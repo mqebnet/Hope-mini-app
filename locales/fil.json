@@ -1,0 +1,14 @@
+{
+    "settings": {
+      "title": "Mga Setting",
+      "language": "Wika",
+      "haptic": "Haptic Feedback",
+      "sound": "Mga Sound Effect"
+    },
+    "notifications": {
+      "insufficient_tickets": "Hindi sapat na mga tiket! Maglaro pa para makakuha ng higit",
+      "puzzle_success": "Maligayang pagbati! Natapos mo ang puzzle!",
+      "daily_checkin": "Na-check in na para sa araw na ito",
+      "time_expired": "Tapos na ang oras! Subukan ulit?"
+    }
+  }

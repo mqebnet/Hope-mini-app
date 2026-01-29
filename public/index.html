@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hope - Home</title>
+  
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
+  
+  <!-- Shared Styles -->
+  <link rel="stylesheet" href="styles.css" />
+
+  <!-- Telegram Web App SDK -->
+  <script src="https://telegram.org/js/telegram-web-app.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0"></script>
+
+
+</head>
+<body>
+  <!-- Top Navigation Bar -->
+  <header id="top-nav">
+  <button id="profile-button" aria-label="Profile Menu">
+    <i data-lucide="user"></i>
+  </button>
+
+  <div id="user-stats">
+    <p class="tag">Level</p>
+    <span id="current-level">—</span>
+
+    <p class="tag">XP</p>
+    <span id="user-exp">—</span>
+  </div>
+
+  <div id="ticket-icons">
+    <span id="bronze-tickets">—</span>
+    <span id="silver-tickets">—</span>
+    <span id="gold-tickets">—</span>
+  </div>
+
+  <div id="ton-connect-ui"></div>
+
+  <button id="ton-connect-button" aria-label="Connect Wallet">
+    <i data-lucide="wallet"></i>
+  </button>
+</header>
+
+<div id="display-panel">
+  <p class="tag">Points</p>
+
+  <div id="points-bar">
+    <div id="points-progress">
+      <span id="points-display">—</span>
+    </div>
+  </div>
+
+  <button id="settings-button" aria-label="settings-button">
+    <i data-lucide="settings"></i>
+  </button>
+</div>
+
+  
+  <!-- Settings Panel -->
+<div id="settings-panel" class="hidden">
+  <div class="settings-content">
+    <h2 data-i18n="settings.title">Settings</h2>
+    
+    <div class="setting-item">
+      <label data-i18n="settings.language">Language</label>
+<select id="language-select">
+  <option value="en">English</option>
+  <option value="es">Español</option>
+  <option value="ar">العربية (Arabic)</option>
+  <option value="fil">Filipino</option>
+  <option value="zh">中文 (Chinese)</option>
+  <option value="ru">Русский (Russian)</option>
+  <option value="ms">Bahasa Melayu (Malay)</option>
+</select>
+    </div>
+
+    <div class="setting-item">
+      <label data-i18n="settings.haptic">Haptic Feedback</label>
+      <label class="switch">
+        <input type="checkbox" id="haptic-toggle" checked>
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <button class="close-settings" onclick="closeSettings()">&times;</button>
+  </div>
+</div>
+</div>
+
+  <!-- Main Content: Home -->
+  <main id="main-content">
+  <section id="home-content">
+    <button id="go-to-weekly-contest" disabled>
+  <i data-lucide="award"></i> Weekly Contest
+</button>
+
+
+    <p>Streak: <span id="streak">—</span> days 🔥</p>
+
+    <button id="check-in-button" aria-label="Daily Check In">
+      Check In
+    </button>
+  </section>
+
+  <!-- Mining Section -->
+  <section id="mining-section">
+    <h2>⛏️ Mining for Points</h2>
+
+    <div id="mining-bar">
+      <div id="mining-progress"></div>
+    </div>
+
+    <button id="farm-btn">Start</button>
+  </section>
+</main>
+
+
+
+<!-- Profile Panel (hidden by default) -->
+<div id="profile-container"></div>
+
+  <!-- Bottom Navigation Bar -->
+  <footer id="bottom-nav">
+    <a href="index.html" class="nav-btn" data-page="home"><i data-lucide="home"></i> Home</a>
+    <a href="leaderBoard.html" class="nav-btn" data-page="leaderBoard"><i data-lucide="trending-up"></i> Leaders</a>
+    <a href="invitePage.html" class="nav-btn" data-page="invitePage"><i data-lucide="users"></i> Invite</a>
+    <a href="marketPlace.html" class="nav-btn" data-page="marketPlace"><i data-lucide="shopping-cart"></i> Marketplace</a>
+    <a href="tasksPage.html" class="nav-btn" data-page="tasksPage"><i data-lucide="check-square"></i> Tasks</a>
+</footer>
+
+<script type="module" src="userData.js"></script>
+<script type=module src="script.js"></script>
+<script src="tonconnect.js" defer></script>
+<script src="connectWallet.js" defer></script>
+  <!-- Page-Specific JavaScript -->
+  <script type="module" src="home.js"></script>
+  <script src="profile.js" defer></script>
+  <script type="module" src="settings.js"></script>
+  <script src="activeTab.js" defer></script>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      lucide.createIcons();
+    });
+  </script>
+
+</body>
+</html>

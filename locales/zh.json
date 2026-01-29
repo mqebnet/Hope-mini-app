@@ -1,0 +1,14 @@
+{
+    "settings": {
+      "title": "设置",
+      "language": "语言",
+      "haptic": "触觉反馈",
+      "sound": "音效"
+    },
+    "notifications": {
+      "insufficient_tickets": "票数不足！继续游戏获取更多",
+      "puzzle_success": "恭喜！你完成了拼图！",
+      "daily_checkin": "今日签到成功",
+      "time_expired": "时间到！再试一次？"
+    }
+  }

@@ -1,0 +1,14 @@
+{
+    "settings": {
+      "title": "Tetapan",
+      "language": "Bahasa",
+      "haptic": "Maklum Balas Haptik",
+      "sound": "Kesan Bunyi"
+    },
+    "notifications": {
+      "insufficient_tickets": "Tiket tidak mencukupi! Terus bermain untuk dapatkan lebih",
+      "puzzle_success": "Tahniah! Anda berjaya menyelesaikan teka-teki!",
+      "daily_checkin": "Daftar masuk harian berjaya",
+      "time_expired": "Masa tamat! Cuba lagi?"
+    }
+  }
