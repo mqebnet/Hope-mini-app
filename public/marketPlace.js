@@ -185,10 +185,45 @@ async function claimPuzzleReward() {
 }
 
 // -------------------- PUZZLE CORE (STUB) --------------------
+// marketPlace.js (replace generatePuzzle and add onPuzzleSolved call)
 function generatePuzzle(imageUrl) {
-  // This hooks into your existing drag/drop + touch engine
-  // When all pieces are correct, call:
-  // onPuzzleSolved();
+  const puzzleContainer = document.getElementById('puzzle-area'); // Add <div id="puzzle-area"></div> to HTML
+  puzzleContainer.innerHTML = '';
+  const pieces = 10;
+  const cols = 5, rows = 2; // Simple grid
+  const pieceWidth = 100 / cols, pieceHeight = 100 / rows;
+
+  for (let i = 0; i < pieces; i++) {
+    const piece = document.createElement('div');
+    piece.className = 'puzzle-piece';
+    piece.style.backgroundImage = `url(${imageUrl})`;
+    piece.style.backgroundPosition = `${-(i % cols) * pieceWidth}% ${-Math.floor(i / cols) * pieceHeight}%`;
+    piece.style.width = `${pieceWidth}%`;
+    piece.style.height = `${pieceHeight}%`;
+    piece.draggable = true;
+    piece.dataset.index = i;
+    puzzleContainer.appendChild(piece); // Shuffle: append in random order
+  }
+
+  // Drag-drop logic (simplified - add full event listeners for dragstart, dragover, drop)
+  puzzleContainer.addEventListener('dragover', e => e.preventDefault());
+  puzzleContainer.addEventListener('drop', e => {
+    const from = document.activeElement;
+    const to = e.target;
+    if (from !== to && to.classList.contains('puzzle-piece')) {
+      const temp = to.cloneNode(true);
+      to.parentNode.replaceChild(temp, to);
+      to.parentNode.replaceChild(to, from);
+      checkPuzzleComplete();
+    }
+  });
+}
+
+function checkPuzzleComplete() {
+  const pieces = document.querySelectorAll('.puzzle-piece');
+  let correct = true;
+  pieces.forEach((p, i) => { if (p.dataset.index != i) correct = false; });
+  if (correct) onPuzzleSolved();
 }
 
 function onPuzzleSolved() {
