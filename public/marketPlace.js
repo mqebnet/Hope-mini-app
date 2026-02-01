@@ -184,7 +184,7 @@ async function claimPuzzleReward() {
   }
 }
 
-// -------------------- PUZZLE CORE (STUB) -------------------
+// -------------------- PUZZLE CORE (STUB) --------------------
 function generatePuzzle(imageUrl) {
   const puzzleContainer = document.getElementById('puzzle-area'); // Add <div id="puzzle-area"></div> to HTML
   puzzleContainer.innerHTML = '';

@@ -421,6 +421,7 @@ button:active {
   font-size: 16px;
   margin: 5px 0;
 }
+  .puzzle-piece { cursor: grab; position: relative; } /* Add more for grid */
 
 /* Leaderboard Styles */
 #leaderboard-container {
