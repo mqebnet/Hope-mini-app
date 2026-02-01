@@ -1,7 +1,7 @@
 // routes/test-login.js
 const express = require('express');
 const jwt = require('jsonwebtoken');
-const User = require('../models/User');
+const User = require ('../models/User');
 
 const router = express.Router();
 
@@ -13,8 +13,8 @@ router.post('/', async (req, res) => {
     user = await User.create({
       telegramId,
       username: 'test_user',
-      points: 0,
-      xp: 0,
+      points: 10000,
+      xp: 10,
       level: 'Seeker'
     });
   }

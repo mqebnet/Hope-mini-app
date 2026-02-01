@@ -6,6 +6,9 @@ const User = require('../models/User');
 
 const router = express.Router();
 
+/* ============================
+   TELEGRAM SIGNATURE CHECK
+============================ */
 function checkSignature(initData) {
   const botToken = process.env.BOT_TOKEN;
   if (!botToken || !initData) return false;
@@ -17,44 +20,51 @@ function checkSignature(initData) {
   params.delete('hash');
 
   const dataCheckString = Array.from(params.entries())
-    .sort()
+    .sort(([a], [b]) => a.localeCompare(b))
     .map(([k, v]) => `${k}=${v}`)
     .join('\n');
 
-  const secret = crypto
+  const secretKey = crypto
     .createHash('sha256')
     .update(botToken)
     .digest();
 
-  const computed = crypto
-    .createHmac('sha256', secret)
+  const computedHash = crypto
+    .createHmac('sha256', secretKey)
     .update(dataCheckString)
     .digest('hex');
 
-  return computed === hash;
+  return computedHash === hash;
 }
 
+/* ============================
+   MINI APP AUTH
+============================ */
 router.post('/telegram', async (req, res) => {
   try {
     const { initData } = req.body;
+    if (!initData) {
+      return res.status(400).json({ success: false, message: 'initData missing' });
+    }
 
     if (!checkSignature(initData)) {
-      return res.status(401).json({ success: false, message: 'Invalid Telegram signature' });
+      return res.status(403).json({ success: false, message: 'Invalid Telegram data' });
     }
 
     const params = new URLSearchParams(initData);
-    const telegramId = params.get('user.id');
-    if (!telegramId) {
-      return res.status(400).json({ success: false, message: 'User ID missing' });
+    const userRaw = params.get('user');
+    if (!userRaw) {
+      return res.status(400).json({ success: false, message: 'User missing' });
     }
+
+    const tgUser = JSON.parse(userRaw);
+    const telegramId = tgUser.id;
 
     let user = await User.findOne({ telegramId });
     if (!user) {
       user = await User.create({
         telegramId,
-        username: params.get('user.username') || `user_${telegramId}`,
-        firstName: params.get('user.first_name'),
-        lastName: params.get('user.last_name'),
+        username: tgUser.username || `user_${telegramId}`,
         points: 0,
         xp: 0,
         level: 'Seeker'
@@ -64,7 +74,7 @@ router.post('/telegram', async (req, res) => {
     const token = jwt.sign(
       { telegramId: user.telegramId },
       process.env.JWT_SECRET,
-      { expiresIn: '1h' }
+      { expiresIn: '7d' }
     );
 
     res.cookie('jwt', token, {
@@ -75,12 +85,11 @@ router.post('/telegram', async (req, res) => {
 
     res.json({
       success: true,
-      token,
       user: {
         id: user.telegramId,
-        points: user.points,
         level: user.level,
-        xp: user.xp
+        xp: user.xp,
+        points: user.points
       }
     });
   } catch (err) {

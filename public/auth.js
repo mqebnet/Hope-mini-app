@@ -1,3 +1,4 @@
+// public/auth.js
 function showError(message) {
   const el = document.getElementById('error');
   el.textContent = message;

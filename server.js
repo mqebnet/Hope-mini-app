@@ -39,7 +39,7 @@ const connectDB = async () => {
 app.use(cors({
   origin: [
     'http://localhost:3000',
-    'https://86035ae134b2.ngrok-free.app',
+    'https://85c09d5b1052.ngrok-free.app',
     'https://web.telegram.org',
     'https://connect.tonhubapi.com' // Add TON Connect domains
   ],

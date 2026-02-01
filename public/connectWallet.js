@@ -24,9 +24,22 @@ document.addEventListener('DOMContentLoaded', async () => {
   updateUI(tonConnectUI.wallet);
 
   // React to wallet changes
-  tonConnectUI.onStatusChange(wallet => {
-    updateUI(wallet);
-  });
+tonConnectUI.onStatusChange(wallet => {
+  if (wallet && wallet.chain !== '-239') { // -239 = mainnet ID
+    alert('Switch to TON Mainnet!');
+    tonConnectUI.disconnect();
+    return;
+  }
+  updateUI(wallet);
+  if (wallet) {
+    // Link to user ID (backend call)
+    fetch('/api/link-wallet', {
+      method: 'POST',
+      body: JSON.stringify({ address: wallet.account.address }),
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('jwt')}` }
+    });
+  }
+});
 
   // Connect wallet
   button.addEventListener('click', async () => {

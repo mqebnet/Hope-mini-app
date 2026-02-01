@@ -1,7 +1,7 @@
 // home.js
 import { updateTopBar } from './userData.js';
 
-const MINING_DURATION_MS = 60 * 60 * 1000; // 1 hour
+const MINING_DURATION_MS = 6 * 60 * 60 * 1000; // 6 hour
 let miningInterval = null;
 let miningTimer = null;
 let miningData = null;
@@ -95,7 +95,9 @@ function syncMiningUI(miningStartedAt) {
 
     if (progress >= 1) {
       miningBtn.textContent = "Claim";
-      clearInterval(miningInterval);
+    miningBtn.style.background = "linear-gradient(90deg, #00ff00, #00ffaa)"; // Green glow
+    miningBtn.style.boxShadow = "0 0 10px #00ff00";
+    clearInterval(miningInterval);
     } else {
       miningBtn.textContent = "Mining...";
     }
@@ -146,6 +148,9 @@ async function claimMining() {
     if (!res.ok) throw new Error(data.error || 'Claim failed');
 
     alert(`+250 points! 🎉`);
+    confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } }); // Confetti
+  miningBtn.style.background = ""; // Reset glow
+  miningBtn.style.boxShadow = "";
     resetMiningUI();
     fetchUser();
   } catch (err) {
