@@ -9,6 +9,24 @@ let miningData = null;
 const miningBar = document.getElementById("mining-progress");
 const miningBtn = document.getElementById("farm-btn");
 
+async function bootstrap() {
+  try {
+    const res = await fetch('/api/me', { credentials: 'include' });
+
+    if (!res.ok) {
+      window.location.replace('/auth');
+      return;
+    }
+
+    const { user } = await res.json();
+    renderUser(user);
+  } catch (err) {
+    console.error('Bootstrap failed:', err);
+    window.location.replace('/auth');
+  }
+}
+
+document.addEventListener('DOMContentLoaded', bootstrap);
 
 /* =======================
    FETCH AUTHENTICATED USER
@@ -43,18 +61,23 @@ async function fetchUser() {
   }
 }
 
-    if (!res.ok) throw new Error('Unauthorized');
-
+   if (!res.ok) {
+      if (res.status === 401) {
+        console.warn('Session expired - redirecting to auth');
+        localStorage.removeItem('jwt');
+        window.location.href = '/auth'; // Redirect once on 401
+      } else {
+        throw new Error('Unauthorized');
+      }
+    }
     const data = await res.json();
     updateTopBar(data.user);
     updateUI(data.user);
     updateWeeklyDropEligibility(data.user);
-syncMiningUI(data.user.miningStartedAt);
+syncMiningUI(data.user.miningStartedAt, MINING_DURATION_MS);
 
   } catch (err) {
     console.error('Failed to load user:', err);
-    // Optional: redirect to auth
-    window.location.href = '/auth';
   }
 }
 

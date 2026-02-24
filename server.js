@@ -1,3 +1,4 @@
+//server.js
 require('dotenv').config();
 const express = require('express');
 const path = require('path');
@@ -15,10 +16,15 @@ const leaderboardRouter = require('./routes/leaderboard');
 const tasksRouter = require('./routes/tasks');
 const dailyCheckInRouter = require('./routes/dailyCheckIn');
 const userRouter = require('./routes/user');
-const MINING_DURATION_MS = 60 * 60 * 1000;
+const MINING_DURATION_MS = 6 * 60 * 60 * 1000; // 6 hours
 
 const app = express();
 app.set('trust proxy', 1);
+
+app.use((req, _, next) => {
+  console.log(`➡️ ${req.method} ${req.path}`);
+  next();
+});
 
 // ==================== Database Connection ====================
 if (!process.env.MONGODB_URI) {
@@ -30,7 +36,7 @@ const connectDB = async () => {
     await mongoose.connect(process.env.MONGODB_URI);
     console.log('✅ Connected to MongoDB');
   } catch (err) {
-    console.error('❌ MongoDB connection error:', err);
+    console.error('❌ MongoDB connection error:', err.stack);
     process.exit(1);
   }
 };
@@ -39,19 +45,18 @@ const connectDB = async () => {
 app.use(cors({
   origin: [
     'http://localhost:3000',
-    'https://85c09d5b1052.ngrok-free.app',
+    'https://529c-197-211-63-6.ngrok-free.app',
     'https://web.telegram.org',
-    'https://connect.tonhubapi.com' // Add TON Connect domains
+    'https://connect.tonhubapi.com' // TON
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'ngrok-skip-browser-warning']
+  allowedHeaders: ['Content-Type', 'Authorization', 'ngrok-skip-browser-warning', 'telegram-init-data']
 }));
 
 app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
 
 // Rate limiting
 const limiter = rateLimit({
@@ -61,18 +66,31 @@ const limiter = rateLimit({
 });
 app.use('/api/', limiter);
 
+// Static first
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Public routes
+app.use('/api/auth', require('./routes/auth'));
+app.use('/api/test-login', require('./routes/test-login'));
+
+// Page protection
+app.get('/', require('./middleware/pageAuth'), (req, res) => {
+  res.sendFile(path.join(__dirname, 'public/index.html'));
+});
+
+app.get('/auth', (_, res) => {
+  res.sendFile(path.join(__dirname, 'public/auth.html'));
+});
+
+// API protection
+app.use('/api', require('./middleware/apiAuth'));
+
+// APIs
+app.use('/api/me', require('./routes/me'));
+app.use('/api/user', userRouter);
+app.use('/api/tasks', tasksRouter);
 
 
-// Static files with security headers
-app.use(express.static(path.join(__dirname, 'public'), {
-  index: false, // Disable automatic index.html serving
-  setHeaders: (res, path) => {
-    if (path.endsWith('auth.html')) {
-      res.set('Cache-Control', 'no-store');
-    }
-    res.set('X-Content-Type-Options', 'nosniff');
-  }
-}));
 // Explicit route handlers
 app.get('/', (req, res) => {
   if (req.user?.telegramId) {
@@ -81,183 +99,35 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'auth.html'));
 });
 
-
 app.get('/auth', (_, res) => {
   res.sendFile(path.join(__dirname, 'public', 'auth.html'));
 });
 
-// ==================== Security Helpers ====================
-function checkSignature(initData) {
-  if (!initData) return false;
-  
-  const botToken = process.env.BOT_TOKEN;
-  if (!botToken) {
-    console.error('BOT_TOKEN is not set in .env file');
-    return false;
-  }
-
-  try {
-    const parsedData = new URLSearchParams(initData);
-    const hash = parsedData.get('hash');
-    if (!hash) return false;
-
-    parsedData.delete('hash');
-    const dataCheckString = Array.from(parsedData.entries())
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([key, value]) => `${key}=${value}`)
-      .join('\n');
-
-    const secretKey = crypto.createHash('sha256').update(botToken).digest();
-    const calculatedHash = crypto.createHmac('sha256', secretKey)
-      .update(dataCheckString)
-      .digest('hex');
-
-    return calculatedHash === hash;
-  } catch (error) {
-    console.error('Signature verification error:', error);
-    return false;
-  }
-}
-
 // ==================== Core Endpoints ====================
-// ==================== Updated Authentication Middleware ====================
-const authenticate = (req, res, next) => {
-  const publicPaths = [
-    '/auth',
-    '/api/auth/telegram',
-    '/api/test-login',
-    '/styles.css',
-    '/auth.js',
-    '/tonconnect-manifest.json'
-  ];
 
-  if (publicPaths.some(p => req.path.startsWith(p))) {
-    return next();
-  }
-
-  const token =
-    req.cookies?.jwt ||
-    req.headers.authorization?.split(' ')[1];
-
-  if (token) {
-    try {
-      req.user = jwt.verify(token, process.env.JWT_SECRET);
-      return next();
-    } catch {}
-  }
-
-  const tgData =
-    req.headers['telegram-init-data'] ||
-    req.query.tgData;
-
-  if (tgData && checkSignature(tgData)) {
-    return next();
-  }
-
-  return res.status(401).json({ error: 'Unauthorized' });
-};
-
-// User Authentication
-app.post('/api/auth/telegram', async (req, res) => {
-  try {
-    const { initData } = req.body;
-    if (!checkSignature(initData)) {
-      return res.status(403).json({ 
-        success: false, 
-        message: 'Invalid Telegram data' 
-      });
-    }
-
-    const parsedData = new URLSearchParams(initData);
-    const telegramId = parsedData.get('user.id');
-    if (!telegramId) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'User ID not found' 
-      });
-    }
-
-    // Find or create user
-    let user = await User.findOne({ telegramId });
-    if (!user) {
-      user = new User({
-        telegramId,
-        username: parsedData.get('user.username') || `user_${telegramId}`,
-        firstName: parsedData.get('user.first_name'),
-        lastName: parsedData.get('user.last_name'),
-        points: 0,
-        streak: 0,
-        xp:     0,
-        level: "Seeker",
-        bronzeTickets: 0,
-        silverTickets: 0,
-        goldTickets: 0
-      });
-      await user.save();
-    }
-
-    // Create JWT token
-    const token = jwt.sign(
-      { telegramId: user.telegramId }, 
-      process.env.JWT_SECRET, 
-      { expiresIn: '1h' }
-    );
-
-    res.cookie('jwt', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict'
-    }).json({ 
-      success: true,
-      token:token,
-      user: {
-        id: user.telegramId,
-        username: user.username,
-        points: user.points,
-        level: user.level,
-        xp: user.xp,
-        streak: user.streak
-      }
-    });
-  } catch (error) {
-    console.error('Authentication Error:', error);
-    console.log('INIT DATA RECEIVED:', initData);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Internal server error' 
-    });
-  }
-});
-
-app.use('/api/auth', require('./routes/auth'));
-app.use('/api/test-login', require('./routes/test-login'));
-
-// Apply middleware before static files
-app.use('/api', authenticate);
-
-
-// User Data Endpoint
-
-
-// Mining Claim Endpoint
+// Mining Endpoints
 app.post('/api/start-mining', async (req, res) => {
-  const user = await User.findOne({ telegramId: req.user.telegramId });
-  if (!user) return res.status(404).json({ error: 'User not found' });
+  try {
+    const user = await User.findOne({ telegramId: req.user.telegramId });
+    if (!user) return res.status(404).json({ error: 'User not found' });
 
-  if (user.miningStartedAt) {
-    return res.status(400).json({ error: 'Mining already active' });
+    if (user.miningStartedAt) {
+      return res.status(400).json({ error: 'Mining already active' });
+    }
+
+    user.miningStartedAt = new Date();
+    await user.save();
+
+    res.json({
+      success: true,
+      miningStartedAt: user.miningStartedAt,
+      durationMs: MINING_DURATION_MS
+    });
+  } catch (err) {
+    console.error('Start mining error:', err.stack);
+    res.status(500).json({ error: 'Internal server error' });
   }
-
-  user.miningStartedAt = new Date();
-  await user.save();
-
-  res.json({
-    success: true,
-    miningStartedAt: user.miningStartedAt,
-    durationMs: 60 * 60 * 1000
-  });
 });
-
 
 app.post('/api/claim-mining', async (req, res) => {
   try {
@@ -276,7 +146,6 @@ app.post('/api/claim-mining', async (req, res) => {
     user.lastMiningClaim = new Date();
     user.level = getUserLevel(user.points);
 
-
     await user.save();
 
     res.json({
@@ -284,16 +153,14 @@ app.post('/api/claim-mining', async (req, res) => {
       points: user.points,
       level: user.level
     });
-  } catch (error) {
-    console.error('Mining Claim Error:', error);
-    res.status(500).json({
-      error: 'Internal server error'
-    });
+  } catch (err) {
+    console.error('Claim mining error:', err.stack);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-
 // ==================== Route Mounting ====================
+
 
 app.use('/api/referral', referralRouter);
 app.use('/api/leaderboard', leaderboardRouter);
@@ -305,12 +172,9 @@ app.use('/api/puzzles', require('./routes/puzzles'));
 // Legacy daily check-in (deprecated, kept for backward compatibility)
 app.use('/api/dailyCheckIn', dailyCheckInRouter);
 
-
-
 const routes = [ 
   'weeklyDrop', 'rewards', 'tonAmount', 'invite'
 ];
-
 
 routes.forEach(route => {
   try {

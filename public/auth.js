@@ -1,4 +1,7 @@
 // public/auth.js
+console.log("TELEGRAM WEBAPP:", Telegram.WebApp);
+console.log("initDataUnsafe:", Telegram.WebApp.initDataUnsafe);
+
 function showError(message) {
   const el = document.getElementById('error');
   el.textContent = message;
@@ -22,6 +25,8 @@ async function authenticateWithTelegram() {
     return;
   }
 
+  console.log('Sending initData:', initData); // Log for debugging
+
   try {
     const res = await fetch('/api/auth/telegram', {
       method: 'POST',
@@ -35,7 +40,7 @@ async function authenticateWithTelegram() {
       throw new Error(data.message || 'Authentication failed');
     }
 
-    // JWT already stored in httpOnly cookie
+    // Redirect to dashboard on success
     window.location.replace('/');
   } catch (err) {
     console.error(err);
