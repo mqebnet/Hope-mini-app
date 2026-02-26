@@ -1,3 +1,4 @@
+// public/connectWallet.js
 import { tonConnectUI } from './tonconnect.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -10,38 +11,38 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (wallet) {
       button.innerHTML = `<i data-lucide="wallet"></i> Connected`;
       button.classList.add('connected');
-      button.disabled = true; // prevent accidental disconnect
+      button.disabled = true;
     } else {
       button.innerHTML = `<i data-lucide="wallet"></i> Connect Wallet`;
       button.classList.remove('connected');
       button.disabled = false;
     }
-    lucide.createIcons();
+    if (window.lucide) lucide.createIcons();
   };
 
-  // Wait for wallet restoration
-  await tonConnectUI.restoreConnection();
+  try {
+    // API compatibility across TonConnect UI versions
+    if (typeof tonConnectUI.restoreConnection === 'function') {
+      await tonConnectUI.restoreConnection();
+    } else if (tonConnectUI.connectionRestored && typeof tonConnectUI.connectionRestored.then === 'function') {
+      await tonConnectUI.connectionRestored;
+    }
+  } catch (err) {
+    console.warn('Wallet restore failed:', err);
+  }
+
   updateUI(tonConnectUI.wallet);
 
-  // React to wallet changes
-tonConnectUI.onStatusChange(wallet => {
-  if (wallet && wallet.chain !== '-239') { // -239 = mainnet ID
-    alert('Switch to TON Mainnet!');
-    tonConnectUI.disconnect();
-    return;
-  }
-  updateUI(wallet);
-  if (wallet) {
-    // Link to user ID (backend call)
-    fetch('/api/link-wallet', {
-      method: 'POST',
-      body: JSON.stringify({ address: wallet.account.address }),
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('jwt')}` }
-    });
-  }
-});
+  tonConnectUI.onStatusChange((wallet) => {
+    if (wallet && wallet.chain !== '-239') {
+      alert('Switch to TON Mainnet!');
+      tonConnectUI.disconnect();
+      return;
+    }
 
-  // Connect wallet
+    updateUI(wallet);
+  });
+
   button.addEventListener('click', async () => {
     if (busy || tonConnectUI.wallet) return;
 

@@ -1,3 +1,4 @@
+// public/leaderBoard.js
 import { updateTopBar } from './userData.js';
 
 let currentLevelIndex = 1;
@@ -16,7 +17,7 @@ const LEVEL_INDEX = {
   Eldrin: 10
 };
 
-document.addEventListener("DOMContentLoaded", async () => {
+document.addEventListener('DOMContentLoaded', async () => {
   if (window.Telegram?.WebApp) {
     const tg = window.Telegram.WebApp;
     tg.ready();
@@ -24,28 +25,21 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   try {
-    const res = await fetch('/api/user/me', {
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem('jwt')}`
-      }
-    });
-
+    const res = await fetch('/api/user/me', { credentials: 'include' });
     if (!res.ok) throw new Error('Unauthorized');
 
     const data = await res.json();
     const user = data.user;
 
     updateTopBar(user);
-
     currentUserId = user.telegramId;
     currentLevelIndex = LEVEL_INDEX[user.level] || 1;
 
     await loadLeaderboard(currentLevelIndex);
     enableSwipeNavigation();
-
   } catch (err) {
-    console.error("Initialization error:", err);
-    window.location.href = "/auth";
+    console.error('Initialization error:', err);
+    window.location.href = '/auth';
   }
 });
 
@@ -53,20 +47,19 @@ async function loadLeaderboard(levelIndex) {
   showLoading(true);
 
   try {
-    const res = await fetch(`/api/leaderboard/by-level/${levelIndex}`);
+    const res = await fetch(`/api/leaderboard/by-level/${levelIndex}`, { credentials: 'include' });
     const data = await res.json();
 
     const { levelName, users } = data;
 
-    const list = document.getElementById("leaderboard-list");
-    list.innerHTML = "";
+    const list = document.getElementById('leaderboard-list');
+    list.innerHTML = '';
 
-    document.getElementById("leaderboard-level").textContent =
-      `Level ${levelIndex} â€¢ ${levelName}`;
+    document.getElementById('leaderboard-level').textContent = `Level ${levelIndex} • ${levelName}`;
 
     users.forEach((u, i) => {
-      const row = document.createElement("div");
-      row.className = "leaderboard-row";
+      const row = document.createElement('div');
+      row.className = 'leaderboard-row';
       row.innerHTML = `
         <span class="rank">${i + 1}</span>
         <span class="username">${u.username || u.telegramId}</span>
@@ -76,53 +69,40 @@ async function loadLeaderboard(levelIndex) {
       `;
 
       if (u.telegramId === currentUserId) {
-        row.classList.add("current-user");
+        row.classList.add('current-user');
       }
 
       list.appendChild(row);
     });
 
     currentLevelIndex = levelIndex;
-
   } catch (err) {
     console.error(err);
-    showNotification("Failed to load leaderboard", "error");
+    showNotification('Failed to load leaderboard', 'error');
   } finally {
     showLoading(false);
   }
 }
 
-/* ======================
-   SWIPE NAVIGATION
-====================== */
 function enableSwipeNavigation() {
   let startX = 0;
-  const container = document.getElementById("leaderboard-container");
+  const container = document.getElementById('leaderboard-container');
 
-  container.addEventListener("touchstart", e => {
+  container.addEventListener('touchstart', (e) => {
     startX = e.touches[0].clientX;
   }, { passive: true });
 
-  container.addEventListener("touchend", e => {
+  container.addEventListener('touchend', (e) => {
     const endX = e.changedTouches[0].clientX;
     const diff = startX - endX;
 
     if (Math.abs(diff) < 50) return;
 
-    const next =
-      diff > 0
-        ? Math.min(10, currentLevelIndex + 1)
-        : Math.max(1, currentLevelIndex - 1);
-
-    if (next !== currentLevelIndex) {
-      loadLeaderboard(next);
-    }
+    const next = diff > 0 ? Math.min(10, currentLevelIndex + 1) : Math.max(1, currentLevelIndex - 1);
+    if (next !== currentLevelIndex) loadLeaderboard(next);
   }, { passive: true });
 }
 
-/* ======================
-   HELPERS
-====================== */
 function formatNumber(num = 0) {
   if (num >= 1e6) return `${(num / 1e6).toFixed(1)}M`;
   if (num >= 1e3) return `${(num / 1e3).toFixed(1)}K`;
@@ -130,20 +110,20 @@ function formatNumber(num = 0) {
 }
 
 function showLoading(show) {
-  const loader = document.getElementById("loading-indicator") || createLoader();
-  loader.style.display = show ? "block" : "none";
+  const loader = document.getElementById('loading-indicator') || createLoader();
+  loader.style.display = show ? 'block' : 'none';
 }
 
 function createLoader() {
-  const loader = document.createElement("div");
-  loader.id = "loading-indicator";
-  loader.className = "loader";
-  document.getElementById("leaderboard-container").appendChild(loader);
+  const loader = document.createElement('div');
+  loader.id = 'loading-indicator';
+  loader.className = 'loader';
+  document.getElementById('leaderboard-container').appendChild(loader);
   return loader;
 }
 
-function showNotification(message, type = "info") {
-  const n = document.createElement("div");
+function showNotification(message, type = 'info') {
+  const n = document.createElement('div');
   n.className = `notification ${type}`;
   n.textContent = message;
   document.body.appendChild(n);

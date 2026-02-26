@@ -1,9 +1,7 @@
 // public/auth.js
-console.log("TELEGRAM WEBAPP:", Telegram.WebApp);
-console.log("initDataUnsafe:", Telegram.WebApp.initDataUnsafe);
-
 function showError(message) {
   const el = document.getElementById('error');
+  if (!el) return;
   el.textContent = message;
   el.style.display = 'block';
 }
@@ -19,41 +17,34 @@ async function authenticateWithTelegram() {
   tg.expand();
 
   const initData = tg.initData;
-
   if (!initData) {
     showError('Telegram initData missing');
     return;
   }
 
-  console.log('Sending initData:', initData); // Log for debugging
-
   try {
     const res = await fetch('/api/auth/telegram', {
       method: 'POST',
+      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ initData })
     });
 
     const data = await res.json();
-
     if (!res.ok || !data.success) {
       throw new Error(data.message || 'Authentication failed');
     }
 
-    // Redirect to dashboard on success
     window.location.replace('/');
   } catch (err) {
-    console.error(err);
+    console.error('Auth failed:', err);
     showError(err.message);
   }
 }
 
-/* ======================
-   DEV TEST LOGIN ONLY
-====================== */
 async function testLogin() {
   try {
-    const res = await fetch('/api/test-login', { method: 'POST' });
+    const res = await fetch('/api/test-login', { method: 'POST', credentials: 'include' });
     const data = await res.json();
 
     if (!res.ok) {
@@ -69,7 +60,8 @@ async function testLogin() {
 document.addEventListener('DOMContentLoaded', () => {
   authenticateWithTelegram();
 
-  document
-    .getElementById('test-login')
-    .addEventListener('click', testLogin);
+  const testLoginBtn = document.getElementById('test-login');
+  if (testLoginBtn) {
+    testLoginBtn.addEventListener('click', testLogin);
+  }
 });

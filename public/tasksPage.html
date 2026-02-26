@@ -102,21 +102,14 @@
 
   <!-- Scripts -->
   <script type="module" src="userData.js"></script>
-  <script src="script.js" defer></script>
-  <script src="connectWallet.js" defer></script>
-  <script src="tonconnect.js" defer></script>
-  <script src="tasks.js" defer></script>
-  <script src="profile.js" defer></script>
+  <script type="module" src="script.js"></script>
+  <script type="module" src="connectWallet.js"></script>
+  <script type="module" src="tonconnect.js"></script>
+  <script type="module" src="tasks.js"></script>
+  <script type="module" src="profile.js"></script>
   <script src="activeTab.js" defer></script>
 
-  <script type="module">
-    import { TonConnectUI } from '@tonconnect/ui';
-
-    const tonConnectUI = new TonConnectUI({
-      manifestUrl: 'https://your-domain.com/tonconnect-manifest.json',
-      buttonRootId: 'ton-connect-button'
-    });
-  </script>
+  
 
   <script>
     document.addEventListener("DOMContentLoaded", () => {
@@ -125,3 +118,5 @@
   </script>
 </body>
 </html>
+
+

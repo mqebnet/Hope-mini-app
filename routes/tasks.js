@@ -17,8 +17,12 @@ router.post('/daily-checkin', async (req, res) => {
       return res.status(400).json({ error: 'Missing transaction hash' });
     }
 
-    // Verify TON payment (0.3 USDT equivalent)
-    const isValid = await verifyTransaction(telegramId, txHash, 0.3);
+    const isValid = await verifyTransaction({
+      telegramId,
+      txHash,
+      requiredUsd: 0.3
+    });
+
     if (!isValid) {
       return res.status(400).json({ error: 'Invalid transaction' });
     }
@@ -31,7 +35,7 @@ router.post('/daily-checkin', async (req, res) => {
 
     user.dailyCheckins = user.dailyCheckins || [];
 
-    const alreadyChecked = user.dailyCheckins.some(d => {
+    const alreadyChecked = user.dailyCheckins.some((d) => {
       const x = new Date(d);
       x.setHours(0, 0, 0, 0);
       return x.getTime() === today.getTime();
@@ -59,7 +63,7 @@ router.post('/daily-checkin', async (req, res) => {
 /**
  * POST /api/tasks/complete
  * Body: { taskId }
- * For non-TON daily/social tasks that don’t require proof
+ * For non-TON daily/social tasks that do not require proof
  */
 router.post('/complete', async (req, res) => {
   try {
@@ -155,7 +159,7 @@ router.get('/definitions', (_, res) => {
         title: 'Play Puzzles',
         action: 'play',
         reward: 100,
-        description: 'Solve today’s puzzle'
+        description: 'Solve today\'s puzzle'
       },
       {
         id: 'visit-telegram',

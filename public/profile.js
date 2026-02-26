@@ -1,3 +1,4 @@
+// public/profile.js
 import { updateTopBar } from './userData.js';
 
 async function loadProfileFragment() {
@@ -5,23 +6,27 @@ async function loadProfileFragment() {
   if (!res.ok) throw new Error('Failed to load profile fragment');
 
   const html = await res.text();
-  document.getElementById('profile-container').innerHTML = html;
+  const container = document.getElementById('profile-container');
+  if (!container) return;
+  container.innerHTML = html;
 
   if (window.lucide) lucide.createIcons();
 }
 
 async function loadUserProfile() {
-  const res = await fetch('/api/user/me', {
-    headers: {
-      Authorization: `Bearer ${localStorage.getItem('jwt')}`
-    }
-  });
+  const res = await fetch('/api/user/me', { credentials: 'include' });
 
-  if (!res.ok) throw new Error('Failed to fetch user');
+  if (res.status === 401) {
+    window.location.href = '/auth';
+    return;
+  }
+
+  if (!res.ok) {
+    throw new Error(`Failed to fetch user (${res.status})`);
+  }
 
   const { user } = await res.json();
 
-  // Fill profile fields
   setText('profile-userid', user.telegramId);
   setText('profile-level', user.level);
   setText('profile-points', user.points);
@@ -36,7 +41,7 @@ async function loadUserProfile() {
 
 function setText(id, value) {
   const el = document.getElementById(id);
-  if (el) el.textContent = value ?? '—';
+  if (el) el.textContent = value ?? '-';
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -46,10 +51,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const profilePanel = document.getElementById('profile-panel');
   const closeBtn = document.getElementById('close-profile-button');
 
-  if (!profileButton || !profilePanel || !closeBtn) {
-    console.error('Profile UI elements missing');
-    return;
-  }
+  if (!profileButton || !profilePanel || !closeBtn) return;
 
   profileButton.addEventListener('click', async () => {
     try {

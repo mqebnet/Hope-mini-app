@@ -6,20 +6,10 @@ const priceHandler = require('./priceHandler');
 const TON_API_BASE_URL = process.env.TON_API_URL || 'https://tonapi.io/v2';
 const APP_WALLET_ADDRESS = process.env.DEV_WALLET_ADDRESS;
 
-if (!APP_WALLET_ADDRESS) {
-  throw new Error('DEV_WALLET_ADDRESS is required');
-}
-
-/**
- * Normalize TON address (basic safety)
- */
 function normalizeAddress(addr) {
   return addr?.toLowerCase()?.trim();
 }
 
-/**
- * Fetch transaction by hash
- */
 async function fetchTransaction(txHash) {
   try {
     const { data } = await axios.get(
@@ -33,15 +23,7 @@ async function fetchTransaction(txHash) {
   }
 }
 
-/**
- * Verify TON payment
- */
-async function verifyTransaction({
-  telegramId,
-  txHash,
-  requiredUsd,
-  minConfirmations = 1
-}) {
+async function verifyTonPayment(txHash, requiredUsd, recipientAddress, minConfirmations = 1) {
   const tx = await fetchTransaction(txHash);
   if (!tx) return false;
 
@@ -51,21 +33,26 @@ async function verifyTransaction({
     return false;
   }
 
+  const expectedRecipient = normalizeAddress(recipientAddress || APP_WALLET_ADDRESS);
+  if (!expectedRecipient) {
+    console.error('No recipient wallet configured');
+    return false;
+  }
+
   const destination = normalizeAddress(outMsg.destination?.address);
-  if (!destination || destination !== normalizeAddress(APP_WALLET_ADDRESS)) {
+  if (!destination || destination !== expectedRecipient) {
     console.error('Invalid recipient');
     return false;
   }
 
   const amountTon = Number(outMsg.value) / 1e9;
-  const expectedTon = await priceHandler.usdtToTon(requiredUsd);
+  const expectedTon = await priceHandler.usdtToTon(requiredUsd, { allowStale: false });
 
   if (amountTon + 1e-6 < expectedTon) {
     console.error('Underpaid:', amountTon, '<', expectedTon);
     return false;
   }
 
-  // Optional confirmation depth
   if (
     typeof tx.confirmations === 'number' &&
     tx.confirmations < minConfirmations
@@ -74,20 +61,42 @@ async function verifyTransaction({
     return false;
   }
 
-  // Persist transaction
+  return true;
+}
+
+async function verifyTransaction({
+  telegramId,
+  txHash,
+  requiredUsd,
+  minConfirmations = 1
+}) {
+  const paid = await verifyTonPayment(
+    txHash,
+    requiredUsd,
+    APP_WALLET_ADDRESS,
+    minConfirmations
+  );
+
+  if (!paid) return false;
+
   const user = await User.findOne({ telegramId });
   if (!user) return false;
 
   user.transactions = user.transactions || [];
 
-  const exists = user.transactions.some(t => t.txHash === txHash);
+  const exists = user.transactions.some((t) => t.txHash === txHash);
   if (!exists) {
+    const tx = await fetchTransaction(txHash);
+    const amountTon = tx?.out_msgs?.[0]?.value
+      ? Number(tx.out_msgs[0].value) / 1e9
+      : 0;
+
     user.transactions.push({
       txHash,
+      expectedUsd: requiredUsd,
       amountTon,
-      amountUsd: requiredUsd,
-      status: 'confirmed',
-      verifiedAt: new Date()
+      status: 'verified',
+      createdAt: new Date()
     });
     await user.save();
   }
@@ -97,5 +106,6 @@ async function verifyTransaction({
 
 module.exports = {
   verifyTransaction,
+  verifyTonPayment,
   fetchTransaction
 };

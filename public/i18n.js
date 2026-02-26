@@ -1,14 +1,21 @@
-import en from './locales/en.json' assert { type: 'json' };
-import es from './locales/es.json' assert { type: 'json' };
-import ar from './locales/ar.json' assert { type: 'json' };
-import fil from './locales/fil.json' assert { type: 'json' };
-import zh from './locales/zh.json' assert { type: 'json' };
-import ru from './locales/ru.json' assert { type: 'json' };
-import ms from './locales/ms.json' assert { type: 'json' };
-
+// public/i18n.js
 class I18n {
   constructor() {
-    this.languages = { en, es, ar, fil, zh, ru, ms };
+    this.languages = {
+      en: {
+        settings: {
+          title: 'Settings',
+          language: 'Language',
+          haptic: 'Haptic Feedback',
+          sound: 'Sound Effects'
+        },
+        notifications: {
+          checkInSuccess: 'Check-in successful!',
+          insufficient_tickets: 'Insufficient tickets! Keep playing to earn more',
+          puzzle_success: 'Congratulations! Puzzle solved!'
+        }
+      }
+    };
     this.rtlLanguages = new Set(['ar']);
     this.currentLang = 'en';
   }
@@ -18,7 +25,15 @@ class I18n {
   }
 
   t(key) {
-    return this.languages[this.currentLang][key] || key;
+    const parts = key.split('.');
+    let cur = this.languages[this.currentLang];
+
+    for (const p of parts) {
+      cur = cur?.[p];
+      if (cur === undefined) return key;
+    }
+
+    return typeof cur === 'string' ? cur : key;
   }
 
   get direction() {

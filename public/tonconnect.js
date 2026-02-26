@@ -1,16 +1,10 @@
 // public/tonconnect.js
-import { TonConnectUI } from '@tonconnect/ui';
+import { TonConnectUI } from 'https://esm.sh/@tonconnect/ui@2.0.10';
 
-/**
- * Single shared TON Connect UI instance
- * Used across the frontend
- */
+const manifestUrl = `${window.location.origin}/tonconnect-manifest.json`;
+
 export const tonConnectUI = new TonConnectUI({
-  manifestUrl: 'https://529c-197-211-63-6.ngrok-free.app /tonconnect-manifest.json',
-
-  // Enforce mainnet only
-  network: 'mainnet',
-
+  manifestUrl,
   uiPreferences: {
     theme: 'DARK'
   }
