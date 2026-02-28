@@ -84,9 +84,6 @@ app.use('/api', (req, res, next) => {
   next();
 });
 app.use('/api/auth', require('./routes/auth'));
-if (process.env.ENABLE_TEST_LOGIN === 'true') {
-  app.use('/api/test-login', require('./routes/test-login'));
-}
 
 app.get('/', require('./middleware/pageAuth'), (req, res) => {
   res.sendFile(path.join(__dirname, 'public/index.html'));

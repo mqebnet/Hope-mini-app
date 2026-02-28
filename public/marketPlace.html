@@ -8,6 +8,7 @@
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
   <script src="https://telegram.org/js/telegram-web-app.js" defer></script>
   <script src="https://unpkg.com/@tonconnect/sdk@latest" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0"></script>
 
   <link rel="stylesheet" href="styles.css" />
 </head>
@@ -53,6 +54,7 @@
     <h2>Puzzles Game</h2>
 
     <div class="mystery-box-panel">
+      <div id="mystery-box-track" class="mystery-box-track"></div>
       <button id="open-market-mystery-box-button">
         <i data-lucide="gift"></i> Get Mystery Box
       </button>
@@ -104,12 +106,14 @@
 <!-- Puzzle Game Overlay -->
 <div id="puzzle-game" class="hidden">
   <div class="game-header">
+    <button id="puzzle-close-button" class="puzzle-close-button" aria-label="Close Puzzle">&times;</button>
     <div class="reference-image" id="reference-image"></div>
-    <div class="timer" id="puzzle-timer">00:30</div>
+    <div class="timer" id="puzzle-timer">01:00</div>
   </div>
 
   <div class="puzzle-board" id="puzzle-board"></div>
   <div class="puzzle-pieces" id="puzzle-pieces"></div>
+  <button id="puzzle-claim-button" class="hidden">Claim Reward</button>
 </div>
 
 <!-- Profile -->

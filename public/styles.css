@@ -492,19 +492,6 @@ button:disabled {
   border-color: rgba(255, 195, 84, 0.44);
   box-shadow: 0 8px 28px rgba(255, 195, 84, 0.14);
 }
-.test-btn {
-  margin-top: 24px;
-  padding: 10px 14px;
-  border-radius: 6px;
-  border: none;
-  background: #22c55e;
-  cursor: pointer;
-  font-weight: 600;
-  transition: transform 0.2s;
-}
-.test-btn:hover {
-  transform: scale(1.05);
-}
 
 /* Mining Section (Home/Dashboard) */
 #mining-section {
@@ -989,6 +976,177 @@ button:disabled {
   justify-content: center;
   gap: 10px;
   margin: 15px 0;
+}
+
+.mystery-box-panel {
+  margin: 14px auto;
+  max-width: 640px;
+  background: rgba(7, 23, 34, 0.5);
+  border: 1px solid rgba(0, 255, 170, 0.25);
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.mystery-box-track {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.box-card {
+  border-radius: 10px;
+  padding: 8px 6px;
+  text-align: center;
+  border: 1px solid rgba(158, 185, 206, 0.28);
+  background: rgba(16, 30, 44, 0.8);
+}
+
+.box-title {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+}
+
+.box-state {
+  display: block;
+  margin-top: 4px;
+  font-size: 10px;
+  color: #9bb3c2;
+}
+
+.box-card.next {
+  border-color: rgba(0, 255, 170, 0.75);
+  box-shadow: 0 0 10px rgba(0, 255, 170, 0.24);
+}
+
+.box-card.ready,
+.box-card.opened {
+  border-color: rgba(255, 214, 114, 0.75);
+}
+
+.box-card.claimed {
+  border-color: rgba(83, 216, 133, 0.8);
+  background: rgba(18, 48, 34, 0.75);
+}
+
+.box-card.locked {
+  opacity: 0.6;
+}
+
+.box-card.bronze .box-title {
+  color: #d3a670;
+}
+
+.box-card.silver .box-title {
+  color: #c5d1dc;
+}
+
+.box-card.gold .box-title {
+  color: #e8cf74;
+}
+
+#mystery-box-info p {
+  margin: 6px 0;
+  color: #d8ecf5;
+  font-size: 13px;
+}
+
+#puzzle-game {
+  position: fixed;
+  inset: 0;
+  z-index: 3300;
+  background: radial-gradient(circle at top, rgba(9, 33, 48, 0.98), rgba(4, 10, 20, 0.98));
+  padding: 14px 10px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+#puzzle-game.hidden {
+  display: none;
+}
+
+.game-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.reference-image {
+  width: 76px;
+  height: 76px;
+  border-radius: 10px;
+  border: 2px solid rgba(0, 255, 170, 0.45);
+  background-color: rgba(0, 0, 0, 0.35);
+  background-size: cover;
+  background-position: center;
+}
+
+.timer {
+  font-size: 24px;
+  font-weight: 700;
+  color: #ffd366;
+  text-shadow: 0 0 8px rgba(255, 211, 102, 0.35);
+}
+
+.puzzle-close-button {
+  margin: 0;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 24px;
+  line-height: 1;
+  box-shadow: none;
+  background: rgba(255, 255, 255, 0.08);
+  color: #d2eef2;
+}
+
+.puzzle-board {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+  padding: 8px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  min-height: 210px;
+}
+
+.market-puzzle-slot {
+  aspect-ratio: 1.25 / 1;
+  border: 1px dashed rgba(0, 255, 170, 0.4);
+  border-radius: 8px;
+  background: rgba(11, 27, 38, 0.85);
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+  overflow: hidden;
+}
+
+.puzzle-pieces {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+  padding: 8px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.2);
+  min-height: 180px;
+}
+
+.market-puzzle-piece {
+  width: 100%;
+  aspect-ratio: 1.25 / 1;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  cursor: grab;
+  background-repeat: no-repeat;
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+#puzzle-claim-button {
+  width: min(360px, 100%);
+  margin: 0 auto;
 }
 
 /* Weekly Drop */

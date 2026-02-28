@@ -42,26 +42,6 @@ async function authenticateWithTelegram() {
   }
 }
 
-async function testLogin() {
-  try {
-    const res = await fetch('/api/test-login', { method: 'POST', credentials: 'include' });
-    const data = await res.json();
-
-    if (!res.ok) {
-      throw new Error(data.message || 'Test login failed');
-    }
-
-    window.location.replace('/');
-  } catch (err) {
-    showError(err.message);
-  }
-}
-
 document.addEventListener('DOMContentLoaded', () => {
   authenticateWithTelegram();
-
-  const testLoginBtn = document.getElementById('test-login');
-  if (testLoginBtn) {
-    testLoginBtn.addEventListener('click', testLogin);
-  }
 });

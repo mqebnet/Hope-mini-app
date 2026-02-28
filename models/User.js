@@ -8,10 +8,20 @@ const mysteryBoxSchema = new mongoose.Schema({
   transactionId: { type: String },
   puzzle: {
     meme: String,
+    imageUrl: String,
     totalPieces: Number,
-    openedAt: Date
+    openedAt: Date,
+    sessionId: String,
+    pieces: [{
+      pieceId: String,
+      sourceIndex: Number
+    }],
+    solution: [String],
+    attempts: { type: Number, default: 0 },
+    solved: { type: Boolean, default: false },
+    solvedAt: Date
   }
-}, { _id: false });
+});
 
 // Main User Schema
 const UserSchema = new mongoose.Schema({
