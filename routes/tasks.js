@@ -3,6 +3,11 @@ const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
 const { verifyTransaction } = require('../utils/tonHandler');
+const {
+  DAILY_CHECKIN_REWARD,
+  getCheckInDayKey,
+  applyVerifiedDailyCheckIn
+} = require('../utils/dailyCheckIn');
 
 /**
  * POST /api/tasks/daily-checkin
@@ -28,31 +33,33 @@ router.post('/daily-checkin', async (req, res) => {
     }
 
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
 
     const user = await User.findOne({ telegramId });
     if (!user) return res.status(404).json({ error: 'User not found' });
-
-    user.dailyCheckins = user.dailyCheckins || [];
-
-    const alreadyChecked = user.dailyCheckins.some((d) => {
-      const x = new Date(d);
-      x.setHours(0, 0, 0, 0);
-      return x.getTime() === today.getTime();
-    });
-
-    if (alreadyChecked) {
+    const dayKey = getCheckInDayKey(today);
+    if ((user.checkIns || []).some((c) => c.dayKey === dayKey)) {
       return res.status(400).json({ error: 'Already checked in today' });
     }
+    if ((user.checkIns || []).some((c) => c.txHash === txHash)) {
+      return res.status(400).json({ error: 'Transaction already used for check-in' });
+    }
 
-    user.dailyCheckins.push(new Date());
-    user.points += 100;
+    const applyResult = applyVerifiedDailyCheckIn(user, txHash, today);
+    if (!applyResult.ok) {
+      return res.status(applyResult.status).json({ error: applyResult.error });
+    }
 
     await user.save();
 
     res.json({
       success: true,
-      points: user.points
+      points: user.points,
+      streak: user.streak,
+      xp: user.xp,
+      bronzeTickets: user.bronzeTickets,
+      level: user.level,
+      badges: user.badges || [],
+      reward: DAILY_CHECKIN_REWARD
     });
   } catch (err) {
     console.error('Daily Check-in Error:', err);
@@ -149,8 +156,8 @@ router.get('/definitions', (_, res) => {
         id: 'daily-checkin',
         title: 'Daily Check-in',
         action: 'check-in',
-        reward: 100,
-        description: 'Start your day with a check-in',
+        reward: 1000,
+        description: 'Start your day with a check-in (+1000 points, +100 bronze, +5 XP)',
         transactionRequired: true,
         feeUSD: 0.3
       },
@@ -223,7 +230,7 @@ router.get('/definitions', (_, res) => {
         id: 'future-task',
         title: 'Special Mission',
         action: 'verify',
-        reward: 200,
+        reward: 500,
         description: 'Coming soon',
         comingSoon: true
       }

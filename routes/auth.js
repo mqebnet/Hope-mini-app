@@ -3,10 +3,36 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const User = require('../models/User');
+const { generateUniqueInviteCode } = require('../utils/inviteCode');
 
 const router = express.Router();
 const TELEGRAM_AUTH_MAX_AGE_SEC = Number(process.env.TELEGRAM_AUTH_MAX_AGE_SEC || 86400);
 const TELEGRAM_FUTURE_SKEW_SEC = Number(process.env.TELEGRAM_FUTURE_SKEW_SEC || 300);
+
+function getCookieOptions(req) {
+  const isProd = process.env.NODE_ENV === 'production';
+  const viaHttps = req.secure || req.headers['x-forwarded-proto'] === 'https';
+  const explicitSameSite = (process.env.COOKIE_SAMESITE || '').toLowerCase();
+
+  let sameSite;
+  if (explicitSameSite === 'none' || explicitSameSite === 'lax' || explicitSameSite === 'strict') {
+    sameSite = explicitSameSite;
+  } else if (viaHttps) {
+    // Telegram WebView commonly needs SameSite=None for cookie round-trips.
+    sameSite = 'none';
+  } else {
+    sameSite = isProd ? 'strict' : 'lax';
+  }
+
+  const secure = sameSite === 'none' ? true : (isProd || viaHttps);
+
+  return {
+    httpOnly: true,
+    sameSite,
+    secure,
+    path: '/'
+  };
+}
 
 function parseAndValidateInitData(initData) {
   if (typeof initData !== 'string' || !initData.trim()) {
@@ -117,7 +143,7 @@ router.post('/telegram', async (req, res) => {
 
     let user = await User.findOne({ telegramId });
     if (!user) {
-      user = await User.create({
+      user = new User({
         telegramId,
         username,
         points: 0,
@@ -128,6 +154,13 @@ router.post('/telegram', async (req, res) => {
         silverTickets: 0,
         goldTickets: 0
       });
+      // assign a unique invite code before saving
+      user.inviteCode = await generateUniqueInviteCode();
+      await user.save();
+    } else if (!user.inviteCode) {
+      // retroactively fill missing codes for existing accounts
+      user.inviteCode = await generateUniqueInviteCode();
+      await user.save();
     }
 
     const token = jwt.sign(
@@ -136,13 +169,7 @@ router.post('/telegram', async (req, res) => {
       { expiresIn: '7d' }
     );
 
-    const isProduction = process.env.NODE_ENV === 'production';
-    res.cookie('jwt', token, {
-      httpOnly: true,
-      sameSite: isProduction ? 'strict' : 'lax',
-      secure: isProduction,
-      path: '/'
-    });
+    res.cookie('jwt', token, getCookieOptions(req));
 
     res.json({
       success: true,
@@ -153,6 +180,7 @@ router.post('/telegram', async (req, res) => {
         xp: user.xp,
         streak: user.streak,
         points: user.points,
+        badges: user.badges || [],
         bronzeTickets: user.bronzeTickets,
         silverTickets: user.silverTickets,
         goldTickets: user.goldTickets

@@ -9,7 +9,7 @@ export function formatPoints(points = 0) {
 }
 
 export async function fetchUserData() {
-  const res = await fetch('/api/user/me', { credentials: 'include' });
+  const res = await fetch('/api/user/me', { credentials: 'include', cache: 'no-store' });
   if (!res.ok) throw new Error('Unauthorized');
   const data = await res.json();
   return data.user;
@@ -40,7 +40,12 @@ export function updateTopBar(user) {
   if (!user) return;
 
   setText('current-level', user.level || 'Seeker');
-  setText('points-display', formatPoints(user.points || 0));
+  
+  // Display points as "current/max" format
+  const currentFormatted = formatPoints(user.points || 0);
+  const maxFormatted = formatPoints(user.nextLevelAt || 50000);
+  setText('points-display', `${currentFormatted}/${maxFormatted}`);
+  
   setText('streak', user.streak || 0);
   setText('user-exp', user.xp || 0);
   setText('bronze-tickets', user.bronzeTickets || 0);
@@ -48,9 +53,10 @@ export function updateTopBar(user) {
   setText('gold-tickets', user.goldTickets || 0);
 
   const progressEl = document.getElementById('points-progress');
-  if (progressEl && user.nextLevelAt) {
-    const progress = Math.min((user.points || 0) / user.nextLevelAt, 1) * 100;
-    progressEl.style.width = `${progress}%`;
+  const pointsBarEl = document.getElementById('points-bar');
+  if (progressEl && pointsBarEl && user.nextLevelAt) {
+    const progress = Math.min((user.points || 0) / user.nextLevelAt, 1);
+    progressEl.style.width = `${progress * 100}%`;
   }
 }
 
@@ -62,3 +68,4 @@ function setText(id, value) {
   const el = document.getElementById(id);
   if (el) el.textContent = value;
 }
+

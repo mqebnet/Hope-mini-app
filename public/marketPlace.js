@@ -1,8 +1,9 @@
 // marketPlace.js
 import { fetchUserData, updateTopBar } from './userData.js';
+import { tonConnectUI } from './tonconnect.js';
 
-const tg = window.Telegram.WebApp;
-tg.ready();
+const tg = window.Telegram?.WebApp;
+if (tg) tg.ready();
 
 let user = null;
 let selectedTradeAmount = null;
@@ -13,17 +14,58 @@ let timeLeft = 30;
 
 // -------------------- BOOTSTRAP --------------------
 document.addEventListener('DOMContentLoaded', async () => {
-  const tgUser = tg.initDataUnsafe?.user;
+  const tgUser = tg?.initDataUnsafe?.user;
   if (!tgUser) return alert("Telegram user not found");
 
   user = await fetchUserData();
   updateTopBar(user);
 
+  initMarketplaceTabs();
   initExchangeUI();
   initMysteryBoxes();
 });
 
+function initMarketplaceTabs() {
+  const tabs = document.querySelectorAll('.market-tab');
+  const sections = {
+    puzzles: document.getElementById('puzzles-section'),
+    exchange: document.getElementById('exchange-section')
+  };
+
+  tabs.forEach((tab) => {
+    tab.addEventListener('click', () => {
+      const target = tab.dataset.tab;
+      tabs.forEach((t) => t.classList.toggle('active', t === tab));
+
+      Object.entries(sections).forEach(([key, section]) => {
+        if (!section) return;
+        section.classList.toggle('active', key === target);
+      });
+    });
+  });
+}
+
 // -------------------- TICKET EXCHANGE --------------------
+function updateExchangePreview(tradeType, amount) {
+  // Simple 1:1 exchange rates (bronze -> silver, silver -> gold)
+  const exchangeRates = {
+    bronze: 1,   // 100 bronze = 100 silver
+    silver: 1    // 100 silver = 100 gold
+  };
+
+  const rate = exchangeRates[tradeType] || 1;
+  const toAmount = Math.floor(amount * rate);
+
+  const fromLabel = tradeType === 'bronze' ? '🟫 Bronze' : '🟩 Silver';
+  const toLabel = tradeType === 'bronze' ? '🟩 Silver' : '🟨 Gold';
+
+  const fromDiv = document.getElementById('from-ticket');
+  const toDiv = document.getElementById('to-ticket');
+
+  if (fromDiv) fromDiv.textContent = `${amount} ${fromLabel}`;
+  if (toDiv) toDiv.textContent = `${toAmount} ${toLabel}`;
+}
+
 function initExchangeUI() {
   const typeSelect = document.getElementById('exchange-type');
   const amountButtons = document.querySelectorAll('.amount-option');
@@ -50,6 +92,14 @@ function initExchangeUI() {
   typeSelect.addEventListener('change', () => {
     selectedTradeAmount = null;
     tradeBtn.disabled = true;
+    tradeBtn.classList.remove('active');
+    
+    // Clear preview
+    const fromDiv = document.getElementById('from-ticket');
+    const toDiv = document.getElementById('to-ticket');
+    if (fromDiv) fromDiv.textContent = '';
+    if (toDiv) toDiv.textContent = '';
+    
     refreshAvailability();
   });
 
@@ -64,6 +114,9 @@ function initExchangeUI() {
       selectedTradeType = typeSelect.value;
       tradeBtn.disabled = false;
       tradeBtn.classList.add('active');
+
+      // Update preview display
+      updateExchangePreview(selectedTradeType, selectedTradeAmount);
     });
   });
 
@@ -71,16 +124,17 @@ function initExchangeUI() {
     if (!selectedTradeAmount) return;
 
     try {
-      const txHash = await window.ton.connectAndSendTransaction(0.1);
+      if (!tonConnectUI.wallet) {
+        throw new Error('Please connect your wallet first');
+      }
 
-      const res = await fetch('/api/marketplace/exchange-tickets', {
+      const res = await fetch('/api/exchangeTickets', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          telegramId: user.telegramId,
           fromType: selectedTradeType,
-          quantity: selectedTradeAmount / 100,
-          txHash
+          quantity: selectedTradeAmount / 100
         })
       });
 
@@ -228,6 +282,40 @@ function checkPuzzleComplete() {
 function onPuzzleSolved() {
   clearInterval(puzzleTimer);
   showConfetti();
-  document.getElementById('claim-mystery-box-button').style.display = 'block';
+  document.getElementById('claim-mystery-reward-button').style.display = 'block';
   triggerHapticFeedback('medium');
+}
+
+// -------------------- UTILITY FUNCTIONS --------------------
+function showNotification(message, type = 'info') {
+  const notification = document.createElement('div');
+  notification.className = `notification ${type}`;
+  notification.textContent = message;
+  document.body.appendChild(notification);
+  
+  setTimeout(() => {
+    notification.classList.add('show');
+  }, 10);
+  
+  setTimeout(() => {
+    notification.classList.remove('show');
+    setTimeout(() => notification.remove(), 300);
+  }, 4000);
+}
+
+function showConfetti() {
+  if (typeof confetti === 'function') {
+    confetti({
+      particleCount: 100,
+      spread: 70,
+      origin: { y: 0.6 }
+    });
+  }
+}
+
+function triggerHapticFeedback(pattern = 'light') {
+  const tg = window.Telegram?.WebApp;
+  if (tg?.HapticFeedback) {
+    tg.HapticFeedback.impactOccurred(pattern);
+  }
 }

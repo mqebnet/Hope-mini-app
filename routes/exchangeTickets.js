@@ -17,20 +17,24 @@ router.post('/', async (req, res) => {
   try {
     const telegramId = req.user.telegramId;
     const { fromType, quantity, txHash } = req.body;
+    const requirePayment =
+      process.env.REQUIRE_EXCHANGE_PAYMENT === 'true' ||
+      process.env.NODE_ENV === 'production';
 
-    if (!fromType || !quantity || quantity <= 0 || !txHash) {
+    if (!fromType || !quantity || quantity <= 0) {
       return res.status(400).json({ error: 'Invalid parameters' });
     }
 
-    // Verify TON payment (0.1 USDT equivalent in TON)
-    const paid = await verifyTonPayment(
-      txHash,
-      0.1,
-      process.env.TON_WALLET_ADDRESS
-    );
+    if (requirePayment) {
+      if (!txHash) {
+        return res.status(400).json({ error: 'Missing transaction hash' });
+      }
 
-    if (!paid) {
-      return res.status(400).json({ error: 'Invalid or unverified payment' });
+      // Verify TON payment (0.1 USDT equivalent in TON)
+      const paid = await verifyTonPayment(txHash, 0.1);
+      if (!paid) {
+        return res.status(400).json({ error: 'Invalid or unverified payment' });
+      }
     }
 
     const conversionRate = 100; // 100 -> 1

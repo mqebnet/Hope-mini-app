@@ -1,25 +1,12 @@
 // public/script.js
-import { updateUI } from './userData.js';
 import { i18n } from './i18n.js';
-
-const POLL_MS = 30_000;
-let pollId = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
   const hasSession = await checkSession();
-  if (hasSession) {
-    startPolling();
-    fetchAuthenticatedUser();
-  } else {
+  if (!hasSession) {
     initializeTelegramWebApp();
   }
-
   initializeLanguage();
-});
-
-document.addEventListener('visibilitychange', () => {
-  if (document.hidden) stopPolling();
-  else startPolling();
 });
 
 async function checkSession() {
@@ -29,17 +16,6 @@ async function checkSession() {
   } catch {
     return false;
   }
-}
-
-function startPolling() {
-  stopPolling();
-  pollId = setInterval(fetchAuthenticatedUser, POLL_MS);
-}
-
-function stopPolling() {
-  if (!pollId) return;
-  clearInterval(pollId);
-  pollId = null;
 }
 
 function initializeTelegramWebApp() {
@@ -66,31 +42,8 @@ async function authenticateTelegramUser(initData) {
 
     if (!response.ok) throw new Error('Authentication failed');
 
-    startPolling();
-    fetchAuthenticatedUser();
   } catch (error) {
     console.error('Auth error:', error);
-  }
-}
-
-async function fetchAuthenticatedUser() {
-  try {
-    const res = await fetch('/api/user/me', { credentials: 'include' });
-
-    if (res.status === 401) {
-      window.location.href = '/auth';
-      return;
-    }
-
-    if (!res.ok) {
-      throw new Error(`User fetch failed (${res.status})`);
-    }
-
-    const data = await res.json();
-    updateUI(data.user);
-  } catch (err) {
-    // Do not force redirect on transient network issues
-    console.error('User fetch failed:', err);
   }
 }
 
@@ -107,3 +60,4 @@ function applyTranslations() {
     el.textContent = i18n.t(key);
   });
 }
+

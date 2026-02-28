@@ -1,5 +1,6 @@
 //tasks.js
 import { fetchUserData, updateTopBar } from './userData.js';
+import { tonConnectUI } from './tonconnect.js';
 
 const TASK_TYPES = {
   DAILY: 'daily',
@@ -93,7 +94,7 @@ function createTaskElement(task, type) {
   `;
 
   return wrapper;
-}
+} 
 
 function getButtonLabel(task, completed) {
   if (completed) return 'Done';
@@ -157,7 +158,7 @@ async function handleButtonClick(e) {
     }
 
     if (action === 'play') {
-      window.location.href = '/puzzle.html';
+      window.location.href = '/marketPlace.html';
       return;
     }
 
@@ -190,12 +191,33 @@ function markButtonDone(btn) {
 ======================= */
 
 async function handleDailyCheckIn() {
-  const txHash = await window.ton.connectAndSendTransaction();
+  if (!tonConnectUI.wallet) {
+    throw new Error('Please connect your TON wallet first');
+  }
 
-  const res = await fetch('/api/tasks/daily-checkin', {
+  const priceRes = await fetch('/api/tonAmount/ton-amount', { credentials: 'include' });
+  if (!priceRes.ok) throw new Error('Failed to get TON amount');
+  const { tonAmount, recipientAddress } = await priceRes.json();
+  if (!recipientAddress) throw new Error('Payment recipient is not configured');
+  if (typeof tonAmount !== 'number' || tonAmount <= 0) throw new Error('Invalid TON amount');
+
+  const tx = await tonConnectUI.sendTransaction({
+    validUntil: Math.floor(Date.now() / 1000) + 300,
+    messages: [
+      {
+        address: recipientAddress,
+        amount: (tonAmount * 1e9).toFixed(0)
+      }
+    ]
+  });
+
+  if (!tx?.boc) throw new Error('Transaction rejected');
+
+  const res = await fetch('/api/dailyCheckIn/verify', {
     method: 'POST',
+    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ txHash })
+    body: JSON.stringify({ txHash: tx.boc })
   });
 
   const data = await res.json();
@@ -203,7 +225,7 @@ async function handleDailyCheckIn() {
   if (!res.ok) throw new Error(data.error || 'Check-in failed');
 
   await refreshUser();
-  showSuccessToast('Check-in successful +100 points');
+  showSuccessToast('Check-in successful +1000 points');
 }
 
 /* =======================
@@ -266,9 +288,17 @@ async function refreshUser() {
 }
 
 function showSuccessToast(msg) {
-  alert(msg); // replace later with your toast system
+  if (typeof window.showSuccessToast === 'function') {
+    window.showSuccessToast(msg);
+    return;
+  }
+  alert(msg);
 }
 
 function showErrorToast(msg) {
+  if (typeof window.showErrorToast === 'function') {
+    window.showErrorToast(msg);
+    return;
+  }
   alert(msg);
 }

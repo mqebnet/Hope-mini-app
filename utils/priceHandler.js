@@ -66,15 +66,23 @@ class PriceHandler {
       'https://api.coingecko.com/api/v3/simple/price',
       {
         params: {
-          ids: 'the-open-network',
-          vs_currencies: 'usdt'
+          ids: 'the-open-network,toncoin',
+          vs_currencies: 'usdt,usd'
         },
         timeout: 5000
       }
     );
 
-    const price = res?.data?.['the-open-network']?.usdt;
-    if (typeof price !== 'number') {
+    const data = res?.data || {};
+    const candidates = [
+      data?.['the-open-network']?.usdt,
+      data?.['toncoin']?.usdt,
+      data?.['the-open-network']?.usd,
+      data?.['toncoin']?.usd
+    ].map((v) => Number(v));
+
+    const price = candidates.find((v) => Number.isFinite(v) && v > 0);
+    if (!price) {
       throw new Error('Invalid Coingecko price response');
     }
 
@@ -82,17 +90,28 @@ class PriceHandler {
   }
 
   async fetchFromBinance() {
-    const res = await axios.get(
-      'https://api.binance.com/api/v3/ticker/price',
-      { params: { symbol: 'TONUSDT' }, timeout: 5000 }
-    );
+    const symbols = ['TONUSDT', 'TONFDUSD'];
+    let lastErr;
 
-    const price = Number(res.data?.price);
-    if (!price || Number.isNaN(price)) {
-      throw new Error('Invalid Binance price response');
+    for (const symbol of symbols) {
+      try {
+        const res = await axios.get(
+          'https://api.binance.com/api/v3/ticker/price',
+          { params: { symbol }, timeout: 5000 }
+        );
+
+        const price = Number(res.data?.price);
+        if (Number.isFinite(price) && price > 0) {
+          return price;
+        }
+      } catch (err) {
+        lastErr = err;
+      }
     }
 
-    return price;
+    const status = lastErr?.response?.status;
+    const details = lastErr?.response?.data?.msg || lastErr?.message || 'Unknown error';
+    throw new Error(`Invalid Binance price response${status ? ` (${status})` : ''}: ${details}`);
   }
 
   async getTonPriceUSDT(options = {}) {

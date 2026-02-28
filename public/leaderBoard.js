@@ -25,7 +25,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   try {
-    const res = await fetch('/api/user/me', { credentials: 'include' });
+    const res = await fetch('/api/user/me', { credentials: 'include', cache: 'no-store' });
     if (!res.ok) throw new Error('Unauthorized');
 
     const data = await res.json();
@@ -58,11 +58,12 @@ async function loadLeaderboard(levelIndex) {
     document.getElementById('leaderboard-level').textContent = `Level ${levelIndex} • ${levelName}`;
 
     users.forEach((u, i) => {
+      const displayName = u.username || u.telegramId;
       const row = document.createElement('div');
       row.className = 'leaderboard-row';
       row.innerHTML = `
         <span class="rank">${i + 1}</span>
-        <span class="username">${u.username || u.telegramId}</span>
+        <span class="username" title="${displayName}">${displayName}</span>
         <span class="xp">${formatNumber(u.xp)}</span>
         <span class="points">${formatNumber(u.points)}</span>
         <span class="tx">${u.transactionsCount ?? 0}</span>

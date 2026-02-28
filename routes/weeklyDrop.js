@@ -5,12 +5,15 @@ const router = express.Router();
 const User = require('../models/User');
 const Contestant = require('../models/Contestant');
 const { getUserLevel } = require('../utils/levelUtil');
+const { normalizeStreakIfMissed } = require('../utils/dailyCheckIn');
 
 // Step 1: Check eligibility (used by frontend to enable/disable button)
 router.get('/eligibility', async (req, res) => {
   try {
     const user = await User.findOne({ telegramId: req.user.telegramId });
     if (!user) return res.status(404).json({ error: 'User not found' });
+    const streakChanged = normalizeStreakIfMissed(user, new Date());
+    if (streakChanged) await user.save();
 
     const level = getUserLevel(user.points || 0);
     const eligible =
@@ -40,6 +43,8 @@ router.post('/enter', async (req, res) => {
 
     const user = await User.findOne({ telegramId: req.user.telegramId });
     if (!user) return res.status(404).json({ error: 'User not found' });
+    const streakChanged = normalizeStreakIfMissed(user, new Date());
+    if (streakChanged) await user.save();
 
     const level = getUserLevel(user.points || 0);
     if (level !== 'Believer') {

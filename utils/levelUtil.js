@@ -12,4 +12,24 @@ function getUserLevel(points) {
   else return "Eldrin"; // For points above 100,000,000
 }
 
-module.exports = { getUserLevel };
+function getNextLevelThreshold(points) {
+  const thresholds = [
+    50000,      // Seeker -> Dreamer
+    100000,     // Dreamer -> Believer
+    500000,     // Believer -> Challenger
+    1000000,    // Challenger -> Navigator
+    2000000,    // Navigator -> Ascender
+    5000000,    // Ascender -> Master
+    10000000,   // Master -> Grandmaster
+    20000000,   // Grandmaster -> Legend
+    50000000,   // Legend -> Eldrin
+    100000000   // Eldrin max
+  ];
+
+  for (const threshold of thresholds) {
+    if (points < threshold) return threshold;
+  }
+  return 100000000; // Max threshold
+}
+
+module.exports = { getUserLevel, getNextLevelThreshold };

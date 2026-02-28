@@ -16,6 +16,7 @@ const miningRouter = require('./routes/mining');
 
 const app = express();
 app.set('trust proxy', 1);
+app.set('etag', false);
 
 app.use((req, _, next) => {
   console.log(`[REQ] ${req.method} ${req.path}`);
@@ -66,7 +67,22 @@ const limiter = rateLimit({
 app.use('/api/', limiter);
 
 app.use(express.static(path.join(__dirname, 'public')));
+if (process.env.NODE_ENV !== 'production') {
+  app.use((req, res, next) => {
+    if (req.path.endsWith('.js') || req.path.endsWith('.html') || req.path.endsWith('.css')) {
+      res.setHeader('Cache-Control', 'no-store');
+    }
+    next();
+  });
+}
 
+// API responses should not be cached/revalidated in WebView.
+app.use('/api', (req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  next();
+});
 app.use('/api/auth', require('./routes/auth'));
 if (process.env.ENABLE_TEST_LOGIN === 'true') {
   app.use('/api/test-login', require('./routes/test-login'));
@@ -123,3 +139,5 @@ connectDB().then(() => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
 });
+
+

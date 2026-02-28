@@ -57,7 +57,7 @@ const UserSchema = new mongoose.Schema({
     joinedAt: { type: Date, default: Date.now }
   }],
 
-  inviteCode: { type: String, index: true },
+  inviteCode: { type: String, index: true, unique: true },
   invitedBy: { type: Number, default: null },
   invitedCount: { type: Number, default: 0 },
 
@@ -84,8 +84,29 @@ const UserSchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now }
   }],
 
+  badges: { type: [String], default: [] },
+
   mysteryBoxes: { type: [mysteryBoxSchema], default: [] }
 }, { timestamps: true });
+
+// generate a short unique code for referral/invite links
+function _genCode() {
+  // 4 random bytes -> 8 hex characters
+  return require('crypto').randomBytes(4).toString('hex');
+}
+
+// ensure every new user gets a permanent, unique inviteCode
+UserSchema.pre('save', async function(next) {
+  if (this.isNew && !this.inviteCode) {
+    let code;
+    const User = mongoose.models.User;
+    do {
+      code = _genCode();
+    } while (await User.exists({ inviteCode: code }));
+    this.inviteCode = code;
+  }
+  next();
+});
 
 // Indexes
 UserSchema.index({ level: 1, points: -1 });

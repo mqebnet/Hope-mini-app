@@ -1,6 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
+const { getNextLevelThreshold } = require('../utils/levelUtil');
+const {
+  normalizeStreakIfMissed,
+  getCheckInDayKey,
+  getNextResetAtUtc
+} = require('../utils/dailyCheckIn');
 
 /**
  * GET current authenticated user
@@ -20,6 +26,14 @@ router.get('/me', async (req, res) => {
       });
     }
 
+    const now = new Date();
+    const streakChanged = normalizeStreakIfMissed(user, now);
+    if (streakChanged) {
+      await user.save();
+    }
+    const todayDayKey = getCheckInDayKey(now);
+    const checkedInToday = (user.checkIns || []).some((c) => c.dayKey === todayDayKey);
+
     res.json({
       success: true,
       user: {
@@ -33,7 +47,12 @@ router.get('/me', async (req, res) => {
         silverTickets: user.silverTickets,
         goldTickets: user.goldTickets,
         lastCheckInDate: user.lastCheckInDate,
-        miningStartedAt: user.miningStartedAt
+        checkIns: user.checkIns || [],
+        badges: user.badges || [],
+        checkedInToday,
+        dailyCheckInResetAtUtc: getNextResetAtUtc(now).toISOString(),
+        miningStartedAt: user.miningStartedAt,
+        nextLevelAt: getNextLevelThreshold(user.points || 0)
       }
     });
   } catch (error) {

@@ -3,15 +3,53 @@ import { tonConnectUI } from './tonconnect.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
   const button = document.getElementById('ton-connect-button');
-  if (!button) return;
+  const topNav = document.getElementById('top-nav');
+  if (!button || !topNav) return;
 
   let busy = false;
+  const MAINNET_CHAIN = '-239';
+  const TESTNET_CHAIN = '-3';
+  const menu = document.createElement('div');
+  menu.id = 'wallet-popover';
+  menu.className = 'hidden';
+  menu.innerHTML = `
+    <p class="wallet-popover-title">Connected Wallet</p>
+    <p id="wallet-address" class="wallet-popover-address">-</p>
+    <button id="wallet-disconnect-btn" class="wallet-disconnect-btn">Disconnect</button>
+  `;
+  topNav.appendChild(menu);
+
+  const addressEl = menu.querySelector('#wallet-address');
+  const disconnectBtn = menu.querySelector('#wallet-disconnect-btn');
+
+  const getWalletChain = (wallet) => {
+    // TonConnect wallet format varies by version/wallet app.
+    return wallet?.account?.chain || wallet?.chain || null;
+  };
+  const getWalletAddress = (wallet) => wallet?.account?.address || '';
+  const shortAddress = (address) => {
+    if (!address || address.length < 13) return address || '-';
+    return `${address.slice(0, 6)}...${address.slice(-6)}`;
+  };
+  const closeMenu = () => menu.classList.add('hidden');
+  const toggleMenu = () => menu.classList.toggle('hidden');
+  const updateMenu = (wallet) => {
+    const fullAddress = getWalletAddress(wallet);
+    if (!fullAddress) {
+      addressEl.textContent = '-';
+      addressEl.removeAttribute('title');
+      closeMenu();
+      return;
+    }
+    addressEl.textContent = shortAddress(fullAddress);
+    addressEl.title = fullAddress;
+  };
 
   const updateUI = (wallet) => {
     if (wallet) {
       button.innerHTML = `<i data-lucide="wallet"></i> Connected`;
       button.classList.add('connected');
-      button.disabled = true;
+      button.disabled = false;
     } else {
       button.innerHTML = `<i data-lucide="wallet"></i> Connect Wallet`;
       button.classList.remove('connected');
@@ -32,19 +70,32 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   updateUI(tonConnectUI.wallet);
+  updateMenu(tonConnectUI.wallet);
 
   tonConnectUI.onStatusChange((wallet) => {
-    if (wallet && wallet.chain !== '-239') {
+    const chain = getWalletChain(wallet);
+    if (wallet && chain === TESTNET_CHAIN) {
       alert('Switch to TON Mainnet!');
       tonConnectUI.disconnect();
       return;
     }
 
+    if (wallet && !chain) {
+      console.warn('Unable to determine wallet chain from TonConnect payload:', wallet);
+    } else if (wallet && chain !== MAINNET_CHAIN) {
+      console.warn(`Unexpected wallet chain value: ${chain}`);
+    }
+
     updateUI(wallet);
+    updateMenu(wallet);
   });
 
   button.addEventListener('click', async () => {
-    if (busy || tonConnectUI.wallet) return;
+    if (busy) return;
+    if (tonConnectUI.wallet) {
+      toggleMenu();
+      return;
+    }
 
     try {
       busy = true;
@@ -56,5 +107,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     } finally {
       busy = false;
     }
+  });
+
+  disconnectBtn?.addEventListener('click', async () => {
+    try {
+      await tonConnectUI.disconnect();
+      closeMenu();
+    } catch (err) {
+      console.error('Wallet disconnect failed:', err);
+      alert('Failed to disconnect wallet');
+    }
+  });
+
+  document.addEventListener('click', (event) => {
+    if (menu.classList.contains('hidden')) return;
+    if (menu.contains(event.target) || button.contains(event.target)) return;
+    closeMenu();
   });
 });

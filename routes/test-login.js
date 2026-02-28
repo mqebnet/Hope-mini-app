@@ -5,6 +5,30 @@ const User = require('../models/User');
 
 const router = express.Router();
 
+function getCookieOptions(req) {
+  const isProd = process.env.NODE_ENV === 'production';
+  const viaHttps = req.secure || req.headers['x-forwarded-proto'] === 'https';
+  const explicitSameSite = (process.env.COOKIE_SAMESITE || '').toLowerCase();
+
+  let sameSite;
+  if (explicitSameSite === 'none' || explicitSameSite === 'lax' || explicitSameSite === 'strict') {
+    sameSite = explicitSameSite;
+  } else if (viaHttps) {
+    sameSite = 'none';
+  } else {
+    sameSite = isProd ? 'strict' : 'lax';
+  }
+
+  const secure = sameSite === 'none' ? true : (isProd || viaHttps);
+
+  return {
+    httpOnly: true,
+    sameSite,
+    secure,
+    path: '/'
+  };
+}
+
 router.post('/', async (req, res) => {
   const telegramId = 1002;
 
@@ -25,15 +49,10 @@ router.post('/', async (req, res) => {
     { expiresIn: '1h' }
   );
 
-  const isProduction = process.env.NODE_ENV === 'production';
-  res.cookie('jwt', token, {
-    httpOnly: true,
-    sameSite: isProduction ? 'strict' : 'lax',
-    secure: isProduction,
-    path: '/'
-  });
+  res.cookie('jwt', token, getCookieOptions(req));
 
   res.json({ token, userId: telegramId });
 });
 
 module.exports = router;
+
