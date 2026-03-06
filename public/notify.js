@@ -48,7 +48,73 @@
     return toast;
   }
 
+  function formatCompact(value) {
+    const n = Number(value) || 0;
+    if (n >= 1e9) return `${(n / 1e9).toFixed(1)}B`;
+    if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
+    if (n >= 1e3) return `${(n / 1e3).toFixed(1)}K`;
+    return String(n);
+  }
+
+  function showRewardPopup(reward = {}, options = {}) {
+    const title = options.title || 'Reward Claimed';
+    const points = Number(reward.points || 0);
+    const xp = Number(reward.xp || 0);
+    const bronze = Number(reward.bronzeTickets || 0);
+    const silver = Number(reward.silverTickets || 0);
+    const gold = Number(reward.goldTickets || 0);
+
+    const existing = document.getElementById('checkin-success-pop');
+    if (existing) existing.remove();
+
+    const pills = [
+      bronze > 0 ? '<div class="checkin-success-pill bronze"><span class="pill-label">Bronze</span><span data-count="' + bronze + '" class="pill-value">+0</span></div>' : '',
+      silver > 0 ? '<div class="checkin-success-pill silver"><span class="pill-label">Silver</span><span data-count="' + silver + '" class="pill-value">+0</span></div>' : '',
+      gold > 0 ? '<div class="checkin-success-pill gold"><span class="pill-label">Gold</span><span data-count="' + gold + '" class="pill-value">+0</span></div>' : '',
+      xp > 0 ? '<div class="checkin-success-pill xp"><span class="pill-label">XP</span><span data-count="' + xp + '" class="pill-value">+0</span></div>' : ''
+    ].filter(Boolean).join('');
+
+    const pop = document.createElement('div');
+    pop.id = 'checkin-success-pop';
+    pop.className = 'checkin-success-pop';
+    pop.innerHTML = `
+      <div class="checkin-success-card">
+        <div class="checkin-success-title">${title}</div>
+        <div class="checkin-success-reward"><span id="reward-points" data-count="${points}">+0</span> Points</div>
+        <div class="checkin-success-grid">${pills}</div>
+      </div>
+    `;
+
+    document.body.appendChild(pop);
+
+    const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
+    const animateCount = (el, value, durationMs = 820) => {
+      if (!el) return;
+      const start = performance.now();
+      const tick = (now) => {
+        const t = Math.min((now - start) / durationMs, 1);
+        const current = Math.round(value * easeOutCubic(t));
+        el.textContent = `+${formatCompact(current)}`;
+        if (t < 1) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    };
+
+    animateCount(pop.querySelector('#reward-points'), points, 900);
+    pop.querySelectorAll('[data-count]').forEach((el, idx) => {
+      const value = Number(el.getAttribute('data-count') || 0);
+      animateCount(el, value, 700 + idx * 80);
+    });
+
+    requestAnimationFrame(() => pop.classList.add('show'));
+    setTimeout(() => {
+      pop.classList.remove('show');
+      setTimeout(() => pop.remove(), 240);
+    }, Number(options.durationMs || 2400));
+  }
+
   window.showNotification = showNotification;
+  window.showRewardPopup = showRewardPopup;
   window.showSuccessToast = (msg) => showNotification(msg, 'success');
   window.showErrorToast = (msg) => showNotification(msg, 'error');
 

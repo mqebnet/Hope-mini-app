@@ -2,10 +2,19 @@
 // UI-only helpers
 
 export function formatPoints(points = 0) {
+  if (points < 100000) return points.toLocaleString();
   if (points >= 1e9) return `${(points / 1e9).toFixed(1)}B`;
   if (points >= 1e6) return `${(points / 1e6).toFixed(1)}M`;
-  if (points >= 1e3) return `${(points / 1e3).toFixed(0)}K`;
+  if (points >= 1e3) return `${(points / 1e3).toFixed(1)}K`;
   return points.toLocaleString();
+}
+
+export function formatCompact(value = 0) {
+  const n = Number(value) || 0;
+  if (n >= 1e9) return `${(n / 1e9).toFixed(1)}B`;
+  if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
+  if (n >= 1e3) return `${(n / 1e3).toFixed(1)}K`;
+  return n.toLocaleString();
 }
 
 export async function fetchUserData() {
@@ -47,10 +56,10 @@ export function updateTopBar(user) {
   setText('points-display', `${currentFormatted}/${maxFormatted}`);
   
   setText('streak', user.streak || 0);
-  setText('user-exp', user.xp || 0);
-  setText('bronze-tickets', user.bronzeTickets || 0);
-  setText('silver-tickets', user.silverTickets || 0);
-  setText('gold-tickets', user.goldTickets || 0);
+  setText('user-exp', formatCompact(user.xp || 0));
+  setText('bronze-tickets', formatCompact(user.bronzeTickets || 0));
+  setText('silver-tickets', formatCompact(user.silverTickets || 0));
+  setText('gold-tickets', formatCompact(user.goldTickets || 0));
 
   const progressEl = document.getElementById('points-progress');
   const pointsBarEl = document.getElementById('points-bar');
@@ -68,4 +77,3 @@ function setText(id, value) {
   const el = document.getElementById(id);
   if (el) el.textContent = value;
 }
-

@@ -9,16 +9,19 @@ const TASK_TYPES = {
 
 let currentUser = null;
 let taskDefinitions = null;
+let dailyCheckInCheckedToday = false;
 
 document.addEventListener('DOMContentLoaded', async () => {
   try {
-    const [definitions, user] = await Promise.all([
+    const [definitions, user, checkInStatus] = await Promise.all([
       fetchTaskDefinitions(),
-      fetchUserData()
+      fetchUserData(),
+      fetchDailyCheckInStatus()
     ]);
 
     taskDefinitions = definitions;
     currentUser = user;
+    dailyCheckInCheckedToday = Boolean(checkInStatus?.checkedInToday);
 
     updateTopBar(user);
 
@@ -36,8 +39,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 ======================= */
 
 async function fetchTaskDefinitions() {
-  const res = await fetch('/api/tasks/definitions');
+  const res = await fetch('/api/tasks/definitions', { credentials: 'include', cache: 'no-store' });
   if (!res.ok) throw new Error('Failed to fetch task definitions');
+  return res.json();
+}
+
+async function fetchDailyCheckInStatus() {
+  const res = await fetch('/api/dailyCheckIn/status', { credentials: 'include', cache: 'no-store' });
+  if (!res.ok) throw new Error('Failed to fetch daily check-in status');
   return res.json();
 }
 
@@ -69,7 +78,9 @@ function renderOneTimeTasks() {
 }
 
 function createTaskElement(task, type) {
-  const completed = currentUser.completedTasks?.includes(task.id);
+  const completed = task.action === 'check-in'
+    ? dailyCheckInCheckedToday
+    : currentUser.completedTasks?.includes(task.id);
 
   const wrapper = document.createElement('div');
   wrapper.className = 'task-item';
@@ -79,7 +90,6 @@ function createTaskElement(task, type) {
     <div class="task-info">
       <h3>${task.title}</h3>
       <p>${task.description}</p>
-      <p class="reward">+${task.reward} points</p>
     </div>
 
     <button class="task-button ${completed ? 'disabled' : ''}"
@@ -101,7 +111,6 @@ function getButtonLabel(task, completed) {
 
   switch (task.action) {
     case 'check-in': return 'Check In';
-    case 'play': return 'Play';
     case 'visit': return 'Check';
     case 'verify': return 'Go';
     default: return 'Start';
@@ -155,10 +164,7 @@ async function handleButtonClick(e) {
   try {
     if (action === 'check-in') {
       await handleDailyCheckIn();
-    }
-
-    if (action === 'play') {
-      window.location.href = '/marketPlace.html';
+      renderAllTasks();
       return;
     }
 
@@ -176,7 +182,13 @@ async function handleButtonClick(e) {
     markButtonDone(btn);
   } catch (err) {
     console.error('Task action error:', err);
-    showErrorToast('Task failed');
+    if (err?.message === 'Already checked in today') {
+      showSuccessToast('You already checked in today');
+      await refreshUser();
+      renderAllTasks();
+      return;
+    }
+    showErrorToast(err?.message || 'Task failed');
   }
 }
 
@@ -191,6 +203,22 @@ function markButtonDone(btn) {
 ======================= */
 
 async function handleDailyCheckIn() {
+  const preStatus = await fetchDailyCheckInStatus();
+  if (preStatus?.checkedInToday) {
+    dailyCheckInCheckedToday = true;
+    throw new Error('Already checked in today');
+  }
+
+  if (typeof tonConnectUI.restoreConnection === 'function') {
+    await tonConnectUI.restoreConnection();
+  } else if (tonConnectUI.connectionRestored && typeof tonConnectUI.connectionRestored.then === 'function') {
+    await tonConnectUI.connectionRestored;
+  }
+
+  if (!tonConnectUI.wallet) {
+    await tonConnectUI.openModal();
+  }
+
   if (!tonConnectUI.wallet) {
     throw new Error('Please connect your TON wallet first');
   }
@@ -211,20 +239,30 @@ async function handleDailyCheckIn() {
     ]
   });
 
-  if (!tx?.boc) throw new Error('Transaction rejected');
+  const txHash = tx?.transaction?.hash || tx?.txid?.hash || tx?.hash || '';
+  const txBoc = tx?.boc || '';
+  if (!txHash && !txBoc) throw new Error('Transaction proof missing');
 
   const res = await fetch('/api/dailyCheckIn/verify', {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ txHash: tx.boc })
+    body: JSON.stringify({ txHash, txBoc })
   });
 
   const data = await res.json();
 
-  if (!res.ok) throw new Error(data.error || 'Check-in failed');
+  if (!res.ok) {
+    if ((data?.error || '').toLowerCase().includes('already checked in')) {
+      dailyCheckInCheckedToday = true;
+      throw new Error('Already checked in today');
+    }
+    throw new Error(data.error || 'Check-in failed');
+  }
 
+  dailyCheckInCheckedToday = true;
   await refreshUser();
+  renderAllTasks();
   showSuccessToast('Check-in successful +1000 points');
 }
 
@@ -235,11 +273,13 @@ async function handleDailyCheckIn() {
 async function completeTask(taskId) {
   const res = await fetch('/api/tasks/complete', {
     method: 'POST',
+    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ taskId })
   });
 
-  if (!res.ok) throw new Error('Failed to complete task');
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Failed to complete task');
 
   await refreshUser();
 }
@@ -265,11 +305,13 @@ async function handleVerificationSubmit(e) {
 
   const res = await fetch('/api/tasks/verify-proof', {
     method: 'POST',
+    credentials: 'include',
     body: formData
   });
 
   if (!res.ok) {
-    showErrorToast('Verification failed');
+    const err = await res.json().catch(() => ({}));
+    showErrorToast(err.error || 'Verification failed');
     return;
   }
 
@@ -283,7 +325,12 @@ async function handleVerificationSubmit(e) {
 ======================= */
 
 async function refreshUser() {
-  currentUser = await fetchUserData();
+  const [user, checkInStatus] = await Promise.all([
+    fetchUserData(),
+    fetchDailyCheckInStatus().catch(() => ({ checkedInToday: dailyCheckInCheckedToday }))
+  ]);
+  currentUser = user;
+  dailyCheckInCheckedToday = Boolean(checkInStatus?.checkedInToday);
   updateTopBar(currentUser);
 }
 

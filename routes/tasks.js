@@ -3,11 +3,20 @@ const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
 const { verifyTransaction } = require('../utils/tonHandler');
+const { getUserLevel } = require('../utils/levelUtil');
 const {
   DAILY_CHECKIN_REWARD,
   getCheckInDayKey,
   applyVerifiedDailyCheckIn
 } = require('../utils/dailyCheckIn');
+const { getTaskCatalog } = require('../utils/taskCatalog');
+
+async function findTaskById(taskId) {
+  const catalog = await getTaskCatalog();
+  const daily = Array.isArray(catalog?.daily) ? catalog.daily : [];
+  const oneTime = Array.isArray(catalog?.oneTime) ? catalog.oneTime : [];
+  return [...daily, ...oneTime].find((t) => t.id === taskId) || null;
+}
 
 /**
  * POST /api/tasks/daily-checkin
@@ -16,20 +25,28 @@ const {
 router.post('/daily-checkin', async (req, res) => {
   try {
     const telegramId = req.user.telegramId;
-    const { txHash } = req.body;
+    const { txHash, txBoc } = req.body;
 
-    if (!txHash) {
-      return res.status(400).json({ error: 'Missing transaction hash' });
+    if (!txHash && !txBoc) {
+      return res.status(400).json({ error: 'Missing transaction proof' });
     }
 
-    const isValid = await verifyTransaction({
+    const verification = await verifyTransaction({
       telegramId,
       txHash,
+      txBoc,
+      purpose: 'daily-checkin',
       requiredUsd: 0.3
     });
 
-    if (!isValid) {
-      return res.status(400).json({ error: 'Invalid transaction' });
+    if (!verification.ok) {
+      console.warn('Tasks daily-checkin verification rejected', {
+        telegramId,
+        reason: verification.reason,
+        hasTxHash: Boolean(txHash),
+        hasTxBoc: Boolean(txBoc)
+      });
+      return res.status(400).json({ error: verification.reason || 'Invalid transaction' });
     }
 
     const today = new Date();
@@ -40,11 +57,12 @@ router.post('/daily-checkin', async (req, res) => {
     if ((user.checkIns || []).some((c) => c.dayKey === dayKey)) {
       return res.status(400).json({ error: 'Already checked in today' });
     }
-    if ((user.checkIns || []).some((c) => c.txHash === txHash)) {
+    const proofRef = verification.txRef || txHash || txBoc;
+    if ((user.checkIns || []).some((c) => c.txHash === proofRef)) {
       return res.status(400).json({ error: 'Transaction already used for check-in' });
     }
 
-    const applyResult = applyVerifiedDailyCheckIn(user, txHash, today);
+    const applyResult = applyVerifiedDailyCheckIn(user, proofRef, today);
     if (!applyResult.ok) {
       return res.status(applyResult.status).json({ error: applyResult.error });
     }
@@ -81,6 +99,12 @@ router.post('/complete', async (req, res) => {
       return res.status(400).json({ error: 'Missing taskId' });
     }
 
+    const task = await findTaskById(taskId);
+    if (!task) return res.status(400).json({ error: 'Unknown task' });
+    if (task.action === 'check-in' || task.action === 'verify') {
+      return res.status(400).json({ error: 'Use the correct flow for this task type' });
+    }
+
     const user = await User.findOne({ telegramId });
     if (!user) return res.status(404).json({ error: 'User not found' });
 
@@ -90,14 +114,21 @@ router.post('/complete', async (req, res) => {
       return res.status(400).json({ error: 'Task already completed' });
     }
 
+    const rewardPoints = Number(task.reward || 0);
     user.completedTasks.push(taskId);
-    user.points += 100;
+    user.points = (user.points || 0) + rewardPoints;
+    user.level = getUserLevel(user.points);
 
     await user.save();
 
     res.json({
       success: true,
-      points: user.points
+      reward: { points: rewardPoints },
+      user: {
+        points: user.points,
+        xp: user.xp || 0,
+        level: user.level
+      }
     });
   } catch (err) {
     console.error('Complete Task Error:', err);
@@ -118,6 +149,12 @@ router.post('/verify-proof', async (req, res) => {
       return res.status(400).json({ error: 'Missing taskId' });
     }
 
+    const task = await findTaskById(taskId);
+    if (!task) return res.status(400).json({ error: 'Unknown task' });
+    if (task.action !== 'verify') {
+      return res.status(400).json({ error: 'Task does not require proof verification' });
+    }
+
     const user = await User.findOne({ telegramId });
     if (!user) return res.status(404).json({ error: 'User not found' });
 
@@ -131,14 +168,21 @@ router.post('/verify-proof', async (req, res) => {
     // - Save image
     // - Send to email: admin@yourdomain.com
 
+    const rewardPoints = Number(task.reward || 0);
     user.completedTasks.push(taskId);
-    user.points += 200;
+    user.points = (user.points || 0) + rewardPoints;
+    user.level = getUserLevel(user.points);
 
     await user.save();
 
     res.json({
       success: true,
-      points: user.points
+      reward: { points: rewardPoints },
+      user: {
+        points: user.points,
+        xp: user.xp || 0,
+        level: user.level
+      }
     });
   } catch (err) {
     console.error('Verify Proof Error:', err);
@@ -150,92 +194,12 @@ router.post('/verify-proof', async (req, res) => {
  * GET /api/tasks/definitions
  */
 router.get('/definitions', (_, res) => {
-  res.json({
-    daily: [
-      {
-        id: 'daily-checkin',
-        title: 'Daily Check-in',
-        action: 'check-in',
-        reward: 1000,
-        description: 'Start your day with a check-in (+1000 points, +100 bronze, +5 XP)',
-        transactionRequired: true,
-        feeUSD: 0.3
-      },
-      {
-        id: 'play-puzzle',
-        title: 'Play Puzzles',
-        action: 'play',
-        reward: 100,
-        description: 'Solve today\'s puzzle'
-      },
-      {
-        id: 'visit-telegram',
-        title: 'Visit Telegram Channel',
-        action: 'visit',
-        reward: 100,
-        description: 'Check our Telegram updates',
-        url: 'https://t.me/yourchannel'
-      },
-      {
-        id: 'twitter-engage',
-        title: 'Like & Retweet Post',
-        action: 'visit',
-        reward: 100,
-        description: 'Engage with our latest Tweet',
-        url: 'https://twitter.com/yourpost'
-      },
-      {
-        id: 'watch-youtube',
-        title: 'Watch YouTube Video',
-        action: 'visit',
-        reward: 100,
-        description: 'Watch our latest video',
-        url: 'https://youtube.com/yourvideo'
-      }
-    ],
-    oneTime: [
-      {
-        id: 'join-telegram',
-        title: 'Subscribe to Telegram Channel',
-        action: 'verify',
-        reward: 200,
-        description: 'Become a member',
-        url: 'https://t.me/yourchannel'
-      },
-      {
-        id: 'subscribe-youtube',
-        title: 'Subscribe to YouTube',
-        action: 'verify',
-        reward: 200,
-        description: 'Join our video hub',
-        url: 'https://youtube.com/yourchannel'
-      },
-      {
-        id: 'follow-twitter',
-        title: 'Follow Twitter Handle',
-        action: 'verify',
-        reward: 200,
-        description: 'Stay updated',
-        url: 'https://twitter.com/yourhandle'
-      },
-      {
-        id: 'join-group',
-        title: 'Join Chat Group',
-        action: 'verify',
-        reward: 200,
-        description: 'Meet the community',
-        url: 'https://t.me/yourgroup'
-      },
-      {
-        id: 'future-task',
-        title: 'Special Mission',
-        action: 'verify',
-        reward: 500,
-        description: 'Coming soon',
-        comingSoon: true
-      }
-    ]
-  });
+  getTaskCatalog()
+    .then((catalog) => res.json(catalog))
+    .catch((err) => {
+      console.error('Task definitions error:', err);
+      res.status(500).json({ error: 'Failed to load task definitions' });
+    });
 });
 
 module.exports = router;

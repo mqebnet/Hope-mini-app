@@ -9,6 +9,15 @@ const router = express.Router();
 const TELEGRAM_AUTH_MAX_AGE_SEC = Number(process.env.TELEGRAM_AUTH_MAX_AGE_SEC || 86400);
 const TELEGRAM_FUTURE_SKEW_SEC = Number(process.env.TELEGRAM_FUTURE_SKEW_SEC || 300);
 
+function getAdminIds() {
+  return new Set(
+    (process.env.ADMIN_TELEGRAM_IDS || '')
+      .split(',')
+      .map((v) => Number(v.trim()))
+      .filter((v) => Number.isFinite(v))
+  );
+}
+
 function getCookieOptions(req) {
   const isProd = process.env.NODE_ENV === 'production';
   const viaHttps = req.secure || req.headers['x-forwarded-proto'] === 'https';
@@ -140,12 +149,14 @@ router.post('/telegram', async (req, res) => {
     }
 
     const { telegramId, username } = parsed;
+    const isAdmin = getAdminIds().has(telegramId);
 
     let user = await User.findOne({ telegramId });
     if (!user) {
       user = new User({
         telegramId,
         username,
+        isAdmin,
         points: 0,
         xp: 0,
         streak: 0,
@@ -160,6 +171,9 @@ router.post('/telegram', async (req, res) => {
     } else if (!user.inviteCode) {
       // retroactively fill missing codes for existing accounts
       user.inviteCode = await generateUniqueInviteCode();
+      await user.save();
+    } else if (user.isAdmin !== isAdmin) {
+      user.isAdmin = isAdmin;
       await user.save();
     }
 
@@ -179,6 +193,7 @@ router.post('/telegram', async (req, res) => {
         level: user.level,
         xp: user.xp,
         streak: user.streak,
+        isAdmin: user.isAdmin,
         points: user.points,
         badges: user.badges || [],
         bronzeTickets: user.bronzeTickets,

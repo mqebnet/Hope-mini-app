@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
-const { getNextLevelThreshold } = require('../utils/levelUtil');
+const { getNextLevelThreshold, getUserLevel } = require('../utils/levelUtil');
 const {
   normalizeStreakIfMissed,
   getCheckInDayKey,
@@ -28,7 +28,12 @@ router.get('/me', async (req, res) => {
 
     const now = new Date();
     const streakChanged = normalizeStreakIfMissed(user, now);
-    if (streakChanged) {
+    const calculatedLevel = getUserLevel(user.points || 0);
+    const levelChanged = user.level !== calculatedLevel;
+    if (levelChanged) {
+      user.level = calculatedLevel;
+    }
+    if (streakChanged || levelChanged) {
       await user.save();
     }
     const todayDayKey = getCheckInDayKey(now);
@@ -39,6 +44,7 @@ router.get('/me', async (req, res) => {
       user: {
         telegramId: user.telegramId,
         username: user.username,
+        isAdmin: Boolean(user.isAdmin),
         points: user.points,
         level: user.level,
         streak: user.streak,

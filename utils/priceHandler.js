@@ -2,9 +2,31 @@
 const axios = require('axios');
 const KeyValue = require('../models/KeyValue');
 
+/**
+ * Database key for TON price cache
+ * @type {string}
+ */
 const TON_PRICE_CACHE_KEY = 'ton_price_usdt_cache_v1';
 
+/**
+ * **PriceHandler** - Singleton for managing TON/USDT price with caching
+ *
+ * **Features:**
+ * - In-memory cache with configurable TTL (fresh: 60s, stale fallback: 30min)
+ * - Persistence to MongoDB (KeyValue) for recovery on restart
+ * - Fallback to Binance if Coingecko fails
+ * - `allowStale` option to use old price if all sources fail
+ *
+ * **Usage:**
+ * ```javascript
+ * const price = await priceHandler.getTonPriceUSDT();
+ * const tonAmount = await priceHandler.usdtToTon(0.3);
+ * ```
+ */
 class PriceHandler {
+  /**
+   * Initialize price handler
+   */
   constructor() {
     this.cachedPrice = null;
     this.lastFetchedAt = 0;
@@ -14,6 +36,12 @@ class PriceHandler {
     this.hydratingPromise = null;
   }
 
+  /**
+   * Load price cache from database on startup
+   * @async
+   * @private
+   * @returns {Promise<void>}
+   */
   async hydrateCacheFromDb() {
     if (this.hydrated) return;
     if (this.hydratingPromise) return this.hydratingPromise;
@@ -40,6 +68,12 @@ class PriceHandler {
     return this.hydratingPromise;
   }
 
+  /**
+   * Persist current price cache to database
+   * @async
+   * @private
+   * @returns {Promise<void>}
+   */
   async persistCacheToDb() {
     if (!this.cachedPrice || !this.lastFetchedAt) return;
 
@@ -61,6 +95,13 @@ class PriceHandler {
     }
   }
 
+  /**
+   * Fetch TON price from Coingecko API
+   * @async
+   * @private
+   * @returns {Promise<number>} TON price in USDT
+   * @throws {Error} If Coingecko response is invalid
+   */
   async fetchFromCoingecko() {
     const res = await axios.get(
       'https://api.coingecko.com/api/v3/simple/price',
@@ -89,6 +130,13 @@ class PriceHandler {
     return price;
   }
 
+  /**
+   * Fetch TON price from Binance API (fallback if Coingecko fails)
+   * @async
+   * @private
+   * @returns {Promise<number>} TON price in USDT
+   * @throws {Error} If both Binance endpoints fail
+   */
   async fetchFromBinance() {
     const symbols = ['TONUSDT', 'TONFDUSD'];
     let lastErr;
@@ -114,6 +162,18 @@ class PriceHandler {
     throw new Error(`Invalid Binance price response${status ? ` (${status})` : ''}: ${details}`);
   }
 
+  /**
+   * Get current TON price in USDT
+   * Tries fresh cache → Coingecko → Binance → stale cache
+   * @async
+   * @param {Object} [options={}] - Options
+   * @param {boolean} [options.allowStale=false] - Fall back to stale cache if fetch fails
+   * @returns {Promise<number>} TON price in USDT (e.g., 6.5)
+   * @throws {Error} If all sources fail and allowStale=false
+   * @example
+   * const price = await priceHandler.getTonPriceUSDT();
+   * console.log(price); // 6.42
+   */
   async getTonPriceUSDT(options = {}) {
     const { allowStale = false } = options;
     const now = Date.now();
@@ -151,7 +211,16 @@ class PriceHandler {
   }
 
   /**
-   * Convert USDT to TON
+   * Convert USDT amount to equivalent TON
+   * @async
+   * @param {number} usdtAmount - Amount in USDT
+   * @param {Object} [options={}] - Options passed to getTonPriceUSDT
+   * @param {boolean} [options.allowStale=false] - Allow using stale price
+   * @returns {Promise<number>} Equivalent amount in TON (6 decimals)
+   * @throws {Error} If usdtAmount is invalid or price fetch fails
+   * @example
+   * const tonAmount = await priceHandler.usdtToTon(0.3);
+   * console.log(tonAmount); // 0.046731
    */
   async usdtToTon(usdtAmount, options = {}) {
     if (typeof usdtAmount !== 'number' || usdtAmount <= 0) {

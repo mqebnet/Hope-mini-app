@@ -1,3 +1,12 @@
+/**
+ * Determine user's level based on accumulated points
+ * @param {number} points - User's total accumulated points
+ * @returns {string} Level name (Seeker → Eldrin)
+ * @example
+ * getUserLevel(75000) // 'Dreamer'
+ * getUserLevel(0)     // 'Seeker'
+ * getUserLevel(1e9)   // 'Eldrin'
+ */
 function getUserLevel(points) {
   if (points < 50000) return "Seeker";               // 0 to 50,000
   else if (points < 100000) return "Dreamer";         // 50,000 to 100,000
@@ -12,6 +21,14 @@ function getUserLevel(points) {
   else return "Eldrin"; // For points above 100,000,000
 }
 
+/**
+ * Get the point threshold required for the next level
+ * @param {number} points - User's current points
+ * @returns {number} Points needed to reach next level (or max if already at Eldrin)
+ * @example
+ * getNextLevelThreshold(25000)  // 50000
+ * getNextLevelThreshold(75000)  // 100000
+ */
 function getNextLevelThreshold(points) {
   const thresholds = [
     50000,      // Seeker -> Dreamer

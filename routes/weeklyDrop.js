@@ -6,6 +6,7 @@ const User = require('../models/User');
 const Contestant = require('../models/Contestant');
 const { getUserLevel } = require('../utils/levelUtil');
 const { normalizeStreakIfMissed } = require('../utils/dailyCheckIn');
+const { getCurrentContestWeek } = require('../utils/contestWeek');
 
 // Step 1: Check eligibility (used by frontend to enable/disable button)
 router.get('/eligibility', async (req, res) => {
@@ -63,7 +64,7 @@ router.post('/enter', async (req, res) => {
     user.goldTickets -= 10;
     await user.save();
 
-    const currentWeek = process.env.CURRENT_CONTEST_WEEK || 'Week 1';
+    const currentWeek = await getCurrentContestWeek();
 
     await Contestant.create({
       telegramId: user.telegramId,

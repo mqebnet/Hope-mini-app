@@ -3,6 +3,7 @@ const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
 const { generateUniqueInviteCode } = require('../utils/inviteCode');
+const { getUserLevel } = require('../utils/levelUtil');
 
 const rewards = {
   1: { points: 100, xp: 1 },
@@ -34,6 +35,7 @@ router.post('/register', async (req, res) => {
 
     newUser.invitedBy = inviter.telegramId;
     newUser.points = (newUser.points || 0) + 100;
+    newUser.level = getUserLevel(newUser.points);
     await newUser.save();
 
     inviter.invitedCount = (inviter.invitedCount || 0) + 1;
@@ -83,20 +85,30 @@ router.get('/progress', async (req, res) => {
   const user = await User.findOne({ telegramId });
   if (!user) return res.status(404).json({ error: 'User not found' });
 
+  const completedInviteTasks = Array.isArray(user.completedInviteTasks)
+    ? user.completedInviteTasks.map((v) => Number(v)).filter((v) => Number.isFinite(v))
+    : [];
+
   res.json({
     invitedCount: user.invitedCount || 0,
-    completedTasks: user.completedInviteTasks || []
+    completedTasks: completedInviteTasks,
+    points: user.points || 0,
+    xp: user.xp || 0,
+    level: user.level
   });
 });
 
 router.get('/verify', async (req, res) => {
   const target = parseInt(req.query.target, 10);
+  if (!Number.isFinite(target)) return res.status(400).json({ error: 'Invalid target' });
   const telegramId = req.user.telegramId;
   const user = await User.findOne({ telegramId });
   if (!user) return res.status(404).json({ error: 'User not found' });
 
   const completed = (user.invitedCount || 0) >= target;
-  const claimed = user.completedInviteTasks?.includes(target) || false;
+  const claimed = Array.isArray(user.completedInviteTasks)
+    ? user.completedInviteTasks.map((v) => Number(v)).includes(target)
+    : false;
 
   res.json({ completed, claimed });
 });
@@ -114,17 +126,31 @@ router.post('/claim', async (req, res) => {
     return res.status(400).json({ error: 'Target not reached' });
   }
 
-  if (user.completedInviteTasks?.includes(target)) {
+  user.completedInviteTasks = Array.isArray(user.completedInviteTasks)
+    ? user.completedInviteTasks.map((v) => Number(v)).filter((v) => Number.isFinite(v))
+    : [];
+
+  if (user.completedInviteTasks.includes(target)) {
     return res.status(400).json({ error: 'Already claimed' });
   }
 
-  user.points += reward.points;
-  user.xp += reward.xp;
-  user.completedInviteTasks = user.completedInviteTasks || [];
+  user.points = (user.points || 0) + reward.points;
+  user.xp = (user.xp || 0) + reward.xp;
+  user.level = getUserLevel(user.points);
   user.completedInviteTasks.push(target);
 
   await user.save();
-  res.json({ success: true });
+  res.json({
+    success: true,
+    reward,
+    user: {
+      points: user.points,
+      xp: user.xp,
+      level: user.level,
+      invitedCount: user.invitedCount || 0,
+      completedInviteTasks: user.completedInviteTasks
+    }
+  });
 });
 
 router.get('/top-referrers', async (req, res) => {

@@ -14,6 +14,10 @@ const PROFILE_FALLBACK_HTML = `
   <p><strong>Gold Tickets:</strong> <span id="profile-gold-tickets">-</span></p>
   <p><strong>Streak:</strong> <span id="profile-streak">-</span></p>
   <p><strong>Perfect Streak Badge:</strong> <span id="profile-perfect-streak-badge">-</span></p>
+  <p id="profile-admin-row" style="display:none;">
+    <strong>Admin:</strong>
+    <button id="profile-admin-link" type="button">Open Admin Dashboard</button>
+  </p>
 </div>`;
 
 function setText(id, value) {
@@ -75,6 +79,10 @@ async function loadUserProfile() {
   setText('profile-streak', user.streak);
   const hasPerfectBadge = (user.badges || []).includes('perfect-streak-10');
   setText('profile-perfect-streak-badge', hasPerfectBadge ? 'Earned' : 'Not yet');
+  const adminRow = document.getElementById('profile-admin-row');
+  if (adminRow) {
+    adminRow.style.display = user.isAdmin ? 'block' : 'none';
+  }
 
   updateTopBar(user);
 }
@@ -92,6 +100,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const panel = document.getElementById('profile-panel');
     if (panel) panel.style.display = 'none';
     profileContainer.style.display = 'none';
+  });
+  profileContainer.addEventListener('click', (event) => {
+    const adminBtn = event.target.closest('#profile-admin-link');
+    if (!adminBtn) return;
+    window.location.href = '/admin';
   });
 
   profileButton.addEventListener('click', async () => {

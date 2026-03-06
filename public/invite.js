@@ -12,7 +12,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Load invite link for the current user
     const inviteLinkInput = document.getElementById("invite-link");
-    const linkRes = await fetch('/api/invite/link');
+    const linkRes = await fetch('/api/invite/link', { credentials: 'include' });
     const { inviteLink } = await linkRes.json();
     inviteLinkInput.value = inviteLink;
 
@@ -25,6 +25,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Load progress
     await loadProgress();
+    await loadReferralLeaderboard();
 
     lucide.createIcons();
   } catch (err) {
@@ -34,11 +35,13 @@ document.addEventListener("DOMContentLoaded", async () => {
 });
 
 async function loadProgress() {
-  const res = await fetch('/api/invite/progress');
+  const res = await fetch('/api/invite/progress', { credentials: 'include', cache: 'no-store' });
   const data = await res.json();
 
   const invitedCount = data.invitedCount || 0;
-  const completedTasks = data.completedTasks || [];
+  const completedTasks = Array.isArray(data.completedTasks)
+    ? data.completedTasks.map((v) => Number(v))
+    : [];
 
   document.querySelectorAll('.invite-task').forEach(task => {
     const target = parseInt(task.dataset.target, 10);
@@ -59,8 +62,16 @@ async function loadProgress() {
 
     btn.onclick = async () => {
       try {
-        const verifyRes = await fetch(`/api/invite/verify?target=${target}`);
-        const { completed } = await verifyRes.json();
+        const verifyRes = await fetch(`/api/invite/verify?target=${target}`, { credentials: 'include', cache: 'no-store' });
+        const verifyData = await verifyRes.json();
+        if (!verifyRes.ok) throw new Error(verifyData.error || 'Verification failed');
+        const { completed, claimed } = verifyData;
+        if (claimed) {
+          btn.textContent = "Claimed";
+          btn.disabled = true;
+          btn.classList.add('claimed');
+          return;
+        }
 
         if (!completed) {
           showNotification(
@@ -75,15 +86,16 @@ async function loadProgress() {
 
         btn.onclick = async () => {
           const claimRes = await fetch(`/api/invite/claim?target=${target}`, {
-            method: 'POST'
+            method: 'POST',
+            credentials: 'include'
           });
 
-          if (!claimRes.ok) {
-            const err = await claimRes.json();
-            throw new Error(err.error || "Claim failed");
-          }
+          const claimData = await claimRes.json();
+          if (!claimRes.ok) throw new Error(claimData.error || "Claim failed");
 
-          showNotification("Reward claimed!", "success");
+          const refreshedUser = await fetchUserData();
+          updateTopBar(refreshedUser);
+          showNotification(`Reward claimed! +${claimData.reward?.points || 0} points`, "success");
           await loadProgress();
         };
       } catch (e) {
@@ -94,7 +106,7 @@ async function loadProgress() {
 }
 
 async function loadReferralLeaderboard() {
-  const res = await fetch('/api/invite/top-referrers');
+  const res = await fetch('/api/invite/top-referrers', { credentials: 'include' });
   const data = await res.json();
 
   const container = document.getElementById('referral-leaderboard-list');

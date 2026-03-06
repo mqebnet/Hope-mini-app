@@ -8,7 +8,7 @@ router.get('/ton-amount', async (req, res) => {
     const usd = Number.parseFloat(req.query.usd);
     const targetUsd = Number.isFinite(usd) && usd > 0 ? usd : 0.3;
     const tonEquivalent = await priceHandler.usdtToTon(targetUsd, { allowStale: true });
-    const recipientAddress = process.env.DEV_WALLET_ADDRESS || '';
+    const recipientAddress = process.env.DEV_WALLET_ADDRESS || process.env.TON_WALLET_ADDRESS || '';
     res.json({ tonAmount: tonEquivalent, recipientAddress, usd: targetUsd });
   } catch (error) {
     console.error('TON Amount Error:', error);

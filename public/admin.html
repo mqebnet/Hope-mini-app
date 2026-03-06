@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HOPE Admin</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <style>
+    .admin-wrap { max-width: 980px; margin: 16px auto 120px; padding: 16px; }
+    .admin-card { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); border-radius: 12px; padding: 14px; margin-bottom: 14px; }
+    .admin-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(220px,1fr)); gap: 10px; }
+    .admin-input, .admin-textarea { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.25); color: #fff; }
+    .admin-textarea { min-height: 120px; resize: vertical; }
+    .admin-btn { padding: 10px 12px; border: 0; border-radius: 8px; cursor: pointer; background: #1f8f45; color: #fff; font-weight: 700; }
+    .admin-btn.alt { background: #116ca8; }
+    .admin-btn.warn { background: #a86d11; }
+    .admin-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; }
+    .admin-mono { font-family: Consolas, Monaco, monospace; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <main class="admin-wrap">
+    <h1>Admin Dashboard</h1>
+
+    <section class="admin-card">
+      <h2>Overview</h2>
+      <div id="admin-stats" class="admin-grid"></div>
+    </section>
+
+    <section class="admin-card">
+      <h2>Users</h2>
+      <div class="admin-row">
+        <input id="user-search" class="admin-input" placeholder="Search telegramId or username" />
+        <button id="btn-load-users" class="admin-btn alt">Load</button>
+      </div>
+      <div id="users-result" class="admin-mono"></div>
+    </section>
+
+    <section class="admin-card">
+      <h2>Update User</h2>
+      <div class="admin-grid">
+        <input id="edit-telegram-id" class="admin-input" placeholder="telegramId" />
+        <input id="edit-points" class="admin-input" placeholder="points (optional)" />
+        <input id="edit-xp" class="admin-input" placeholder="xp (optional)" />
+        <input id="edit-streak" class="admin-input" placeholder="streak (optional)" />
+        <input id="edit-level" class="admin-input" placeholder="level (optional)" />
+        <input id="edit-admin" class="admin-input" placeholder="isAdmin true/false (optional)" />
+      </div>
+      <button id="btn-update-user" class="admin-btn">Save User</button>
+      <div id="update-user-result" class="admin-mono"></div>
+    </section>
+
+    <section class="admin-card">
+      <h2>Task Catalog</h2>
+      <p>JSON with keys: <code>daily</code> and <code>oneTime</code>.</p>
+      <textarea id="tasks-json" class="admin-textarea"></textarea>
+      <div class="admin-grid">
+        <button id="btn-load-tasks" class="admin-btn alt">Load Tasks</button>
+        <button id="btn-save-tasks" class="admin-btn">Save Tasks</button>
+      </div>
+      <div id="tasks-result" class="admin-mono"></div>
+    </section>
+
+    <section class="admin-card">
+      <h2>Contests</h2>
+      <div class="admin-grid">
+        <input id="contest-week" class="admin-input" placeholder="Week label (e.g. Week 8)" />
+        <button id="btn-set-week" class="admin-btn alt">Set Current Week</button>
+      </div>
+      <div class="admin-grid">
+        <input id="result-week" class="admin-input" placeholder="Result week" />
+        <input id="winner-ids" class="admin-input" placeholder="Winner telegramIds, comma-separated" />
+      </div>
+      <textarea id="result-message" class="admin-textarea" placeholder="Contest result message"></textarea>
+      <button id="btn-publish-result" class="admin-btn warn">Publish Result + Notify</button>
+      <div id="contest-result" class="admin-mono"></div>
+    </section>
+
+    <section class="admin-card">
+      <h2>Notifications</h2>
+      <button id="btn-run-mining-reminders" class="admin-btn alt">Run Mining Reminders Now</button>
+      <div id="notify-last-run" class="admin-mono"></div>
+      <div id="notify-result" class="admin-mono"></div>
+    </section>
+  </main>
+
+  <script src="/admin.js"></script>
+</body>
+</html>

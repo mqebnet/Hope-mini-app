@@ -1,54 +1,85 @@
 import { fetchUserData, updateTopBar } from './userData.js';
 import { tonConnectUI } from './tonconnect.js';
 
-const PUZZLE_PIECES = 10;
-const PUZZLE_COLS = 5;
-const PUZZLE_ROWS = 2;
+const BOX_PRICE_USD = 0.15;
 
 let user = null;
 let selectedTradeAmount = null;
 let selectedTradeType = null;
-let currentPuzzle = null;
-let puzzleTimer = null;
-let timeLeft = 60;
-let puzzleSolved = false;
+let cachedBoxStatus = null;
 
 const mysteryBtn = document.getElementById('open-market-mystery-box-button');
 const mysteryInfo = document.getElementById('mystery-box-info');
-const claimBtn = document.getElementById('claim-mystery-reward-button');
 const mysteryTrack = document.getElementById('mystery-box-track');
 
-const puzzleGame = document.getElementById('puzzle-game');
-const puzzleBoard = document.getElementById('puzzle-board');
-const puzzlePieces = document.getElementById('puzzle-pieces');
-const puzzleTimerEl = document.getElementById('puzzle-timer');
-const referenceImage = document.getElementById('reference-image');
-const puzzleCloseBtn = document.getElementById('puzzle-close-button');
-const puzzleClaimBtn = document.getElementById('puzzle-claim-button');
-
-let cachedBoxStatus = null;
+const boxRewards = {
+  bronze: { points: 200, bronzeTickets: 10, xp: 1 },
+  silver: { points: 300, bronzeTickets: 20, xp: 2 },
+  gold: { points: 500, bronzeTickets: 20, silverTickets: 1, xp: 5 }
+};
 
 document.addEventListener('DOMContentLoaded', async () => {
   if (window.Telegram?.WebApp) window.Telegram.WebApp.ready();
+  initMarketplaceTabs();
 
   try {
-    user = await fetchUserData();
+    await ensureSessionReady();
+    user = await fetchUserDataWithRetry(8, 700);
     updateTopBar(user);
   } catch (err) {
-    console.error('Failed to load user:', err);
-    showNotification('Failed to load user', 'error');
+    console.error('Failed to load user after retries:', err);
+    showNotification('Session not ready. Please reopen the mini app.', 'error');
     return;
   }
 
-  initMarketplaceTabs();
   initExchangeUI();
-  initMysteryBoxes();
+  initMysteryBoxUI();
   await refreshMysteryStatus();
 });
+
+async function fetchUserDataWithRetry(retries = 3, delayMs = 400) {
+  let lastErr;
+  for (let attempt = 1; attempt <= retries; attempt += 1) {
+    try {
+      return await fetchUserData();
+    } catch (err) {
+      lastErr = err;
+      if (attempt < retries) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+    }
+  }
+  throw lastErr || new Error('Failed to load user');
+}
+
+async function ensureSessionReady() {
+  const meRes = await fetch('/api/me', { credentials: 'include', cache: 'no-store' });
+  if (meRes.ok) return true;
+
+  const initData = window.Telegram?.WebApp?.initData;
+  if (!initData) return false;
+
+  try {
+    const authRes = await fetch('/api/auth/telegram', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ initData })
+    });
+    if (!authRes.ok) return false;
+  } catch (err) {
+    console.error('Marketplace auth bootstrap failed:', err);
+    return false;
+  }
+
+  const meRetry = await fetch('/api/me', { credentials: 'include', cache: 'no-store' });
+  return meRetry.ok;
+}
 
 function initMarketplaceTabs() {
   const tabs = document.querySelectorAll('.market-tab');
   const sections = {
+    games: document.getElementById('games-section'),
     puzzles: document.getElementById('puzzles-section'),
     exchange: document.getElementById('exchange-section')
   };
@@ -65,7 +96,7 @@ function initMarketplaceTabs() {
 }
 
 function updateExchangePreview(tradeType, amount) {
-  const exchangeRates = { bronze: 1, silver: 1 };
+  const exchangeRates = { bronze: 0.01, silver: 0.01 };
   const rate = exchangeRates[tradeType] || 1;
   const toAmount = Math.floor(amount * rate);
   const fromLabel = tradeType === 'bronze' ? 'Bronze' : 'Silver';
@@ -81,7 +112,27 @@ function initExchangeUI() {
   const typeSelect = document.getElementById('exchange-type');
   const amountButtons = document.querySelectorAll('.amount-option');
   const tradeBtn = document.getElementById('trade-button');
+  if (!typeSelect || !tradeBtn || !amountButtons.length) return;
+
   tradeBtn.disabled = true;
+
+  const prettyAmount = (amount) => (amount >= 1000 ? `${amount / 1000}k` : `${amount}`);
+  const labelsByType = {
+    bronze: 'Bronze',
+    silver: 'Silver'
+  };
+
+  function clearAmountSelection() {
+    amountButtons.forEach((btn) => btn.classList.remove('selected'));
+  }
+
+  function renderAmountLabels() {
+    const label = labelsByType[typeSelect.value] || 'Ticket';
+    amountButtons.forEach((btn) => {
+      const amount = Number.parseInt(btn.dataset.amount, 10);
+      btn.textContent = `${prettyAmount(amount)} ${label}`;
+    });
+  }
 
   function refreshAvailability() {
     amountButtons.forEach((btn) => {
@@ -90,14 +141,26 @@ function initExchangeUI() {
       const balance = type === 'bronze' ? user.bronzeTickets : user.silverTickets;
       btn.disabled = balance < amount;
       btn.classList.toggle('disabled', balance < amount);
+      if (btn.disabled && btn.classList.contains('selected')) {
+        btn.classList.remove('selected');
+      }
     });
+
+    if (!Array.from(amountButtons).some((btn) => btn.classList.contains('selected'))) {
+      selectedTradeAmount = null;
+      tradeBtn.disabled = true;
+    }
   }
 
+  renderAmountLabels();
   refreshAvailability();
 
   typeSelect.addEventListener('change', () => {
     selectedTradeAmount = null;
+    selectedTradeType = null;
     tradeBtn.disabled = true;
+    clearAmountSelection();
+    renderAmountLabels();
     const fromDiv = document.getElementById('from-ticket');
     const toDiv = document.getElementById('to-ticket');
     if (fromDiv) fromDiv.textContent = '';
@@ -111,6 +174,8 @@ function initExchangeUI() {
         showNotification('Not enough tickets', 'info');
         return;
       }
+      clearAmountSelection();
+      btn.classList.add('selected');
       selectedTradeAmount = Number.parseInt(btn.dataset.amount, 10);
       selectedTradeType = typeSelect.value;
       tradeBtn.disabled = false;
@@ -136,11 +201,40 @@ function initExchangeUI() {
 
       user = await fetchUserData();
       updateTopBar(user);
+      clearAmountSelection();
       refreshAvailability();
       tradeBtn.disabled = true;
+      selectedTradeAmount = null;
+      selectedTradeType = null;
+      const fromDiv = document.getElementById('from-ticket');
+      const toDiv = document.getElementById('to-ticket');
+      if (fromDiv) fromDiv.textContent = '';
+      if (toDiv) toDiv.textContent = '';
       showNotification('Trade successful!', 'success');
     } catch (err) {
       showNotification(err.message || 'Trade failed', 'error');
+    }
+  });
+}
+
+function initMysteryBoxUI() {
+  if (!mysteryBtn) return;
+
+  mysteryBtn.addEventListener('click', async () => {
+    try {
+      if (cachedBoxStatus?.activeBox) {
+        await openMysteryBox();
+        return;
+      }
+
+      if (cachedBoxStatus?.nextBoxType) {
+        await purchaseMysteryBox();
+        return;
+      }
+
+      showNotification('Daily mystery box limit reached', 'info');
+    } catch (err) {
+      showNotification(err.message || 'Mystery box action failed', 'error');
     }
   });
 }
@@ -162,21 +256,24 @@ function renderMysteryStatus(status) {
   const activeBox = status.activeBox;
   const todayBoxes = status.todayBoxes || [];
 
-  const label = activeBox
+  mysteryBtn.textContent = activeBox
     ? `Open ${activeBox.boxType.toUpperCase()} Box`
     : nextBox
       ? `Get ${nextBox.toUpperCase()} Mystery Box`
       : 'Daily Limit Reached';
 
-  mysteryBtn.textContent = label;
   mysteryBtn.disabled = !activeBox && !nextBox;
 
   const progressLabel = `${purchasedToday}/${limit} purchased today`;
-  const nextLabel = nextBox ? `Next box: ${nextBox}` : 'All 3 boxes purchased today';
+  const nextLabel = activeBox
+    ? `Ready to open: ${activeBox.boxType}`
+    : nextBox
+      ? `Next box: ${nextBox}`
+      : 'All 3 boxes purchased today';
+
   mysteryInfo.innerHTML = `
     <p>${progressLabel}</p>
     <p>${nextLabel}</p>
-    <p>Each box costs 0.1 USDT in TON</p>
   `;
 
   if (mysteryTrack) {
@@ -187,10 +284,8 @@ function renderMysteryStatus(status) {
       const recorded = statusMap.get(boxType);
       let state = 'locked';
       if (recorded === 'claimed') state = 'claimed';
-      else if (recorded === 'opened') state = 'opened';
       else if (recorded === 'purchased') state = 'ready';
       else if (nextBox === boxType) state = 'next';
-
       card.className = `box-card ${boxType} ${state}`;
       card.innerHTML = `
         <span class="box-title">${boxType.toUpperCase()}</span>
@@ -206,289 +301,74 @@ async function refreshMysteryStatus() {
     const status = await fetchMysteryStatus();
     renderMysteryStatus(status);
   } catch (err) {
-    showNotification(err.message || 'Failed to load mystery status', 'error');
-  }
-}
-
-function initMysteryBoxes() {
-  if (mysteryBtn) {
-    mysteryBtn.addEventListener('click', async () => {
-      try {
-        if (cachedBoxStatus?.activeBox) {
-          await openPuzzleFromBackend();
-          return;
-        }
-        await purchaseMysteryBox();
-      } catch (err) {
-        showNotification(err.message || 'Mystery box action failed', 'error');
-      }
-    });
-  }
-
-  if (claimBtn) {
-    claimBtn.addEventListener('click', async () => {
-      await claimPuzzleReward();
-    });
-  }
-
-  if (puzzleClaimBtn) {
-    puzzleClaimBtn.addEventListener('click', async () => {
-      await claimPuzzleReward();
-    });
-  }
-
-  if (puzzleCloseBtn) {
-    puzzleCloseBtn.addEventListener('click', () => {
-      closePuzzle(false);
-    });
+    showNotification(err.message || 'Failed to load mystery box status', 'error');
   }
 }
 
 async function purchaseMysteryBox() {
+  if (!tonConnectUI.wallet) {
+    if (typeof tonConnectUI.openModal === 'function') {
+      await tonConnectUI.openModal();
+    }
+  }
+
   if (!tonConnectUI.wallet) throw new Error('Please connect your wallet first');
 
-  const amountRes = await fetch('/api/tonAmount/ton-amount?usd=0.1', { credentials: 'include' });
+  const amountRes = await fetch(`/api/tonAmount/ton-amount?usd=${BOX_PRICE_USD}`, { credentials: 'include' });
   const amountData = await amountRes.json();
   if (!amountRes.ok) throw new Error(amountData.error || 'Failed to get TON amount');
 
   const { tonAmount, recipientAddress } = amountData;
   if (!recipientAddress) throw new Error('Payment recipient not configured');
-  if (typeof tonAmount !== 'number' || tonAmount <= 0) throw new Error('Invalid TON amount');
 
   const tx = await tonConnectUI.sendTransaction({
     validUntil: Math.floor(Date.now() / 1000) + 300,
     messages: [{ address: recipientAddress, amount: (tonAmount * 1e9).toFixed(0) }]
   });
-  if (!tx?.boc) throw new Error('Transaction rejected');
+
+  const txHash = tx?.transaction?.hash || tx?.txid?.hash || tx?.hash || '';
+  const txBoc = tx?.boc || '';
+  if (!txHash && !txBoc) throw new Error('Transaction proof missing');
 
   const purchaseRes = await fetch('/api/mysteryBox/purchase', {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ txHash: tx.boc })
+    body: JSON.stringify({ txHash, txBoc })
   });
-  const purchaseData = await purchaseRes.json();
-  if (!purchaseRes.ok) throw new Error(purchaseData.error || 'Purchase failed');
 
-  showNotification(`${purchaseData.boxType.toUpperCase()} box purchased. Click to open.`, 'success');
+  const data = await purchaseRes.json();
+  if (!purchaseRes.ok) throw new Error(data.error || 'Purchase failed');
+
+  showNotification(`${data.boxType.toUpperCase()} box purchased`, 'success');
   await refreshMysteryStatus();
 }
 
-async function openPuzzleFromBackend() {
-  const openRes = await fetch('/api/mysteryBox/open', {
+async function openMysteryBox() {
+  const openRes = await fetch('/api/boxes/open', {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' }
   });
-  const openData = await openRes.json();
-  if (!openRes.ok) throw new Error(openData.error || 'Failed to open box');
 
-  currentPuzzle = openData;
-  launchPuzzleGame(openData);
-}
+  const data = await openRes.json();
+  if (!openRes.ok) throw new Error(data.error || 'Failed to open box');
 
-function createPieceEl(pieceDef, imageUrl) {
-  const sourceIndex = Number(pieceDef.sourceIndex);
-  const col = sourceIndex % PUZZLE_COLS;
-  const row = Math.floor(sourceIndex / PUZZLE_COLS);
-  const piece = document.createElement('div');
-  piece.className = 'market-puzzle-piece';
-  piece.draggable = true;
-  piece.dataset.piece = String(pieceDef.pieceId);
-  piece.style.backgroundImage = `url(${imageUrl})`;
-  piece.style.backgroundSize = `${PUZZLE_COLS * 100}% ${PUZZLE_ROWS * 100}%`;
-  piece.style.backgroundPosition = `${(col / (PUZZLE_COLS - 1)) * 100}% ${(row / (PUZZLE_ROWS - 1)) * 100}%`;
-  piece.addEventListener('dragstart', (e) => {
-    e.dataTransfer.setData('pieceIndex', piece.dataset.piece);
-  });
-  return piece;
-}
+  const reward = data.reward || boxRewards[data.boxType] || {};
 
-function launchPuzzleGame(data) {
-  puzzleSolved = false;
-  timeLeft = Number(data.timerSeconds) || 60;
-  if (puzzleTimerEl) puzzleTimerEl.textContent = formatTimer(timeLeft);
-  if (referenceImage) {
-    referenceImage.style.backgroundImage = `url(${data.puzzle.imageUrl})`;
-  }
-  if (claimBtn) claimBtn.classList.add('hidden');
-  if (puzzleClaimBtn) puzzleClaimBtn.classList.add('hidden');
-
-  puzzleBoard.innerHTML = '';
-  puzzlePieces.innerHTML = '';
-
-  const pieces = Array.isArray(data.puzzle.pieces) ? data.puzzle.pieces : [];
-  if (pieces.length !== PUZZLE_PIECES) {
-    throw new Error('Invalid puzzle data');
+  if (typeof confetti === 'function') {
+    confetti({ particleCount: 110, spread: 78, origin: { y: 0.62 } });
   }
 
-  for (let i = 0; i < PUZZLE_PIECES; i += 1) {
-    const slot = document.createElement('div');
-    slot.className = 'market-puzzle-slot';
-    slot.dataset.slot = String(i);
-
-    slot.addEventListener('dragover', (e) => e.preventDefault());
-    slot.addEventListener('drop', (e) => {
-      e.preventDefault();
-      const pieceIndex = e.dataTransfer.getData('pieceIndex');
-      if (!pieceIndex) return;
-      placePieceInSlot(pieceIndex, slot, data.puzzle.imageUrl);
-      checkPuzzleSolved();
-    });
-    puzzleBoard.appendChild(slot);
+  if (typeof window.showRewardPopup === 'function') {
+    window.showRewardPopup(reward, { title: `${String(data.boxType || '').toUpperCase()} Box Reward` });
+  } else {
+    showNotification('Box opened! Rewards added.', 'success');
   }
 
-  puzzlePieces.ondragover = (e) => e.preventDefault();
-  puzzlePieces.ondrop = (e) => {
-    e.preventDefault();
-    const pieceIndex = e.dataTransfer.getData('pieceIndex');
-    if (!pieceIndex) return;
-    movePieceToPool(pieceIndex, data.puzzle.imageUrl);
-  };
-
-  pieces.forEach((piece) => {
-    puzzlePieces.appendChild(createPieceEl(piece, data.puzzle.imageUrl));
-  });
-
-  puzzleGame.classList.remove('hidden');
-  startPuzzleTimer();
-}
-
-function placePieceInSlot(pieceId, slot, imageUrl) {
-  const descriptor = currentPuzzle?.puzzle?.pieces?.find((p) => p.pieceId === pieceId);
-  if (!descriptor) return;
-  const draggedPiece = document.querySelector(`.market-puzzle-piece[data-piece="${pieceId}"]`);
-  if (!draggedPiece) return;
-
-  const existing = slot.querySelector('.market-puzzle-piece');
-  if (existing) {
-    const existingDescriptor = currentPuzzle?.puzzle?.pieces?.find((p) => p.pieceId === existing.dataset.piece);
-    if (existingDescriptor) {
-      puzzlePieces.appendChild(createPieceEl(existingDescriptor, imageUrl));
-    }
-    existing.remove();
-  }
-
-  const currentParent = draggedPiece.parentElement;
-  if (currentParent && currentParent.classList.contains('market-puzzle-slot')) {
-    draggedPiece.remove();
-  } else if (currentParent) {
-    draggedPiece.remove();
-  }
-
-  const placedPiece = createPieceEl(descriptor, imageUrl);
-  placedPiece.draggable = true;
-  slot.appendChild(placedPiece);
-}
-
-function movePieceToPool(pieceId, imageUrl) {
-  const descriptor = currentPuzzle?.puzzle?.pieces?.find((p) => p.pieceId === pieceId);
-  if (!descriptor) return;
-  const pieceEl = document.querySelector(`.market-puzzle-piece[data-piece="${pieceId}"]`);
-  if (!pieceEl) return;
-  const parent = pieceEl.parentElement;
-  if (parent && parent.classList.contains('market-puzzle-slot')) {
-    pieceEl.remove();
-    puzzlePieces.appendChild(createPieceEl(descriptor, imageUrl));
-  }
-}
-
-function getCurrentArrangement() {
-  const arrangement = [];
-  const slots = puzzleBoard.querySelectorAll('.market-puzzle-slot');
-  slots.forEach((slot) => {
-    const piece = slot.querySelector('.market-puzzle-piece');
-    arrangement.push(piece ? piece.dataset.piece : '');
-  });
-  return arrangement;
-}
-
-async function checkPuzzleSolved() {
-  const arrangement = getCurrentArrangement();
-  if (arrangement.some((pieceId) => !pieceId)) return;
-  const solved = arrangement.every(Boolean);
-  if (!solved || puzzleSolved) return;
-
-  try {
-    const res = await fetch('/api/mysteryBox/solve', {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ arrangement, sessionId: currentPuzzle?.puzzle?.sessionId })
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Puzzle verification failed');
-
-    puzzleSolved = true;
-    clearInterval(puzzleTimer);
-    showConfetti();
-    showNotification('Congratulations! Puzzle solved.', 'success');
-    if (claimBtn) claimBtn.classList.remove('hidden');
-    if (puzzleClaimBtn) puzzleClaimBtn.classList.remove('hidden');
-  } catch (err) {
-    showNotification(err.message || 'Failed to verify puzzle solve', 'error');
-  }
-}
-
-function startPuzzleTimer() {
-  clearInterval(puzzleTimer);
-  puzzleTimer = setInterval(() => {
-    timeLeft -= 1;
-    if (puzzleTimerEl) puzzleTimerEl.textContent = formatTimer(Math.max(timeLeft, 0));
-    if (timeLeft <= 0) {
-      clearInterval(puzzleTimer);
-      if (!puzzleSolved) {
-        closePuzzle(false);
-        showNotification('Unlucky! Try again?', 'error');
-      }
-    }
-  }, 1000);
-}
-
-function closePuzzle(success) {
-  clearInterval(puzzleTimer);
-  puzzleGame.classList.add('hidden');
-  if (!success) {
-    if (claimBtn) claimBtn.classList.add('hidden');
-    if (puzzleClaimBtn) puzzleClaimBtn.classList.add('hidden');
-  }
-}
-
-async function claimPuzzleReward() {
-  try {
-    const res = await fetch('/api/mysteryBox/claim', {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' }
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Claim failed');
-
-    user = await fetchUserData();
-    updateTopBar(user);
-    closePuzzle(true);
-    if (claimBtn) claimBtn.classList.add('hidden');
-    if (puzzleClaimBtn) puzzleClaimBtn.classList.add('hidden');
-    showNotification('Rewards claimed!', 'success');
-    await refreshMysteryStatus();
-  } catch (err) {
-    showNotification(err.message || 'Claim failed', 'error');
-  }
-}
-
-function formatTimer(seconds) {
-  const mm = String(Math.floor(seconds / 60)).padStart(2, '0');
-  const ss = String(seconds % 60).padStart(2, '0');
-  return `${mm}:${ss}`;
-}
-
-function shuffle(arr) {
-  const out = [...arr];
-  for (let i = out.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [out[i], out[j]] = [out[j], out[i]];
-  }
-  return out;
+  user = await fetchUserData();
+  updateTopBar(user);
+  await refreshMysteryStatus();
 }
 
 function showNotification(message, type = 'info') {
@@ -505,9 +385,4 @@ function showNotification(message, type = 'info') {
     return;
   }
   alert(message);
-}
-
-function showConfetti() {
-  if (typeof confetti !== 'function') return;
-  confetti({ particleCount: 120, spread: 75, origin: { y: 0.6 } });
 }

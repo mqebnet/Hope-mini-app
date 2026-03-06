@@ -22,22 +22,28 @@
 
   <div id="user-stats">
     <p class="tag">Level</p>
-    <span id="current-level">—</span>
+    <span id="current-level">-</span>
     <p class="tag">XP</p>
-    <span id="user-exp">—</span>
+    <span id="user-exp">-</span>
   </div>
 
+  <div id="ticket-icons">
+    <span id="bronze-tickets">-</span>
+    <span id="silver-tickets">-</span>
+    <span id="gold-tickets">-</span>
+  </div>
+
+  <div id="ton-connect-ui"></div>
+
+  <button id="ton-connect-button" aria-label="Connect Wallet"></button>
+</header>
+<div id="display-panel">
+  <p class="tag">Points</p>
   <div id="points-bar">
     <div id="points-progress"></div>
     <span id="points-display">—</span>
   </div>
-
-  <div id="ticket-icons">
-    <span id="bronze-tickets">—</span>
-    <span id="silver-tickets">—</span>
-    <span id="gold-tickets">—</span>
-  </div>
-</header>
+</div>
 
 <main id="main-content">
 
@@ -45,13 +51,21 @@
 
   <!-- Tabs -->
   <div id="marketplace-tabs">
-    <button class="market-tab active" data-tab="puzzles">Puzzles</button>
+    <button class="market-tab active" data-tab="games">Games</button>
     <button class="market-tab" data-tab="exchange">Exchange</button>
   </div>
 
-  <!-- Puzzles Section -->
-  <section id="puzzles-section" class="market-section active">
-    <h2>Puzzles Game</h2>
+  <!-- Games Section -->
+  <section id="games-section" class="market-section active">
+    <h2>Games</h2>
+    <div id="games-container">
+      <div id="games-grid"></div>
+    </div>
+  </section>
+
+  <!-- Legacy Puzzles Section (hidden but kept for backward compatibility) -->
+  <section id="puzzles-section" class="market-section" style="display: none;">
+    <h2>Mystery Boxes</h2>
 
     <div class="mystery-box-panel">
       <div id="mystery-box-track" class="mystery-box-track"></div>
@@ -60,10 +74,6 @@
       </button>
 
       <div id="mystery-box-info"></div>
-
-      <button id="claim-mystery-reward-button" class="hidden">
-        <i data-lucide="check-circle"></i> Claim Reward
-      </button>
     </div>
   </section>
 
@@ -75,19 +85,19 @@
 
       <div class="ticket-selector">
         <select id="exchange-type">
-          <option value="bronze">Bronze → Silver</option>
-          <option value="silver">Silver → Gold</option>
+          <option value="bronze">Bronze -> Silver</option>
+          <option value="silver">Silver -> Gold</option>
         </select>
       </div>
 
       <div class="ticket-options">
         <div class="amount-grid">
-          <button class="amount-option" data-amount="100">100 🟫</button>
-          <button class="amount-option" data-amount="200">200 🟫</button>
-          <button class="amount-option" data-amount="500">500 🟫</button>
-          <button class="amount-option" data-amount="1000">1k 🟫</button>
-          <button class="amount-option" data-amount="5000">5k 🟫</button>
-          <button class="amount-option" data-amount="10000">10k 🟫</button>
+          <button class="amount-option" data-amount="100">100 </button>
+          <button class="amount-option" data-amount="200">200 </button>
+          <button class="amount-option" data-amount="500">500 </button>
+          <button class="amount-option" data-amount="1000">1k </button>
+          <button class="amount-option" data-amount="5000">5k </button>
+          <button class="amount-option" data-amount="10000">10k </button>
         </div>
       </div>
 
@@ -95,26 +105,9 @@
         <div id="from-ticket"></div>
         <i data-lucide="arrow-right"></i>
         <div id="to-ticket"></div>
-      </div>
-
-      <button id="trade-button" disabled>Trade</button>
-    </div>
   </section>
 
 </main>
-
-<!-- Puzzle Game Overlay -->
-<div id="puzzle-game" class="hidden">
-  <div class="game-header">
-    <button id="puzzle-close-button" class="puzzle-close-button" aria-label="Close Puzzle">&times;</button>
-    <div class="reference-image" id="reference-image"></div>
-    <div class="timer" id="puzzle-timer">01:00</div>
-  </div>
-
-  <div class="puzzle-board" id="puzzle-board"></div>
-  <div class="puzzle-pieces" id="puzzle-pieces"></div>
-  <button id="puzzle-claim-button" class="hidden">Claim Reward</button>
-</div>
 
 <!-- Profile -->
 <div id="profile-container"></div>
@@ -133,6 +126,7 @@
 <script type="module" src="script.js"></script>
 <script type="module" src="tonconnect.js"></script>
 <script type="module" src="connectWallet.js"></script>
+<script type="module" src="games.js"></script>
 <script type="module" src="marketPlace.js"></script>
 <script type="module" src="profile.js"></script>
 <script src="activeTab.js" defer></script>
@@ -145,5 +139,11 @@
 
 </body>
 </html>
+
+
+
+
+
+
 
 

@@ -3,23 +3,16 @@ const mongoose = require('mongoose');
 // Mystery box schema
 const mysteryBoxSchema = new mongoose.Schema({
   boxType: { type: String, enum: ['bronze', 'silver', 'gold'], required: true },
-  status: { type: String, enum: ['purchased', 'opened', 'claimed'], default: 'purchased' },
+  status: { type: String, enum: ['purchased', 'claimed'], default: 'purchased' },
   purchaseTime: { type: Date, default: Date.now },
   transactionId: { type: String },
-  puzzle: {
-    meme: String,
-    imageUrl: String,
-    totalPieces: Number,
-    openedAt: Date,
-    sessionId: String,
-    pieces: [{
-      pieceId: String,
-      sourceIndex: Number
-    }],
-    solution: [String],
-    attempts: { type: Number, default: 0 },
-    solved: { type: Boolean, default: false },
-    solvedAt: Date
+  claimedAt: { type: Date, default: null },
+  reward: {
+    points: { type: Number, default: 0 },
+    bronzeTickets: { type: Number, default: 0 },
+    silverTickets: { type: Number, default: 0 },
+    goldTickets: { type: Number, default: 0 },
+    xp: { type: Number, default: 0 }
   }
 });
 
@@ -33,6 +26,7 @@ const UserSchema = new mongoose.Schema({
   },
 
   username: String,
+  isAdmin: { type: Boolean, default: false },
 
   points: { type: Number, default: 0, min: 0 },
   xp: { type: Number, default: 0, min: 0 },
@@ -77,9 +71,11 @@ const UserSchema = new mongoose.Schema({
     five: Boolean,
     ten: Boolean
   },
+  completedInviteTasks: { type: [Number], default: [] },
 
   miningStartedAt: Date,
   lastMiningClaim: Date,
+  miningReminderSentAt: { type: Date, default: null },
 
   processedTransactions: { type: [String], default: [] },
 

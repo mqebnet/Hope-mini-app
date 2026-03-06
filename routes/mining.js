@@ -16,6 +16,7 @@ router.post('/start', async (req, res) => {
     }
 
     user.miningStartedAt = new Date();
+    user.miningReminderSentAt = null;
     await user.save();
 
     res.json({
@@ -44,6 +45,7 @@ router.post('/claim', async (req, res) => {
     user.points += 250;
     user.miningStartedAt = null;
     user.lastMiningClaim = new Date();
+    user.miningReminderSentAt = null;
     user.level = getUserLevel(user.points);
     await user.save();
 

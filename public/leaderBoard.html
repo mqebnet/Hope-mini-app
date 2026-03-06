@@ -19,22 +19,28 @@
 
   <div id="user-stats">
     <p class="tag">Level</p>
-    <span id="current-level">—</span>
+    <span id="current-level">-</span>
     <p class="tag">XP</p>
-    <span id="user-exp">—</span>
+    <span id="user-exp">-</span>
   </div>
 
+  <div id="ticket-icons">
+    <span id="bronze-tickets">-</span>
+    <span id="silver-tickets">-</span>
+    <span id="gold-tickets">-</span>
+  </div>
+
+  <div id="ton-connect-ui"></div>
+
+  <button id="ton-connect-button" aria-label="Connect Wallet"></button>
+</header>
+<div id="display-panel">
+  <p class="tag">Points</p>
   <div id="points-bar">
     <div id="points-progress"></div>
     <span id="points-display">—</span>
   </div>
-
-  <div id="ticket-icons">
-    <span id="bronze-tickets">—</span>
-    <span id="silver-tickets">—</span>
-    <span id="gold-tickets">—</span>
-  </div>
-</header>
+</div>
 
 
 
@@ -132,4 +138,6 @@ export const getLeaderboard = async (level) => {
   return result;
 };
 }); -->
+
+
 

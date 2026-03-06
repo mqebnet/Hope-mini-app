@@ -41,10 +41,10 @@ router.get('/status', async (req, res) => {
 router.post('/verify', async (req, res) => {
   try {
     const telegramId = req.user.telegramId;
-    const { txHash } = req.body;
+    const { txHash, txBoc } = req.body;
 
-    if (!txHash) {
-      return res.status(400).json({ error: 'txHash required' });
+    if (!txHash && !txBoc) {
+      return res.status(400).json({ error: 'txHash or txBoc required' });
     }
 
     const user = await User.findOne({ telegramId });
@@ -55,21 +55,34 @@ router.post('/verify', async (req, res) => {
     if ((user.checkIns || []).some((c) => c.dayKey === todayKey)) {
       return res.status(400).json({ error: 'Already checked in today' });
     }
-    if ((user.checkIns || []).some((c) => c.txHash === txHash)) {
+    if (txHash && (user.checkIns || []).some((c) => c.txHash === txHash)) {
       return res.status(400).json({ error: 'Transaction already used for check-in' });
     }
 
-    const isValid = await verifyTransaction({
+    const verification = await verifyTransaction({
       telegramId,
       txHash,
+      txBoc,
+      purpose: 'daily-checkin',
       requiredUsd: 0.3
     });
 
-    if (!isValid) {
-      return res.status(400).json({ error: 'Transaction not verified' });
+    if (!verification.ok) {
+      console.warn('Daily check-in verification rejected', {
+        telegramId,
+        reason: verification.reason,
+        hasTxHash: Boolean(txHash),
+        hasTxBoc: Boolean(txBoc)
+      });
+      return res.status(400).json({ error: verification.reason || 'Transaction not verified' });
     }
 
-    const applyResult = applyVerifiedDailyCheckIn(user, txHash, now);
+    const proofRef = verification.txRef || txHash || txBoc;
+    if ((user.checkIns || []).some((c) => c.txHash === proofRef)) {
+      return res.status(400).json({ error: 'Transaction already used for check-in' });
+    }
+
+    const applyResult = applyVerifiedDailyCheckIn(user, proofRef, now);
     if (!applyResult.ok) {
       return res.status(applyResult.status).json({ error: applyResult.error });
     }

@@ -1,11 +1,12 @@
 // home.js
-import { updateTopBar, formatPoints } from './userData.js';
+import { updateTopBar, formatPoints, formatCompact } from './userData.js';
 import { tonConnectUI } from './tonconnect.js';
 
 const MINING_DURATION_MS = 6 * 60 * 60 * 1000;
 let miningInterval = null;
 let miningCompletionTimeout = null;
 let miningAnimationFrame = null;
+let miningIsComplete = false;
 
 const miningBar = document.getElementById('mining-progress');
 const miningBtn = document.getElementById('farm-btn');
@@ -83,10 +84,9 @@ function updateUI(user) {
   document.getElementById('points-display').textContent = `${currentFormatted}/${maxFormatted}`;
   document.getElementById('streak').textContent = user.streak ?? 0;
   document.getElementById('current-level').textContent = user.level;
-  document.getElementById('bronze-tickets').innerHTML = `<i data-lucide="award"></i> ${user.bronzeTickets ?? 0}`;
-  document.getElementById('silver-tickets').innerHTML = `<i data-lucide="award"></i> ${user.silverTickets ?? 0}`;
-  document.getElementById('gold-tickets').innerHTML = `<i data-lucide="award"></i> ${user.goldTickets ?? 0}`;
-  lucide.createIcons();
+  document.getElementById('bronze-tickets').textContent = formatCompact(user.bronzeTickets ?? 0);
+  document.getElementById('silver-tickets').textContent = formatCompact(user.silverTickets ?? 0);
+  document.getElementById('gold-tickets').textContent = formatCompact(user.goldTickets ?? 0);
 }
 
 function formatUtcTime(iso) {
@@ -136,6 +136,59 @@ function closeDailyCheckInModal() {
   if (!dailyCheckInModal) return;
   dailyCheckInModal.classList.add('hidden');
   dailyCheckInModal.setAttribute('aria-hidden', 'true');
+}
+
+function showCheckInSuccessAnimation(reward) {
+  const points = Number(reward?.points || 1000);
+  const bronze = Number(reward?.bronzeTickets || 100);
+  const xp = Number(reward?.xp || 5);
+
+  const existing = document.getElementById('checkin-success-pop');
+  if (existing) existing.remove();
+
+  const pop = document.createElement('div');
+  pop.id = 'checkin-success-pop';
+  pop.className = 'checkin-success-pop';
+  pop.innerHTML = `
+    <div class="checkin-success-card">
+      <div class="checkin-success-title">Check-in Complete</div>
+      <div class="checkin-success-reward"><span id="checkin-points">+0</span> Points</div>
+      <div class="checkin-success-grid">
+        <div class="checkin-success-pill bronze">
+          <span class="pill-label">Bronze</span>
+          <span id="checkin-bronze" class="pill-value">+0</span>
+        </div>
+        <div class="checkin-success-pill xp">
+          <span class="pill-label">XP</span>
+          <span id="checkin-xp" class="pill-value">+0</span>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(pop);
+  const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
+  const animateCount = (el, value, durationMs = 850) => {
+    if (!el) return;
+    const start = performance.now();
+    const tick = (now) => {
+      const t = Math.min((now - start) / durationMs, 1);
+      const current = Math.round(value * easeOutCubic(t));
+      el.textContent = `+${formatCompact(current)}`;
+      if (t < 1) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  };
+
+  animateCount(pop.querySelector('#checkin-points'), points, 900);
+  animateCount(pop.querySelector('#checkin-bronze'), bronze, 780);
+  animateCount(pop.querySelector('#checkin-xp'), xp, 680);
+
+  requestAnimationFrame(() => pop.classList.add('show'));
+  setTimeout(() => {
+    pop.classList.remove('show');
+    setTimeout(() => pop.remove(), 240);
+  }, 2400);
 }
 
 async function fetchDailyCheckInStatus() {
@@ -190,6 +243,7 @@ function syncMiningUI(miningStartedAt) {
 
   const elapsed = Date.now() - startTime;
   const progress = Math.min(Math.max(elapsed / MINING_DURATION_MS, 0), 1);
+  miningBar.style.width = `${progress * 100}%`;
 
   if (progress >= 1) {
     setMiningCompleteUI();
@@ -197,12 +251,17 @@ function syncMiningUI(miningStartedAt) {
   }
 
   miningBtn.textContent = 'Mining...';
+  miningIsComplete = false;
   miningBtn.classList.remove('mining-ready');
   const miningTrack = document.getElementById('mining-bar');
   if (miningTrack) miningTrack.classList.add('mining-active');
 
   miningInterval = setInterval(() => {
-    if (Date.now() - startTime >= MINING_DURATION_MS) {
+    const nowElapsed = Date.now() - startTime;
+    const nowProgress = Math.min(Math.max(nowElapsed / MINING_DURATION_MS, 0), 1);
+    miningBar.style.width = `${nowProgress * 100}%`;
+
+    if (nowElapsed >= MINING_DURATION_MS) {
       if (miningInterval) clearInterval(miningInterval);
       setMiningCompleteUI();
     }
@@ -233,6 +292,7 @@ function resetMiningUI() {
   miningBar.style.transition = 'width 0.25s ease';
   miningBar.style.width = '0%';
   miningBtn.textContent = 'Start Mining';
+  miningIsComplete = false;
   miningBtn.classList.remove('mining-ready');
 }
 
@@ -245,6 +305,7 @@ function setMiningCompleteUI() {
   miningBar.style.transition = 'width 0.3s ease';
   miningBar.style.width = '100%';
   miningBtn.textContent = 'Claim';
+  miningIsComplete = true;
   miningBtn.classList.add('mining-ready');
 }
 
@@ -266,27 +327,96 @@ async function claimMining() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Claim failed');
 
-    alert('+250 points!');
-    confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+    const miningReward = { points: 250 };
+    if (typeof window.showRewardPopup === 'function') {
+      window.showRewardPopup(miningReward, { title: 'Mining Reward Claimed', durationMs: 2600 });
+    } else if (typeof window.showSuccessToast === 'function') {
+      window.showSuccessToast('+250 points!');
+    } else {
+      alert('+250 points!');
+    }
+    launchMiningClaimConfetti();
     resetMiningUI();
-    fetchUser();
+    await fetchUser();
   } catch (err) {
     console.error(err);
-    alert(err.message);
+    if (typeof window.showErrorToast === 'function') {
+      window.showErrorToast(err.message || 'Mining claim failed');
+    } else {
+      alert(err.message);
+    }
   }
 }
 
-async function handleCheckIn(button) {
-  if (!tonConnectUI.wallet) {
-    alert('Please connect your TON wallet first');
-    return;
-  }
+function launchMiningClaimConfetti() {
+  if (typeof confetti !== 'function') return;
+  const canvas = document.createElement('canvas');
+  canvas.style.position = 'fixed';
+  canvas.style.inset = '0';
+  canvas.style.width = '100%';
+  canvas.style.height = '100%';
+  canvas.style.pointerEvents = 'none';
+  canvas.style.zIndex = '4300';
+  canvas.style.background = 'transparent';
+  document.body.appendChild(canvas);
 
+  const fire = confetti.create(canvas, { resize: true, useWorker: true });
+  const palette = ['#00ffaa', '#00eaff', '#74ffd9', '#b3fff0', '#ffd166'];
+  fire({
+    particleCount: 90,
+    spread: 75,
+    startVelocity: 45,
+    scalar: 0.95,
+    ticks: 140,
+    origin: { y: 0.62 },
+    colors: palette,
+    shapes: ['circle']
+  });
+  setTimeout(() => {
+    fire({
+      particleCount: 55,
+      spread: 95,
+      startVelocity: 38,
+      scalar: 0.8,
+      ticks: 120,
+      origin: { y: 0.56 },
+      colors: palette,
+      shapes: ['circle']
+    });
+  }, 140);
+
+  setTimeout(() => {
+    canvas.remove();
+  }, 2200);
+}
+
+async function handleCheckIn(button) {
   const originalText = button.textContent;
   button.disabled = true;
-  button.textContent = 'Waiting for payment...';
+  button.textContent = 'Preparing wallet...';
 
   try {
+    if (typeof tonConnectUI.restoreConnection === 'function') {
+      await tonConnectUI.restoreConnection();
+    } else if (tonConnectUI.connectionRestored && typeof tonConnectUI.connectionRestored.then === 'function') {
+      await tonConnectUI.connectionRestored;
+    }
+
+    if (!tonConnectUI.wallet) {
+      await tonConnectUI.openModal();
+    }
+    if (!tonConnectUI.wallet) {
+      throw new Error('Please connect your TON wallet first');
+    }
+
+    const status = await fetchDailyCheckInStatus();
+    if (status.checkedInToday) {
+      dailyCheckInStatus = status;
+      setDailyCheckInButtonState(status);
+      throw new Error('Already checked in today');
+    }
+
+    button.textContent = 'Waiting for payment...';
     const priceRes = await fetch('/api/tonAmount/ton-amount', { credentials: 'include' });
     if (!priceRes.ok) throw new Error('Failed to get TON amount');
     const { tonAmount, recipientAddress } = await priceRes.json();
@@ -303,13 +433,15 @@ async function handleCheckIn(button) {
       ]
     });
 
-    if (!tx?.boc) throw new Error('Transaction rejected');
+    const txHash = tx?.transaction?.hash || tx?.txid?.hash || tx?.hash || '';
+    const txBoc = tx?.boc || '';
+    if (!txHash && !txBoc) throw new Error('Transaction proof missing');
 
     const verifyRes = await fetch('/api/dailyCheckIn/verify', {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ txHash: tx.boc })
+      body: JSON.stringify({ txHash, txBoc })
     });
 
     if (!verifyRes.ok) {
@@ -319,7 +451,12 @@ async function handleCheckIn(button) {
 
     const verifyData = await verifyRes.json();
     const reward = verifyData.reward || { points: 1000, bronzeTickets: 100, xp: 5 };
-    alert(`Check-in successful! +${reward.points} points, +${reward.bronzeTickets} bronze, +${reward.xp} XP`);
+    confetti({ particleCount: 120, spread: 85, origin: { y: 0.55 } });
+    if (typeof window.showRewardPopup === 'function') {
+      window.showRewardPopup(reward, { title: 'Check-in Complete' });
+    } else {
+      showCheckInSuccessAnimation(reward);
+    }
     closeDailyCheckInModal();
     await fetchUser();
     await refreshDailyCheckInStatus();
@@ -359,7 +496,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (miningBtn) {
     miningBtn.addEventListener('click', () => {
-      if (miningBtn.textContent === 'Claim') claimMining();
+      if (miningIsComplete) claimMining();
       else startMining();
     });
   }

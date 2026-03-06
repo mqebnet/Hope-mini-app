@@ -13,6 +13,8 @@ const tasksRouter = require('./routes/tasks');
 const dailyCheckInRouter = require('./routes/dailyCheckIn');
 const userRouter = require('./routes/user');
 const miningRouter = require('./routes/mining');
+const adminAuth = require('./middleware/adminAuth');
+const { startNotificationScheduler } = require('./utils/notificationScheduler');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -66,15 +68,16 @@ const limiter = rateLimit({
 });
 app.use('/api/', limiter);
 
-app.use(express.static(path.join(__dirname, 'public')));
-if (process.env.NODE_ENV !== 'production') {
-  app.use((req, res, next) => {
-    if (req.path.endsWith('.js') || req.path.endsWith('.html') || req.path.endsWith('.css')) {
-      res.setHeader('Cache-Control', 'no-store');
+app.use(express.static(path.join(__dirname, 'public'), {
+  etag: false,
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.js') || filePath.endsWith('.html') || filePath.endsWith('.css')) {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
     }
-    next();
-  });
-}
+  }
+}));
 
 // API responses should not be cached/revalidated in WebView.
 app.use('/api', (req, res, next) => {
@@ -92,6 +95,9 @@ app.get('/', require('./middleware/pageAuth'), (req, res) => {
 app.get('/auth', (_, res) => {
   res.sendFile(path.join(__dirname, 'public/auth.html'));
 });
+app.get('/admin', require('./middleware/pageAuth'), adminAuth, (req, res) => {
+  res.sendFile(path.join(__dirname, 'public/admin.html'));
+});
 
 app.use('/api', require('./middleware/apiAuth'));
 
@@ -103,9 +109,11 @@ app.use('/api/leaderboard', leaderboardRouter);
 app.use('/api/mining', miningRouter);
 app.use('/api/exchangeTickets', require('./routes/exchangeTickets'));
 app.use('/api/mysteryBox', require('./routes/mysteryBox'));
-app.use('/api/puzzles', require('./routes/puzzles'));
+app.use('/api/boxes', require('./routes/boxes'));
 app.use('/api/dailyCheckIn', dailyCheckInRouter);
 app.use('/api/transactions', require('./routes/transactions'));
+app.use('/api/admin', adminAuth, require('./routes/admin'));
+app.use('/api/games', require('./routes/games'));
 
 const routes = ['weeklyDrop', 'rewards', 'tonAmount', 'invite'];
 routes.forEach((route) => {
@@ -132,8 +140,25 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 3000;
 connectDB().then(() => {
-  app.listen(PORT, () => {
+  startNotificationScheduler();
+  const server = app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
+  });
+
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`Port ${PORT} is already in use.`);
+      console.error(`Stop the existing process on ${PORT} or run with a different port (e.g. set PORT=3001).`);
+      process.exit(1);
+      return;
+    }
+    if (err.code === 'EACCES') {
+      console.error(`Permission denied for port ${PORT}. Try a non-privileged port.`);
+      process.exit(1);
+      return;
+    }
+    console.error('Server startup error:', err);
+    process.exit(1);
   });
 });
 
