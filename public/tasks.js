@@ -1,6 +1,7 @@
 //tasks.js
-import { fetchUserData, updateTopBar } from './userData.js';
+import { fetchUserData, updateTopBar, fetchUserDataOnce, getCachedUser, setCachedUser } from './userData.js';
 import { tonConnectUI } from './tonconnect.js';
+import { canBootstrap, debounceButton } from './utils.js';
 
 const TASK_TYPES = {
   DAILY: 'daily',
@@ -12,10 +13,18 @@ let taskDefinitions = null;
 let dailyCheckInCheckedToday = false;
 
 document.addEventListener('DOMContentLoaded', async () => {
+  // Bootstrap lock: prevent running twice
+  if (!canBootstrap('tasks')) return;
+
   try {
-    const [definitions, user, checkInStatus] = await Promise.all([
+    // Use cached user data (populated by script.js)
+    let user = getCachedUser();
+    if (!user) {
+      user = await fetchUserDataOnce();
+    }
+
+    const [definitions, checkInStatus] = await Promise.all([
       fetchTaskDefinitions(),
-      fetchUserData(),
       fetchDailyCheckInStatus()
     ]);
 
@@ -156,6 +165,9 @@ function setupGlobalHandlers() {
 async function handleButtonClick(e) {
   const btn = e.target.closest('.task-button');
   if (!btn || btn.disabled) return;
+
+  // Debounce button: prevent double clicks
+  if (!debounceButton(btn, 500)) return;
 
   const taskId = btn.dataset.taskId;
   const action = btn.dataset.action;

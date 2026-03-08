@@ -15,6 +15,8 @@ const userRouter = require('./routes/user');
 const miningRouter = require('./routes/mining');
 const adminAuth = require('./middleware/adminAuth');
 const { startNotificationScheduler } = require('./utils/notificationScheduler');
+const socketIo = require('socket.io');
+const stateEmitter = require('./utils/stateEmitter');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -63,8 +65,12 @@ app.use(express.urlencoded({ extended: true }));
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
-  message: 'Too many requests from this IP, please try again later'
+  max: process.env.NODE_ENV === 'production' ? 100 : 1000,
+  message: 'Too many requests from this IP, please try again later',
+  skip: (req) => {
+    // Skip rate limiting for rate limit exemption in dev
+    return process.env.RATE_LIMIT_EXEMPT_IPS?.includes(req.ip);
+  }
 });
 app.use('/api/', limiter);
 
@@ -143,6 +149,99 @@ connectDB().then(() => {
   startNotificationScheduler();
   const server = app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
+  });
+
+  // Setup Socket.IO for real-time data sync (WebSocket fallback to polling)
+  const io = socketIo(server, {
+    cors: {
+      origin: allowedOrigins.length > 0 ? allowedOrigins : '*',
+      credentials: true
+    },
+    transports: ['websocket', 'polling'],
+    serveClient: false
+  });
+
+  // Authenticate WebSocket connections via JWT token (from auth param or httpOnly cookie)
+  io.use((socket, next) => {
+    let token = socket.handshake.auth.token || socket.handshake.headers.authorization?.split(' ')[1];
+    
+    // If no token in auth param, try to extract from httpOnly cookie
+    if (!token && socket.handshake.headers.cookie) {
+      const cookies = socket.handshake.headers.cookie.split(';');
+      for (const cookie of cookies) {
+        const [name, value] = cookie.trim().split('=');
+        if (name === 'token' || name === 'jwt') {
+          token = decodeURIComponent(value);
+          break;
+        }
+      }
+    }
+
+    if (!token) {
+      console.warn('[WS] Connection rejected: no token found in auth param or cookies');
+      return next(new Error('No authentication token'));
+    }
+
+    try {
+      const jwtSecret = process.env.JWT_SECRET || 'development-secret-key';
+      const decoded = require('jsonwebtoken').verify(token, jwtSecret);
+      socket.userId = decoded.id || decoded.telegramId;
+      socket.telegramId = decoded.telegramId;
+      console.log(`[WS] User ${socket.telegramId} authenticated via token`);
+      next();
+    } catch (err) {
+      console.warn('[WS] Token verification failed:', err.message);
+      next(new Error('Invalid token'));
+    }
+  });
+
+  io.on('connection', (socket) => {
+    console.log(`[WS] User ${socket.telegramId} connected (${socket.id})`);
+
+    // Join user-specific room for targeted updates
+    socket.join(`user:${socket.telegramId}`);
+
+    // Listen for leaderboard level subscriptions
+    socket.on('subscribe:leaderboard', (levelIndex) => {
+      socket.join(`leaderboard:${levelIndex}`);
+      console.log(`[WS] User ${socket.telegramId} subscribed to leaderboard level ${levelIndex}`);
+    });
+
+    socket.on('unsubscribe:leaderboard', (levelIndex) => {
+      socket.leave(`leaderboard:${levelIndex}`);
+      console.log(`[WS] User ${socket.telegramId} unsubscribed from leaderboard level ${levelIndex}`);
+    });
+
+    socket.on('disconnect', () => {
+      console.log(`[WS] User ${socket.telegramId} disconnected`);
+    });
+  });
+
+  // Attach io to express app for routes to use
+  app.locals.io = io;
+  app.locals.stateEmitter = stateEmitter;
+
+  // Bridge stateEmitter events to WebSocket
+  stateEmitter.on('user:*:balance', (data) => {
+    // Extract telegramId from event name (e.g., 'user:123456:balance')
+    // This will be handled by route emissions
+  });
+
+  // Routes emit to stateEmitter, which we listen to here for WebSocket broadcast
+  stateEmitter.on('user:updated', (data) => {
+    if (data.telegramId) {
+      io.to(`user:${data.telegramId}`).emit('user:updated', data);
+    }
+  });
+
+  stateEmitter.on('leaderboard:updated', (data) => {
+    if (data.levelIndex) {
+      io.to(`leaderboard:${data.levelIndex}`).emit('leaderboard:updated', data);
+    }
+  });
+
+  stateEmitter.on('global:event', (data) => {
+    io.emit('global:event', data);
   });
 
   server.on('error', (err) => {

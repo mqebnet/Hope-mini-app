@@ -1,11 +1,14 @@
 const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
+const CompletedTask = require('../models/CompletedTask');
 const { getNextLevelThreshold, getUserLevel } = require('../utils/levelUtil');
 const {
   normalizeStreakIfMissed,
   getCheckInDayKey,
-  getNextResetAtUtc
+  getNextResetAtUtc,
+  getUserCheckIns,
+  getUserBadges
 } = require('../utils/dailyCheckIn');
 
 /**
@@ -36,8 +39,14 @@ router.get('/me', async (req, res) => {
     if (streakChanged || levelChanged) {
       await user.save();
     }
+    const [checkIns, badges, completedTaskDocs] = await Promise.all([
+      getUserCheckIns(user.telegramId, 120),
+      getUserBadges(user.telegramId),
+      CompletedTask.find({ telegramId: user.telegramId }, { taskId: 1, _id: 0 }).lean()
+    ]);
+
     const todayDayKey = getCheckInDayKey(now);
-    const checkedInToday = (user.checkIns || []).some((c) => c.dayKey === todayDayKey);
+    const checkedInToday = checkIns.some((c) => c.dayKey === todayDayKey);
 
     res.json({
       success: true,
@@ -53,8 +62,9 @@ router.get('/me', async (req, res) => {
         silverTickets: user.silverTickets,
         goldTickets: user.goldTickets,
         lastCheckInDate: user.lastCheckInDate,
-        checkIns: user.checkIns || [],
-        badges: user.badges || [],
+        checkIns,
+        badges,
+        completedTasks: completedTaskDocs.map((doc) => doc.taskId),
         checkedInToday,
         dailyCheckInResetAtUtc: getNextResetAtUtc(now).toISOString(),
         miningStartedAt: user.miningStartedAt,

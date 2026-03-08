@@ -3,6 +3,7 @@ const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
 const { getUserLevel } = require('../utils/levelUtil');
+const stateEmitter = require('../utils/stateEmitter');
 
 const MINING_DURATION_MS = 6 * 60 * 60 * 1000; // 6 hours
 
@@ -48,6 +49,22 @@ router.post('/claim', async (req, res) => {
     user.miningReminderSentAt = null;
     user.level = getUserLevel(user.points);
     await user.save();
+
+    // Emit real-time update via WebSocket
+    stateEmitter.emit('user:updated', {
+      telegramId: user.telegramId,
+      points: user.points,
+      xp: user.xp,
+      level: user.level,
+      nextLevelAt: user.nextLevelAt,
+      bronzeTickets: user.bronzeTickets,
+      silverTickets: user.silverTickets,
+      goldTickets: user.goldTickets,
+      streak: user.streak,
+      miningStartedAt: user.miningStartedAt,
+      lastCheckInAt: user.lastCheckInAt,
+      transactionsCount: user.transactionsCount
+    });
 
     res.json({
       success: true,

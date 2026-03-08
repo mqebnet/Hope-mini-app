@@ -1,7 +1,11 @@
 // invite.js (Frontend)
 import { fetchUserData, updateTopBar } from './userData.js';
+import { canBootstrap, debounceButton } from './utils.js';
 
 document.addEventListener("DOMContentLoaded", async () => {
+  // Bootstrap lock: prevent running twice
+  if (!canBootstrap('invite')) return;
+
   const tg = window.Telegram.WebApp;
   tg.ready();
   tg.expand();

@@ -274,4 +274,23 @@ router.get('/notifications/mining-reminders/last-run', async (_req, res) => {
   }
 });
 
+router.post('/migrations/cleanup-legacy-puzzle', async (_req, res) => {
+  try {
+    const result = await User.updateMany(
+      { 'mysteryBoxes.puzzle': { $exists: true } },
+      { $unset: { 'mysteryBoxes.$[].puzzle': '' } }
+    );
+
+    return res.json({
+      success: true,
+      matched: result.matchedCount || 0,
+      modified: result.modifiedCount || 0,
+      message: 'Legacy mysteryBoxes.puzzle fields removed'
+    });
+  } catch (err) {
+    console.error('Admin cleanup legacy puzzle error:', err);
+    return res.status(500).json({ error: 'Failed to cleanup legacy puzzle fields' });
+  }
+});
+
 module.exports = router;

@@ -199,11 +199,11 @@ GameSessionSchema.methods.calculateReward = function() {
   const basePoints = 50;
 
   const points = Math.floor(basePoints * perfect * speed);
-  const xp = Math.floor(10 * perfect * speed);
+  const xp = 1; // Fixed XP reward: 1 per game
 
   return {
     points: Math.max(20, points),
-    xp: Math.max(5, xp),
+    xp: Math.max(1, xp),
     bronzeTickets: Math.random() > 0.7 ? 5 : 0 // 30% chance
   };
 };

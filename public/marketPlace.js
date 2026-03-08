@@ -1,5 +1,6 @@
-import { fetchUserData, updateTopBar } from './userData.js';
+import { fetchUserData, updateTopBar, getCachedUser, invalidateCache } from './userData.js';
 import { tonConnectUI } from './tonconnect.js';
+import { canBootstrap } from './utils.js';
 
 const BOX_PRICE_USD = 0.15;
 
@@ -7,10 +8,14 @@ let user = null;
 let selectedTradeAmount = null;
 let selectedTradeType = null;
 let cachedBoxStatus = null;
+let activeMarketTab = 'games';
 
 const mysteryBtn = document.getElementById('open-market-mystery-box-button');
 const mysteryInfo = document.getElementById('mystery-box-info');
 const mysteryTrack = document.getElementById('mystery-box-track');
+const mysteryLauncher = document.getElementById('mystery-box-launcher');
+const mysteryBackBtn = document.getElementById('mystery-box-back-button');
+const gamesGrid = document.getElementById('games-grid');
 
 const boxRewards = {
   bronze: { points: 200, bronzeTickets: 10, xp: 1 },
@@ -19,80 +24,112 @@ const boxRewards = {
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
+  // Bootstrap lock: prevent running twice
+  if (!canBootstrap('marketplace')) return;
+
   if (window.Telegram?.WebApp) window.Telegram.WebApp.ready();
   initMarketplaceTabs();
+  initMysteryLauncher();
 
   try {
-    await ensureSessionReady();
-    user = await fetchUserDataWithRetry(8, 700);
-    updateTopBar(user);
-  } catch (err) {
-    console.error('Failed to load user after retries:', err);
-    showNotification('Session not ready. Please reopen the mini app.', 'error');
-    return;
-  }
-
-  initExchangeUI();
-  initMysteryBoxUI();
-  await refreshMysteryStatus();
-});
-
-async function fetchUserDataWithRetry(retries = 3, delayMs = 400) {
-  let lastErr;
-  for (let attempt = 1; attempt <= retries; attempt += 1) {
-    try {
-      return await fetchUserData();
-    } catch (err) {
-      lastErr = err;
-      if (attempt < retries) {
-        await new Promise((resolve) => setTimeout(resolve, delayMs));
-      }
+    // Use cached user data (populated by script.js during auth)
+    // If not cached yet, fetch it once
+    if (!user) {
+      user = await fetchUserData();
+    } else {
+      user = getCachedUser() || user;
     }
-  }
-  throw lastErr || new Error('Failed to load user');
-}
+    
+    if (!user) {
+      throw new Error('Failed to load user data');
+    }
 
-async function ensureSessionReady() {
-  const meRes = await fetch('/api/me', { credentials: 'include', cache: 'no-store' });
-  if (meRes.ok) return true;
-
-  const initData = window.Telegram?.WebApp?.initData;
-  if (!initData) return false;
-
-  try {
-    const authRes = await fetch('/api/auth/telegram', {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ initData })
-    });
-    if (!authRes.ok) return false;
+    updateTopBar(user);
+    initExchangeUI();
+    initMysteryBoxUI();
+    await refreshMysteryStatus();
   } catch (err) {
-    console.error('Marketplace auth bootstrap failed:', err);
-    return false;
+    console.error('Failed to initialize marketplace:', err);
+    showNotification(err.message || 'Failed to load marketplace. Please refresh.', 'error');
   }
-
-  const meRetry = await fetch('/api/me', { credentials: 'include', cache: 'no-store' });
-  return meRetry.ok;
-}
+});
 
 function initMarketplaceTabs() {
   const tabs = document.querySelectorAll('.market-tab');
   const sections = {
     games: document.getElementById('games-section'),
-    puzzles: document.getElementById('puzzles-section'),
     exchange: document.getElementById('exchange-section')
   };
 
+  function activateTab(target) {
+    activeMarketTab = target === 'exchange' ? 'exchange' : 'games';
+    tabs.forEach((tab) => tab.classList.toggle('active', tab.dataset.tab === activeMarketTab));
+    Object.entries(sections).forEach(([key, section]) => {
+      if (section) section.classList.toggle('active', key === activeMarketTab);
+    });
+    if (activeMarketTab !== 'games') hideMysteryLauncher();
+  }
+
   tabs.forEach((tab) => {
     tab.addEventListener('click', () => {
-      const target = tab.dataset.tab;
-      tabs.forEach((t) => t.classList.toggle('active', t === tab));
-      Object.entries(sections).forEach(([key, section]) => {
-        if (section) section.classList.toggle('active', key === target);
-      });
+      activateTab(tab.dataset.tab);
     });
   });
+
+  const params = new URLSearchParams(window.location.search);
+  const tabParam = params.get('tab');
+  if (tabParam === 'exchange') {
+    activateTab('exchange');
+  } else {
+    activateTab('games');
+    if (tabParam === 'boxes' || tabParam === 'puzzles') {
+      showMysteryLauncher();
+    }
+  }
+}
+
+function initMysteryLauncher() {
+  if (mysteryBackBtn) {
+    mysteryBackBtn.addEventListener('click', () => {
+      hideMysteryLauncher();
+      const url = new URL(window.location.href);
+      url.searchParams.delete('tab');
+      window.history.replaceState({}, '', url.toString());
+    });
+  }
+
+  window.openMysteryBoxesPanel = () => {
+    // Always show the mystery launcher, regardless of current tab
+    // This ensures it works when called from the games grid
+    showMysteryLauncher();
+    // Make sure games tab is active
+    const gamesTab = document.querySelector('.market-tab[data-tab="games"]');
+    const exchangeTab = document.querySelector('.market-tab[data-tab="exchange"]');
+    if (gamesTab && exchangeTab) {
+      gamesTab.classList.add('active');
+      exchangeTab.classList.remove('active');
+    }
+    const gamesSection = document.getElementById('games-section');
+    const exchangeSection = document.getElementById('exchange-section');
+    if (gamesSection && exchangeSection) {
+      gamesSection.classList.add('active');
+      exchangeSection.classList.remove('active');
+    }
+    activeMarketTab = 'games';
+    const url = new URL(window.location.href);
+    url.searchParams.set('tab', 'boxes');
+    window.history.replaceState({}, '', url.toString());
+  };
+}
+
+function showMysteryLauncher() {
+  if (mysteryLauncher) mysteryLauncher.classList.remove('hidden');
+  if (gamesGrid) gamesGrid.classList.add('hidden');
+}
+
+function hideMysteryLauncher() {
+  if (mysteryLauncher) mysteryLauncher.classList.add('hidden');
+  if (gamesGrid) gamesGrid.classList.remove('hidden');
 }
 
 function updateExchangePreview(tradeType, amount) {
@@ -263,6 +300,9 @@ function renderMysteryStatus(status) {
       : 'Daily Limit Reached';
 
   mysteryBtn.disabled = !activeBox && !nextBox;
+  mysteryBtn.classList.remove('buy-ready', 'open-ready');
+  if (activeBox) mysteryBtn.classList.add('open-ready');
+  else if (nextBox) mysteryBtn.classList.add('buy-ready');
 
   const progressLabel = `${purchasedToday}/${limit} purchased today`;
   const nextLabel = activeBox
@@ -356,14 +396,19 @@ async function openMysteryBox() {
 
   const reward = data.reward || boxRewards[data.boxType] || {};
 
+  // Show confetti effect if available
   if (typeof confetti === 'function') {
     confetti({ particleCount: 110, spread: 78, origin: { y: 0.62 } });
   }
 
-  if (typeof window.showRewardPopup === 'function') {
+  // Show reward popup if function is available
+  const showRewardSuccess = typeof window.showRewardPopup === 'function';
+  if (showRewardSuccess) {
     window.showRewardPopup(reward, { title: `${String(data.boxType || '').toUpperCase()} Box Reward` });
   } else {
+    // Fallback notification if reward popup is unavailable
     showNotification('Box opened! Rewards added.', 'success');
+    console.warn('showRewardPopup function not available');
   }
 
   user = await fetchUserData();

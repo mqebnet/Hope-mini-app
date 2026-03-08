@@ -1,7 +1,11 @@
 // public/weeklyDrop.js
 import { fetchUserData, updateTopBar } from './userData.js';
+import { canBootstrap, debounceButton } from './utils.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
+  // Bootstrap lock: prevent running twice
+  if (!canBootstrap('weeklydrop')) return;
+
   const rulesCheckbox = document.getElementById('rules-checkbox');
   const enterButton = document.getElementById('enter-contest-button');
   const statusEl = document.getElementById('eligibility-status');
@@ -40,6 +44,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     enterButton.addEventListener('click', async () => {
+      // Debounce button: prevent double clicks
+      if (!debounceButton(enterButton, 1000)) return;
+
       try {
         const res = await fetch('/api/weeklyDrop/enter', {
           method: 'POST',

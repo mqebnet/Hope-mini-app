@@ -10,6 +10,9 @@
  * - Responsive mobile design
  */
 
+import { debounceButton, cacheGameConfig, getCachedGameConfig } from './utils.js';
+const FLIPCARDS_PASS_USD = 0.55;
+
 export class FlipCardsGame {
   constructor() {
     this.gameSessionId = null;
@@ -17,6 +20,7 @@ export class FlipCardsGame {
     this.flippedCards = [];
     this.matchedTriplets = [];
     this.isProcessing = false;
+    this.isAbandoningGame = false;
     this.timeRemaining = 60;
     this.timeLimit = 60;
     this.startTime = null;
@@ -41,6 +45,13 @@ export class FlipCardsGame {
       });
 
       const data = await response.json();
+      
+      // Check if daily pass is required (402 status from backend)
+      if (response.status === 402) {
+        window.location.href = 'flipcardsPass.html';
+        return { success: false };
+      }
+
       if (!data.success) {
         throw new Error(data.error || 'Failed to start game');
       }
@@ -66,6 +77,64 @@ export class FlipCardsGame {
       this.showNotification(err.message || 'Failed to start game', 'error');
       return { success: false };
     }
+  }
+
+  /**
+   * Show daily pass purchase screen
+   */
+  showPurchasePassScreen() {
+    const gameContainer = document.getElementById('flipcards-game');
+    if (!gameContainer) return;
+
+    // Clear existing content
+    gameContainer.innerHTML = '';
+
+    const passScreen = document.createElement('div');
+    passScreen.className = 'pass-purchase-screen';
+    passScreen.innerHTML = `
+      <div class="pass-card">
+        <div class="pass-icon">🎫</div>
+        <h2>Daily Pass Required</h2>
+        <p class="pass-description">Unlock unlimited Flip Cards gameplay for 24 hours</p>
+        
+        <div class="pass-features">
+          <div class="feature">
+            <span class="feature-icon">♾️</span>
+            <span>Play unlimited games</span>
+          </div>
+          <div class="feature">
+            <span class="feature-icon">⏰</span>
+            <span>Valid for 24 hours</span>
+          </div>
+          <div class="feature">
+            <span class="feature-icon">⭐</span>
+            <span>Earn full rewards</span>
+          </div>
+        </div>
+
+        <div class="pass-price">
+          <span class="price-label">Daily Pass</span>
+          <span class="price-amount">$${FLIPCARDS_PASS_USD.toFixed(2)}</span>
+        </div>
+
+        <button class="btn-purchase-pass" onclick="window.flipCardsGame.purchasePass()">
+          Purchase Daily Pass
+        </button>
+
+        <button class="btn-cancel-pass" onclick="window.location.href='marketPlace.html'">
+          Back to Games
+        </button>
+      </div>
+    `;
+
+    gameContainer.appendChild(passScreen);
+  }
+
+  /**
+   * Purchase daily pass
+   */
+  async purchasePass() {
+    window.location.href = 'flipcardsPass.html';
   }
 
   /**
@@ -390,7 +459,9 @@ export class FlipCardsGame {
    * Abandon current game
    */
   async abandonGame() {
-    if (!this.gameSessionId) return;
+    // Prevent double abandons
+    if (this.isAbandoningGame || !this.gameSessionId) return;
+    this.isAbandoningGame = true;
 
     this.isGameActive = false;
     clearInterval(this.timerInterval);
@@ -403,6 +474,7 @@ export class FlipCardsGame {
       window.location.href = 'marketPlace.html';
     } catch (err) {
       console.error('Failed to abandon game:', err);
+      this.isAbandoningGame = false;
     }
   }
 }
@@ -443,15 +515,21 @@ export function initFlipCardsGame() {
   // Difficulty button handlers
   document.querySelectorAll('.difficulty-btn').forEach((btn) => {
     btn.addEventListener('click', async () => {
+      // Debounce button: prevent double clicks
+      if (!debounceButton(btn, 500)) return;
+
       const difficulty = btn.dataset.difficulty;
       const game = new FlipCardsGame();
       window.flipCardsGame = game;
 
+      // Create game UI first (before startGame)
+      difficultySelector.style.display = 'none';
+      renderGameUI(gameContainer);
+
+      // Now start the game (which will find #flipcards-board)
       const result = await game.startGame(difficulty);
-      if (result.success) {
-        // Replace UI
-        difficultySelector.style.display = 'none';
-        renderGameUI(gameContainer);
+      if (!result.success) {
+        console.error('Failed to start game');
       }
     });
   });
@@ -480,3 +558,5 @@ function renderGameUI(container) {
 
 // Auto-initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', initFlipCardsGame);
+
+

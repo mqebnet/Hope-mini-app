@@ -48,6 +48,29 @@
     return toast;
   }
 
+  // Handle fetch errors globally, especially 429 rate limit
+  window.addEventListener('unhandledrejection', (event) => {
+    const err = event.reason;
+    if (err?.message?.includes('RATE_LIMITED') || err?.status === 429) {
+      showNotification('Too many requests. Please wait a moment and try again.', 'error');
+      event.preventDefault();
+    }
+  });
+
+  // Intercept fetch to handle 429 responses
+  const originalFetch = window.fetch;
+  window.fetch = function(...args) {
+    return originalFetch.apply(this, args).then((response) => {
+      if (response.status === 429) {
+        // Show error notification for rate limit
+        setTimeout(() => {
+          showNotification('Server busy - too many requests. Retrying...', 'warn');
+        }, 100);
+      }
+      return response;
+    });
+  };
+
   function formatCompact(value) {
     const n = Number(value) || 0;
     if (n >= 1e9) return `${(n / 1e9).toFixed(1)}B`;

@@ -2,6 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
+const Referral = require('../models/Referral');
 const { generateUniqueInviteCode } = require('../utils/inviteCode');
 const { getUserLevel } = require('../utils/levelUtil');
 
@@ -11,6 +12,30 @@ const rewards = {
   5: { points: 1000, xp: 3 },
   10: { points: 2500, xp: 5 }
 };
+
+async function reconcileInviteState(user) {
+  const counted = Number(user?.invitedCount || 0);
+  const [referralsCount, legacyInvitedByCount] = await Promise.all([
+    Referral.countDocuments({ inviterId: user.telegramId }),
+    User.countDocuments({ invitedBy: user.telegramId })
+  ]);
+  const effectiveInvitedCount = Math.max(counted, referralsCount, legacyInvitedByCount);
+  let touched = false;
+  if (effectiveInvitedCount !== counted) {
+    user.invitedCount = effectiveInvitedCount;
+    touched = true;
+  }
+
+  if (touched) {
+    await user.save();
+  }
+
+  return {
+    invitedCount: effectiveInvitedCount,
+    referralsCount,
+    directInviteCount: legacyInvitedByCount
+  };
+}
 
 router.post('/register', async (req, res) => {
   try {
@@ -38,7 +63,20 @@ router.post('/register', async (req, res) => {
     newUser.level = getUserLevel(newUser.points);
     await newUser.save();
 
-    inviter.invitedCount = (inviter.invitedCount || 0) + 1;
+    const referralResult = await Referral.updateOne(
+      { invitedId: newUserTelegramId },
+      {
+        $setOnInsert: {
+          inviterId: inviter.telegramId,
+          invitedId: newUserTelegramId,
+          joinedAt: new Date()
+        }
+      },
+      { upsert: true }
+    );
+    if (Number(referralResult?.upsertedCount || 0) > 0) {
+      inviter.invitedCount = (inviter.invitedCount || 0) + 1;
+    }
     await inviter.save();
 
     res.json({ success: true });
@@ -69,8 +107,13 @@ router.get('/link', async (req, res) => {
     const telegramId = req.user.telegramId;
     const user = await User.findOne({ telegramId });
     if (!user) return res.status(404).json({ error: 'User not found' });
+    if (!user.inviteCode) {
+      user.inviteCode = await generateUniqueInviteCode();
+      await user.save();
+    }
 
-    const inviteLink = `https://t.me/hope_official_bot/app?startapp=${user.inviteCode}`;
+    const startParam = `${user.telegramId}_${user.inviteCode}`;
+    const inviteLink = `https://t.me/hope_official_bot/app?startapp=${startParam}`;
     res.json({ inviteLink });
   } catch (err) {
     console.error('Invite link error:', err);
@@ -84,13 +127,14 @@ router.get('/progress', async (req, res) => {
   const telegramId = req.user.telegramId;
   const user = await User.findOne({ telegramId });
   if (!user) return res.status(404).json({ error: 'User not found' });
+  const { invitedCount: effectiveInvitedCount } = await reconcileInviteState(user);
 
   const completedInviteTasks = Array.isArray(user.completedInviteTasks)
     ? user.completedInviteTasks.map((v) => Number(v)).filter((v) => Number.isFinite(v))
     : [];
 
   res.json({
-    invitedCount: user.invitedCount || 0,
+    invitedCount: effectiveInvitedCount,
     completedTasks: completedInviteTasks,
     points: user.points || 0,
     xp: user.xp || 0,
@@ -104,8 +148,9 @@ router.get('/verify', async (req, res) => {
   const telegramId = req.user.telegramId;
   const user = await User.findOne({ telegramId });
   if (!user) return res.status(404).json({ error: 'User not found' });
+  const { invitedCount: effectiveInvitedCount } = await reconcileInviteState(user);
 
-  const completed = (user.invitedCount || 0) >= target;
+  const completed = effectiveInvitedCount >= target;
   const claimed = Array.isArray(user.completedInviteTasks)
     ? user.completedInviteTasks.map((v) => Number(v)).includes(target)
     : false;
@@ -121,8 +166,9 @@ router.post('/claim', async (req, res) => {
   const telegramId = req.user.telegramId;
   const user = await User.findOne({ telegramId });
   if (!user) return res.status(404).json({ error: 'User not found' });
+  const { invitedCount: effectiveInvitedCount } = await reconcileInviteState(user);
 
-  if ((user.invitedCount || 0) < target) {
+  if (effectiveInvitedCount < target) {
     return res.status(400).json({ error: 'Target not reached' });
   }
 
@@ -147,7 +193,7 @@ router.post('/claim', async (req, res) => {
       points: user.points,
       xp: user.xp,
       level: user.level,
-      invitedCount: user.invitedCount || 0,
+      invitedCount: effectiveInvitedCount,
       completedInviteTasks: user.completedInviteTasks
     }
   });
@@ -155,15 +201,73 @@ router.post('/claim', async (req, res) => {
 
 router.get('/top-referrers', async (req, res) => {
   try {
-    const top = await User.find({})
-      .sort({ invitedCount: -1 })
-      .limit(50)
-      .select('telegramId username invitedCount');
+    const top = await User.aggregate([
+      {
+        $project: {
+          telegramId: 1,
+          username: 1,
+          invitedCount: { $ifNull: ['$invitedCount', 0] }
+        }
+      },
+      {
+        $lookup: {
+          from: 'referrals',
+          let: { ownerTelegramId: '$telegramId' },
+          pipeline: [
+            {
+              $match: {
+                $expr: { $eq: ['$inviterId', '$$ownerTelegramId'] }
+              }
+            },
+            { $count: 'count' }
+          ],
+          as: 'referralRows'
+        }
+      },
+      {
+        $addFields: {
+          referralsCount: {
+            $ifNull: [{ $arrayElemAt: ['$referralRows.count', 0] }, 0]
+          }
+        }
+      },
+      {
+        $lookup: {
+          from: 'users',
+          let: { ownerTelegramId: '$telegramId' },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $eq: ['$invitedBy', '$$ownerTelegramId']
+                }
+              }
+            },
+            { $count: 'count' }
+          ],
+          as: 'directInvites'
+        }
+      },
+      {
+        $addFields: {
+          directInviteCount: {
+            $ifNull: [{ $arrayElemAt: ['$directInvites.count', 0] }, 0]
+          }
+        }
+      },
+      {
+        $addFields: {
+          effectiveReferrals: { $max: ['$invitedCount', '$referralsCount', '$directInviteCount'] }
+        }
+      },
+      { $sort: { effectiveReferrals: -1, telegramId: 1 } },
+      { $limit: 50 }
+    ]);
 
     res.json(top.map((u) => ({
       userId: u.telegramId,
       username: u.username,
-      referrals: u.invitedCount || 0
+      referrals: u.effectiveReferrals || 0
     })));
   } catch (err) {
     res.status(500).json({ error: 'Failed to load referral leaderboard' });

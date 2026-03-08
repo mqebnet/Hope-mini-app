@@ -1,5 +1,15 @@
 // public/userData.js
-// UI-only helpers
+// UI-only helpers & imports from cache module
+
+import {
+  fetchUserDataOnce,
+  getCachedUser,
+  setCachedUser,
+  invalidateCache
+} from './cache.js';
+
+// Re-export cache functions for convenience
+export { fetchUserDataOnce, getCachedUser, setCachedUser, invalidateCache };
 
 export function formatPoints(points = 0) {
   if (points < 100000) return points.toLocaleString();
@@ -17,11 +27,9 @@ export function formatCompact(value = 0) {
   return n.toLocaleString();
 }
 
+// Backward compatibility: fetchUserData uses the cache
 export async function fetchUserData() {
-  const res = await fetch('/api/user/me', { credentials: 'include', cache: 'no-store' });
-  if (!res.ok) throw new Error('Unauthorized');
-  const data = await res.json();
-  return data.user;
+  return fetchUserDataOnce();
 }
 
 export function getCurrentLevel(points = 0) {

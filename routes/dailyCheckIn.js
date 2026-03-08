@@ -2,13 +2,18 @@ const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
 const { verifyTransaction } = require('../utils/tonHandler');
+const stateEmitter = require('../utils/stateEmitter');
 const {
   DAILY_CHECKIN_REWARD,
   getCheckInDayKey,
   getNextResetAtUtc,
   normalizeStreakIfMissed,
   buildCheckInCalendar,
-  applyVerifiedDailyCheckIn
+  applyVerifiedDailyCheckIn,
+  hasCheckedInDay,
+  hasCheckInTx,
+  getUserCheckIns,
+  getUserBadges
 } = require('../utils/dailyCheckIn');
 
 router.get('/status', async (req, res) => {
@@ -21,7 +26,8 @@ router.get('/status', async (req, res) => {
     if (streakChanged) await user.save();
 
     const todayKey = getCheckInDayKey(now);
-    const checkedInToday = (user.checkIns || []).some((c) => c.dayKey === todayKey);
+    const checkIns = await getUserCheckIns(user.telegramId, 120);
+    const checkedInToday = await hasCheckedInDay(user.telegramId, todayKey);
 
     res.json({
       success: true,
@@ -30,7 +36,7 @@ router.get('/status', async (req, res) => {
       dayKey: todayKey,
       resetAtUtc: getNextResetAtUtc(now).toISOString(),
       reward: DAILY_CHECKIN_REWARD,
-      calendar: buildCheckInCalendar(user, now)
+      calendar: buildCheckInCalendar(checkIns, now)
     });
   } catch (error) {
     console.error('Daily check-in status error:', error);
@@ -52,10 +58,10 @@ router.post('/verify', async (req, res) => {
     const now = new Date();
     const todayKey = getCheckInDayKey(now);
 
-    if ((user.checkIns || []).some((c) => c.dayKey === todayKey)) {
+    if (await hasCheckedInDay(telegramId, todayKey)) {
       return res.status(400).json({ error: 'Already checked in today' });
     }
-    if (txHash && (user.checkIns || []).some((c) => c.txHash === txHash)) {
+    if (txHash && await hasCheckInTx(telegramId, txHash)) {
       return res.status(400).json({ error: 'Transaction already used for check-in' });
     }
 
@@ -78,16 +84,37 @@ router.post('/verify', async (req, res) => {
     }
 
     const proofRef = verification.txRef || txHash || txBoc;
-    if ((user.checkIns || []).some((c) => c.txHash === proofRef)) {
+    if (await hasCheckInTx(telegramId, proofRef)) {
       return res.status(400).json({ error: 'Transaction already used for check-in' });
     }
 
-    const applyResult = applyVerifiedDailyCheckIn(user, proofRef, now);
+    const applyResult = await applyVerifiedDailyCheckIn(user, proofRef, now);
     if (!applyResult.ok) {
       return res.status(applyResult.status).json({ error: applyResult.error });
     }
 
     await user.save();
+
+    // Emit real-time update via WebSocket
+    stateEmitter.emit('user:updated', {
+      telegramId: user.telegramId,
+      points: user.points,
+      xp: user.xp,
+      level: user.level,
+      nextLevelAt: user.nextLevelAt,
+      bronzeTickets: user.bronzeTickets,
+      silverTickets: user.silverTickets,
+      goldTickets: user.goldTickets,
+      streak: user.streak,
+      miningStartedAt: user.miningStartedAt,
+      lastCheckInAt: user.lastCheckInAt,
+      transactionsCount: user.transactionsCount
+    });
+
+    const [badges, checkIns] = await Promise.all([
+      getUserBadges(user.telegramId),
+      getUserCheckIns(user.telegramId, 120)
+    ]);
 
     res.json({
       success: true,
@@ -96,11 +123,11 @@ router.post('/verify', async (req, res) => {
       xp: user.xp,
       bronzeTickets: user.bronzeTickets,
       level: user.level,
-      badges: user.badges || [],
+      badges,
       dayKey: applyResult.dayKey,
       perfectStreakBadgeAwarded: applyResult.perfectStreakBadgeAwarded,
       reward: DAILY_CHECKIN_REWARD,
-      calendar: buildCheckInCalendar(user, now)
+      calendar: buildCheckInCalendar(checkIns, now)
     });
   } catch (error) {
     console.error('Daily check-in verification error:', error);

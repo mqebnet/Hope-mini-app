@@ -2,12 +2,16 @@
 const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
+const CompletedTask = require('../models/CompletedTask');
 const { verifyTransaction } = require('../utils/tonHandler');
 const { getUserLevel } = require('../utils/levelUtil');
 const {
   DAILY_CHECKIN_REWARD,
   getCheckInDayKey,
-  applyVerifiedDailyCheckIn
+  applyVerifiedDailyCheckIn,
+  hasCheckedInDay,
+  hasCheckInTx,
+  getUserBadges
 } = require('../utils/dailyCheckIn');
 const { getTaskCatalog } = require('../utils/taskCatalog');
 
@@ -54,20 +58,21 @@ router.post('/daily-checkin', async (req, res) => {
     const user = await User.findOne({ telegramId });
     if (!user) return res.status(404).json({ error: 'User not found' });
     const dayKey = getCheckInDayKey(today);
-    if ((user.checkIns || []).some((c) => c.dayKey === dayKey)) {
+    if (await hasCheckedInDay(telegramId, dayKey)) {
       return res.status(400).json({ error: 'Already checked in today' });
     }
     const proofRef = verification.txRef || txHash || txBoc;
-    if ((user.checkIns || []).some((c) => c.txHash === proofRef)) {
+    if (await hasCheckInTx(telegramId, proofRef)) {
       return res.status(400).json({ error: 'Transaction already used for check-in' });
     }
 
-    const applyResult = applyVerifiedDailyCheckIn(user, proofRef, today);
+    const applyResult = await applyVerifiedDailyCheckIn(user, proofRef, today);
     if (!applyResult.ok) {
       return res.status(applyResult.status).json({ error: applyResult.error });
     }
 
     await user.save();
+    const badges = await getUserBadges(telegramId);
 
     res.json({
       success: true,
@@ -76,7 +81,7 @@ router.post('/daily-checkin', async (req, res) => {
       xp: user.xp,
       bronzeTickets: user.bronzeTickets,
       level: user.level,
-      badges: user.badges || [],
+      badges,
       reward: DAILY_CHECKIN_REWARD
     });
   } catch (err) {
@@ -108,14 +113,13 @@ router.post('/complete', async (req, res) => {
     const user = await User.findOne({ telegramId });
     if (!user) return res.status(404).json({ error: 'User not found' });
 
-    user.completedTasks = user.completedTasks || [];
-
-    if (user.completedTasks.includes(taskId)) {
+    const exists = await CompletedTask.exists({ telegramId, taskId });
+    if (exists) {
       return res.status(400).json({ error: 'Task already completed' });
     }
 
     const rewardPoints = Number(task.reward || 0);
-    user.completedTasks.push(taskId);
+    await CompletedTask.create({ telegramId, taskId, completedAt: new Date() });
     user.points = (user.points || 0) + rewardPoints;
     user.level = getUserLevel(user.points);
 
@@ -131,6 +135,9 @@ router.post('/complete', async (req, res) => {
       }
     });
   } catch (err) {
+    if (err?.code === 11000) {
+      return res.status(400).json({ error: 'Task already completed' });
+    }
     console.error('Complete Task Error:', err);
     res.status(500).json({ error: 'Task completion failed' });
   }
@@ -158,9 +165,8 @@ router.post('/verify-proof', async (req, res) => {
     const user = await User.findOne({ telegramId });
     if (!user) return res.status(404).json({ error: 'User not found' });
 
-    user.completedTasks = user.completedTasks || [];
-
-    if (user.completedTasks.includes(taskId)) {
+    const exists = await CompletedTask.exists({ telegramId, taskId });
+    if (exists) {
       return res.status(400).json({ error: 'Task already completed' });
     }
 
@@ -169,7 +175,7 @@ router.post('/verify-proof', async (req, res) => {
     // - Send to email: admin@yourdomain.com
 
     const rewardPoints = Number(task.reward || 0);
-    user.completedTasks.push(taskId);
+    await CompletedTask.create({ telegramId, taskId, completedAt: new Date() });
     user.points = (user.points || 0) + rewardPoints;
     user.level = getUserLevel(user.points);
 
@@ -185,6 +191,9 @@ router.post('/verify-proof', async (req, res) => {
       }
     });
   } catch (err) {
+    if (err?.code === 11000) {
+      return res.status(400).json({ error: 'Task already completed' });
+    }
     console.error('Verify Proof Error:', err);
     res.status(500).json({ error: 'Verification failed' });
   }

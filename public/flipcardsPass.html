@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Hope - Flip Cards Pass</title>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
+  <script src="https://telegram.org/js/telegram-web-app.js" defer></script>
+  <script src="https://unpkg.com/@tonconnect/sdk@latest" defer></script>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<header id="top-nav">
+  <button id="profile-button" aria-label="Profile Menu"><i data-lucide="user"></i></button>
+  <div id="user-stats">
+    <p class="tag">Level</p><span id="current-level">-</span>
+    <p class="tag">XP</p><span id="user-exp">-</span>
+  </div>
+  <div id="ticket-icons">
+    <span id="bronze-tickets">-</span>
+    <span id="silver-tickets">-</span>
+    <span id="gold-tickets">-</span>
+  </div>
+  <div id="ton-connect-ui"></div>
+  <button id="ton-connect-button" aria-label="Connect Wallet"></button>
+</header>
+
+<div id="display-panel">
+  <p class="tag">Points</p>
+  <div id="points-bar">
+    <div id="points-progress"></div>
+    <span id="points-display">-</span>
+  </div>
+</div>
+
+<main id="main-content">
+  <div id="flipcards-pass-root" class="pass-purchase-screen"></div>
+</main>
+
+<footer id="bottom-nav">
+  <a href="index.html" class="nav-btn" data-page="home"><i data-lucide="home"></i> Home</a>
+  <a href="leaderBoard.html" class="nav-btn" data-page="leaderBoard"><i data-lucide="trending-up"></i> Leaders</a>
+  <a href="invitePage.html" class="nav-btn" data-page="invitePage"><i data-lucide="users"></i> Invite</a>
+  <a href="marketPlace.html" class="nav-btn active" data-page="marketPlace"><i data-lucide="shopping-cart"></i> Marketplace</a>
+  <a href="tasksPage.html" class="nav-btn" data-page="tasksPage"><i data-lucide="check-square"></i> Tasks</a>
+</footer>
+
+<script src="notify.js" defer></script>
+<script type="module" src="userData.js"></script>
+<script type="module" src="script.js"></script>
+<script type="module" src="tonconnect.js"></script>
+<script type="module" src="connectWallet.js"></script>
+<script type="module" src="flipcardsPass.js"></script>
+<script src="activeTab.js" defer></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    if (window.lucide) window.lucide.createIcons();
+  });
+</script>
+</body>
+</html>
+

@@ -1,5 +1,6 @@
 // public/profile.js
-import { updateTopBar } from './userData.js';
+import { updateTopBar, fetchUserDataOnce, getCachedUser } from './userData.js';
+import { canBootstrap } from './utils.js';
 
 const PROFILE_FALLBACK_HTML = `
 <div id="profile-panel" class="profile-panel" style="display: none;">
@@ -19,6 +20,8 @@ const PROFILE_FALLBACK_HTML = `
     <button id="profile-admin-link" type="button">Open Admin Dashboard</button>
   </p>
 </div>`;
+
+let profileLoading = false;
 
 function setText(id, value) {
   const el = document.getElementById(id);
@@ -56,18 +59,16 @@ async function ensureProfilePanel(profileContainer) {
 }
 
 async function loadUserProfile() {
-  const res = await fetch('/api/user/me', { credentials: 'include', cache: 'no-store' });
-
-  if (res.status === 401) {
-    window.location.href = '/auth';
-    return;
+  // Use cached user data (populated by script.js)
+  let user = getCachedUser();
+  
+  if (!user) {
+    user = await fetchUserDataOnce();
   }
 
-  if (!res.ok) {
-    throw new Error(`Failed to fetch user (${res.status})`);
+  if (!user) {
+    throw new Error('Failed to load user data');
   }
-
-  const { user } = await res.json();
 
   setText('profile-userid', user.username);
   setText('profile-level', user.level);
@@ -108,6 +109,10 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   profileButton.addEventListener('click', async () => {
+    // Prevent double clicks while loading
+    if (profileLoading) return;
+    
+    profileLoading = true;
     try {
       const profilePanel = await ensureProfilePanel(profileContainer);
       if (!profilePanel) throw new Error('Profile panel not initialized');
@@ -120,6 +125,8 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (err) {
       console.error(err);
       alert('Failed to load profile');
+    } finally {
+      profileLoading = false;
     }
   });
 });

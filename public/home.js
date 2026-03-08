@@ -1,6 +1,7 @@
 // home.js
-import { updateTopBar, formatPoints, formatCompact } from './userData.js';
+import { updateTopBar, formatPoints, formatCompact, fetchUserDataOnce, getCachedUser, setCachedUser, invalidateCache } from './userData.js';
 import { tonConnectUI } from './tonconnect.js';
+import { canBootstrap } from './utils.js';
 
 const MINING_DURATION_MS = 6 * 60 * 60 * 1000;
 let miningInterval = null;
@@ -42,37 +43,85 @@ function updateWeeklyDropEligibility(user) {
 }
 
 async function bootstrap() {
+  // Bootstrap lock: prevent running twice
+  if (!canBootstrap('home')) return;
+
   try {
-    const res = await fetch('/api/me', { credentials: 'include' });
-    if (!res.ok) {
+    // Check if authenticated by pinging /api/me
+    const sessionRes = await fetch('/api/me', { credentials: 'include' });
+    if (!sessionRes.ok) {
       window.location.replace('/auth');
       return;
     }
-    await fetchUser();
+
+    // Get user data from cache (populated by script.js auth flow)
+    // If not cached yet, fetch it
+    let user = getCachedUser();
+    if (!user) {
+      user = await fetchUserDataOnce();
+    }
+
+    if (user) {
+      updateUI(user);
+      updateTopBar(user);
+      updateWeeklyDropEligibility(user);
+      syncMiningUI(user.miningStartedAt);
+    }
   } catch (err) {
     console.error('Bootstrap failed:', err);
     window.location.replace('/auth');
   }
 }
 
-async function fetchUser() {
+// Handler for real-time WebSocket user data updates
+// Called when server pushes user balance changes (mining, tasks, etc.)
+window.onUserDataUpdate = function(user) {
+  if (!user) return;
+  const mergedUser = { ...(getCachedUser() || {}), ...user };
+  setCachedUser(mergedUser);
+
+  // Update DOM elements with new data
+  updateUI(mergedUser);
+  updateTopBar(mergedUser);
+  updateWeeklyDropEligibility(mergedUser);
+
+  // If mining just completed, sync the progress bar
+  if (mergedUser.miningStartedAt) {
+    syncMiningUI(mergedUser.miningStartedAt);
+  } else if (!mergedUser.miningStartedAt && miningIsComplete) {
+    // Mining was just claimed (cleared), reset UI
+    resetMiningUI();
+  }
+
+  console.log('[Home] User data synced via WebSocket');
+};
+
+async function fetchUser(options = {}) {
+  const force = Boolean(options.force);
   try {
-    const res = await fetch('/api/user/me', { credentials: 'include', cache: 'no-store' });
-    if (!res.ok) {
-      if (res.status === 401) {
-        window.location.href = '/auth';
-        return;
-      }
+    // Use cached user data first, fallback to API only if needed
+    let user = null;
+    if (!force) user = getCachedUser();
+
+    if (!user) {
+      if (force) invalidateCache();
+      user = await fetchUserDataOnce();
+      if (user) setCachedUser(user);
+    }
+
+    if (!user) {
       throw new Error('Failed to fetch user');
     }
 
-    const data = await res.json();
-    updateTopBar(data.user);
-    updateUI(data.user);
-    updateWeeklyDropEligibility(data.user);
-    syncMiningUI(data.user.miningStartedAt);
+    updateTopBar(user);
+    updateUI(user);
+    updateWeeklyDropEligibility(user);
+    syncMiningUI(user.miningStartedAt);
   } catch (err) {
     console.error('Failed to load user:', err);
+    if (err.message?.includes('401')) {
+      window.location.href = '/auth';
+    }
   }
 }
 
@@ -337,7 +386,7 @@ async function claimMining() {
     }
     launchMiningClaimConfetti();
     resetMiningUI();
-    await fetchUser();
+    await fetchUser({ force: true });
   } catch (err) {
     console.error(err);
     if (typeof window.showErrorToast === 'function') {

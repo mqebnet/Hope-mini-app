@@ -1357,6 +1357,17 @@ button:disabled {
   font-size: 13px;
 }
 
+#mystery-box-launcher {
+  margin-top: 10px;
+}
+
+.mystery-box-back-button {
+  margin-top: 6px;
+  background: linear-gradient(90deg, #27465d, #1b3247);
+  color: #d9f4ff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
 #open-market-mystery-box-button.buy-ready {
   background: linear-gradient(90deg, #00ffaa, #00eaff);
   color: #00221a;
@@ -2153,5 +2164,148 @@ input:checked + .slider:before {
 .btn-primary:hover {
   transform: translateY(-2px) !important;
   box-shadow: 0 4px 12px rgba(0, 255, 170, 0.3) !important;
+}
+
+/* ============ DAILY PASS PURCHASE SCREEN ============ */
+
+.pass-purchase-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 80vh;
+  padding: 20px;
+}
+
+.pass-card {
+  background: linear-gradient(160deg, rgba(8, 30, 50, 0.98), rgba(5, 15, 30, 0.99));
+  border: 2px solid rgba(0, 255, 170, 0.5);
+  border-radius: 20px;
+  padding: 32px 24px;
+  max-width: 380px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6), 0 0 50px rgba(0, 255, 170, 0.2);
+  animation: slideUp 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.pass-icon {
+  font-size: 64px;
+  margin-bottom: 16px;
+  display: block;
+  animation: bounce 1s ease-in-out infinite;
+}
+
+@keyframes bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+.pass-card h2 {
+  margin: 0 0 12px;
+  font-size: 32px;
+  color: #00ffaa;
+  text-shadow: 0 0 20px rgba(0, 255, 170, 0.5);
+}
+
+.pass-description {
+  color: #9eb7c5;
+  font-size: 14px;
+  margin: 0 0 24px;
+  line-height: 1.5;
+}
+
+.pass-features {
+  background: rgba(0, 255, 170, 0.08);
+  border: 1px solid rgba(0, 255, 170, 0.2);
+  border-radius: 12px;
+  padding: 16px;
+  margin: 24px 0;
+  display: grid;
+  gap: 12px;
+}
+
+.feature {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+  color: #d7f6f1;
+}
+
+.feature-icon {
+  font-size: 20px;
+  display: block;
+}
+
+.pass-price {
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(0, 255, 170, 0.3);
+  border-radius: 12px;
+  padding: 16px;
+  margin: 20px 0;
+}
+
+.price-label {
+  display: block;
+  font-size: 12px;
+  color: #9eb7c5;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+
+.price-amount {
+  display: block;
+  font-size: 32px;
+  font-weight: 700;
+  color: #00ffaa;
+  text-shadow: 0 0 15px rgba(0, 255, 170, 0.4);
+}
+
+.btn-purchase-pass {
+  width: 100%;
+  padding: 14px 16px;
+  font-size: 15px;
+  background: linear-gradient(90deg, #00ffaa, #00eaff);
+  color: #000;
+  border: none;
+  border-radius: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  margin: 12px 0;
+  box-shadow: 0 4px 16px rgba(0, 255, 170, 0.3);
+}
+
+.btn-purchase-pass:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(0, 255, 170, 0.4);
+}
+
+.btn-purchase-pass:active {
+  transform: translateY(-1px);
+}
+
+.btn-cancel-pass {
+  width: 100%;
+  padding: 12px 16px;
+  font-size: 14px;
+  background: transparent;
+  color: #00ffaa;
+  border: 1px solid rgba(0, 255, 170, 0.4);
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin: 0;
+}
+
+.btn-cancel-pass:hover {
+  background: rgba(0, 255, 170, 0.1);
+  border-color: rgba(0, 255, 170, 0.6);
 }
 

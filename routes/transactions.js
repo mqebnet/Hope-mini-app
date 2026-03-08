@@ -2,6 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
+const Transaction = require('../models/Transaction');
 
 /**
  * POST /api/transactions
@@ -24,25 +25,22 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Invalid parameters' });
     }
 
-    const user = await User.findOne({ telegramId });
-    if (!user) return res.status(404).json({ error: 'User not found' });
+    const userExists = await User.exists({ telegramId });
+    if (!userExists) return res.status(404).json({ error: 'User not found' });
 
-    user.transactions = user.transactions || [];
-
-    const exists = user.transactions.some(tx => tx.txHash === txHash);
+    const exists = await Transaction.exists({ txHash });
     if (exists) {
       return res.status(400).json({ error: 'Transaction already recorded' });
     }
 
-    user.transactions.push({
+    await Transaction.create({
+      telegramId,
       txHash,
       purpose,
       expectedUsd,
       status: 'pending',
       createdAt: new Date()
     });
-
-    await user.save();
 
     res.json({
       success: true,
@@ -63,14 +61,14 @@ router.get('/', async (req, res) => {
   try {
     const telegramId = req.user.telegramId;
 
-    const user = await User.findOne(
-      { telegramId },
-      { transactions: 1 }
-    );
+    const userExists = await User.exists({ telegramId });
+    if (!userExists) return res.status(404).json({ error: 'User not found' });
 
-    if (!user) return res.status(404).json({ error: 'User not found' });
+    const transactions = await Transaction.find({ telegramId })
+      .sort({ createdAt: -1 })
+      .lean();
 
-    res.json({ transactions: user.transactions || [] });
+    res.json({ transactions });
   } catch (error) {
     console.error('Fetch transactions error:', error);
     res.status(500).json({ error: 'Failed to fetch transactions' });

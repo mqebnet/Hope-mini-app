@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const Referral = require('../models/Referral');
 const User = require('../models/User');
 
 router.get('/top-referrers', async (req, res) => {
@@ -8,10 +9,27 @@ router.get('/top-referrers', async (req, res) => {
       {
         $project: {
           username: 1,
-          invitedCount: 1,
-          referrals: 1,
+          invitedCount: { $ifNull: ['$invitedCount', 0] }
+        }
+      },
+      {
+        $lookup: {
+          from: 'referrals',
+          let: { ownerId: '$telegramId' },
+          pipeline: [
+            { $match: { $expr: { $eq: ['$inviterId', '$$ownerId'] } } },
+            { $count: 'count' }
+          ],
+          as: 'refRows'
+        }
+      },
+      {
+        $addFields: {
           referralScore: {
-            $size: "$referrals"
+            $max: [
+              '$invitedCount',
+              { $ifNull: [{ $arrayElemAt: ['$refRows.count', 0] }, 0] }
+            ]
           }
         }
       },
@@ -20,9 +38,9 @@ router.get('/top-referrers', async (req, res) => {
       {
         $project: {
           _id: 0,
-          userId: 1,
+          userId: '$telegramId',
           username: 1,
-          referrals: { $size: "$referrals" },
+          referrals: '$referralScore'
         }
       }
     ]);

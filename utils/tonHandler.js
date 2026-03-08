@@ -2,6 +2,8 @@
 const axios = require('axios');
 const { Cell, Address } = require('@ton/core');
 const User = require('../models/User');
+const Transaction = require('../models/Transaction');
+const ProcessedTransaction = require('../models/ProcessedTransaction');
 const priceHandler = require('./priceHandler');
 
 /** @type {string} TON API base URL for blockchain queries */
@@ -298,7 +300,6 @@ async function verifyTransaction({
   const user = await User.findOne({ telegramId });
   if (!user) return { ok: false, reason: 'User not found' };
 
-  user.transactions = user.transactions || [];
   const txRef = resolved.txRef || txHash || (() => {
     const messageHash = toMessageHashFromBoc(txBoc);
     if (!messageHash) return null;
@@ -306,17 +307,35 @@ async function verifyTransaction({
   })() || txBoc;
   if (!txRef) return { ok: false, reason: 'Unable to derive transaction reference' };
 
-  const exists = user.transactions.some((t) => t.txHash === txRef);
-  if (!exists) {
-    user.transactions.push({
+  const processed = await ProcessedTransaction.findOne({ txHash: txRef }).lean();
+  if (processed && Number(processed.telegramId) !== Number(telegramId)) {
+    return { ok: false, reason: 'Transaction already processed by another user' };
+  }
+
+  await Transaction.updateOne(
+    { txHash: txRef },
+    {
+      $setOnInsert: {
+        telegramId,
+        txHash: txRef,
+        createdAt: new Date()
+      },
+      $set: {
+        purpose,
+        expectedUsd: requiredUsd,
+        amountTon,
+        status: 'verified'
+      }
+    },
+    { upsert: true }
+  );
+
+  if (!processed) {
+    await ProcessedTransaction.create({
+      telegramId,
       txHash: txRef,
-      purpose,
-      expectedUsd: requiredUsd,
-      amountTon,
-      status: 'verified',
-      createdAt: new Date()
+      processedAt: new Date()
     });
-    await user.save();
   }
 
   return { ok: true, txRef };

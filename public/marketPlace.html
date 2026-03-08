@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Hope – Marketplace</title>
+  <title>Hope - Marketplace</title>
 
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
   <script src="https://telegram.org/js/telegram-web-app.js" defer></script>
@@ -14,7 +14,6 @@
 </head>
 <body>
 
-<!-- Top Navigation Bar -->
 <header id="top-nav">
   <button id="profile-button" aria-label="Profile Menu">
     <i data-lucide="user"></i>
@@ -34,55 +33,48 @@
   </div>
 
   <div id="ton-connect-ui"></div>
-
   <button id="ton-connect-button" aria-label="Connect Wallet"></button>
 </header>
+
 <div id="display-panel">
   <p class="tag">Points</p>
   <div id="points-bar">
     <div id="points-progress"></div>
-    <span id="points-display">—</span>
+    <span id="points-display">-</span>
   </div>
 </div>
 
 <main id="main-content">
-
   <h1 class="page-title">Marketplace</h1>
 
-  <!-- Tabs -->
   <div id="marketplace-tabs">
     <button class="market-tab active" data-tab="games">Games</button>
     <button class="market-tab" data-tab="exchange">Exchange</button>
   </div>
 
-  <!-- Games Section -->
   <section id="games-section" class="market-section active">
     <h2>Games</h2>
     <div id="games-container">
       <div id="games-grid"></div>
     </div>
-  </section>
 
-  <!-- Legacy Puzzles Section (hidden but kept for backward compatibility) -->
-  <section id="puzzles-section" class="market-section" style="display: none;">
-    <h2>Mystery Boxes</h2>
-
-    <div class="mystery-box-panel">
-      <div id="mystery-box-track" class="mystery-box-track"></div>
-      <button id="open-market-mystery-box-button">
-        <i data-lucide="gift"></i> Get Mystery Box
-      </button>
-
-      <div id="mystery-box-info"></div>
+    <div id="mystery-box-launcher" class="hidden">
+      <h2>Mystery Boxes</h2>
+      <div class="mystery-box-panel">
+        <div id="mystery-box-track" class="mystery-box-track"></div>
+        <button id="open-market-mystery-box-button">
+          <i data-lucide="gift"></i> Get Mystery Box
+        </button>
+        <div id="mystery-box-info"></div>
+      </div>
+      <button id="mystery-box-back-button" class="mystery-box-back-button">Back to Games</button>
     </div>
   </section>
 
-  <!-- Exchange Section -->
   <section id="exchange-section" class="market-section">
     <h2>Exchange Tickets</h2>
 
     <div class="exchange-container">
-
       <div class="ticket-selector">
         <select id="exchange-type">
           <option value="bronze">Bronze -> Silver</option>
@@ -92,12 +84,12 @@
 
       <div class="ticket-options">
         <div class="amount-grid">
-          <button class="amount-option" data-amount="100">100 </button>
-          <button class="amount-option" data-amount="200">200 </button>
-          <button class="amount-option" data-amount="500">500 </button>
-          <button class="amount-option" data-amount="1000">1k </button>
-          <button class="amount-option" data-amount="5000">5k </button>
-          <button class="amount-option" data-amount="10000">10k </button>
+          <button class="amount-option" data-amount="100">100</button>
+          <button class="amount-option" data-amount="200">200</button>
+          <button class="amount-option" data-amount="500">500</button>
+          <button class="amount-option" data-amount="1000">1k</button>
+          <button class="amount-option" data-amount="5000">5k</button>
+          <button class="amount-option" data-amount="10000">10k</button>
         </div>
       </div>
 
@@ -105,14 +97,15 @@
         <div id="from-ticket"></div>
         <i data-lucide="arrow-right"></i>
         <div id="to-ticket"></div>
-  </section>
+      </div>
 
+      <button id="trade-button" disabled>Trade</button>
+    </div>
+  </section>
 </main>
 
-<!-- Profile -->
 <div id="profile-container"></div>
 
-<!-- Bottom Navigation -->
 <footer id="bottom-nav">
   <a href="index.html" class="nav-btn" data-page="home"><i data-lucide="home"></i> Home</a>
   <a href="leaderBoard.html" class="nav-btn" data-page="leaderBoard"><i data-lucide="trending-up"></i> Leaders</a>
@@ -132,18 +125,10 @@
 <script src="activeTab.js" defer></script>
 
 <script>
-  document.addEventListener("DOMContentLoaded", () => {
-    lucide.createIcons();
+  document.addEventListener('DOMContentLoaded', () => {
+    if (window.lucide) window.lucide.createIcons();
   });
 </script>
 
 </body>
 </html>
-
-
-
-
-
-
-
-

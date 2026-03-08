@@ -1,5 +1,7 @@
 // public/leaderBoard.js
-import { updateTopBar } from './userData.js';
+import { updateTopBar, fetchUserDataOnce, getCachedUser } from './userData.js';
+import { canBootstrap } from './utils.js';
+import { subscribeToLeaderboard, unsubscribeFromLeaderboard } from './wsync.js';
 
 let currentLevelIndex = 1;
 let currentUserId = null;
@@ -18,6 +20,9 @@ const LEVEL_INDEX = {
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
+  // Bootstrap lock: prevent running twice
+  if (!canBootstrap('leaderboard')) return;
+
   if (window.Telegram?.WebApp) {
     const tg = window.Telegram.WebApp;
     tg.ready();
@@ -25,11 +30,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   try {
-    const res = await fetch('/api/user/me', { credentials: 'include', cache: 'no-store' });
-    if (!res.ok) throw new Error('Unauthorized');
+    // Use cached user data (populated by script.js)
+    let user = getCachedUser();
+    if (!user) {
+      user = await fetchUserDataOnce();
+    }
 
-    const data = await res.json();
-    const user = data.user;
+    if (!user) throw new Error('Failed to load user');
 
     updateTopBar(user);
     currentUserId = user.telegramId;
@@ -43,6 +50,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 });
 
+// Global handler for WebSocket leaderboard updates
+// Called when other users' points change
+window.refreshLeaderboard = async function() {
+  console.log('[Leaderboard] Refreshing from WebSocket update');
+  await loadLeaderboard(currentLevelIndex);
+};
+
 async function loadLeaderboard(levelIndex) {
   showLoading(true);
 
@@ -55,7 +69,7 @@ async function loadLeaderboard(levelIndex) {
     const list = document.getElementById('leaderboard-list');
     list.innerHTML = '';
 
-    document.getElementById('leaderboard-level').textContent = `Level ${levelIndex} • ${levelName}`;
+    document.getElementById('leaderboard-level').textContent = `Level ${levelIndex} ï¿½ ${levelName}`;
 
     users.forEach((u, i) => {
       const displayName = u.username || u.telegramId;
@@ -77,6 +91,12 @@ async function loadLeaderboard(levelIndex) {
     });
 
     currentLevelIndex = levelIndex;
+    
+    // Store current level globally for WebSocket subscription
+    window.currentLeaderboardLevel = levelIndex;
+
+    // Subscribe to real-time updates for this leaderboard level
+    subscribeToLeaderboard(levelIndex);
   } catch (err) {
     console.error(err);
     showNotification('Failed to load leaderboard', 'error');

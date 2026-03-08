@@ -1,4 +1,6 @@
 const { getUserLevel } = require('./levelUtil');
+const CheckIn = require('../models/CheckIn');
+const UserBadge = require('../models/UserBadge');
 
 /**
  * Daily check-in reward values
@@ -101,8 +103,11 @@ function normalizeStreakIfMissed(user, now = new Date()) {
  * @returns {Array<Object>} Calendar entries: {dayKey, status, checked}
  *   where status is: 'upcoming' | 'checked' | 'available' | 'missed'
  */
-function buildCheckInCalendar(user, now = new Date(), days = 14) {
-  const checkedKeys = new Set((user.checkIns || []).map((c) => c.dayKey));
+function buildCheckInCalendar(userOrCheckIns, now = new Date(), days = 14) {
+  const checkIns = Array.isArray(userOrCheckIns)
+    ? userOrCheckIns
+    : (userOrCheckIns?.checkIns || []);
+  const checkedKeys = new Set(checkIns.map((c) => c.dayKey));
   const currentDayKey = getCheckInDayKey(now);
   const currentTime = new Date(`${currentDayKey}T00:00:00.000Z`).getTime();
 
@@ -134,18 +139,26 @@ function buildCheckInCalendar(user, now = new Date(), days = 14) {
  *   {ok: true, dayKey, streak, perfectStreakBadgeAwarded} on success
  *   {ok: false, status, error} on failure
  */
-function applyVerifiedDailyCheckIn(user, txHash, now = new Date()) {
-  user.checkIns = user.checkIns || [];
+async function applyVerifiedDailyCheckIn(user, txHash, now = new Date()) {
+  const telegramId = Number(user?.telegramId);
+  const todayKey = getCheckInDayKey(now);
 
-  if (user.checkIns.some((c) => c.dayKey === getCheckInDayKey(now))) {
+  if (!Number.isFinite(telegramId)) {
+    return { ok: false, status: 400, error: 'Invalid user' };
+  }
+
+  const alreadyCheckedToday = await CheckIn.exists({ telegramId, dayKey: todayKey });
+  if (alreadyCheckedToday) {
     return { ok: false, status: 400, error: 'Already checked in today' };
   }
 
-  if (user.checkIns.some((c) => c.txHash === txHash)) {
-    return { ok: false, status: 400, error: 'Transaction already used for check-in' };
+  if (txHash) {
+    const txAlreadyUsed = await CheckIn.exists({ telegramId, txHash });
+    if (txAlreadyUsed) {
+      return { ok: false, status: 400, error: 'Transaction already used for check-in' };
+    }
   }
 
-  const todayKey = getCheckInDayKey(now);
   const lastDayKey = user.lastCheckInDate ? getCheckInDayKey(new Date(user.lastCheckInDate)) : null;
   const dayGap = lastDayKey ? dayKeyDiff(lastDayKey, todayKey) : null;
 
@@ -161,18 +174,22 @@ function applyVerifiedDailyCheckIn(user, txHash, now = new Date()) {
   user.level = getUserLevel(user.points || 0);
   user.lastCheckInDate = now;
 
-  user.checkIns.push({
+  await CheckIn.create({
+    telegramId,
     txHash,
     verified: true,
     dayKey: todayKey,
     createdAt: now
   });
 
-  user.badges = user.badges || [];
   let perfectStreakBadgeAwarded = false;
-  if (user.streak >= PERFECT_STREAK_DAYS && !user.badges.includes(PERFECT_STREAK_BADGE)) {
-    user.badges.push(PERFECT_STREAK_BADGE);
-    perfectStreakBadgeAwarded = true;
+  if (user.streak >= PERFECT_STREAK_DAYS) {
+    const badgeResult = await UserBadge.updateOne(
+      { telegramId, badge: PERFECT_STREAK_BADGE },
+      { $setOnInsert: { telegramId, badge: PERFECT_STREAK_BADGE, awardedAt: now } },
+      { upsert: true }
+    );
+    perfectStreakBadgeAwarded = Number(badgeResult?.upsertedCount || 0) > 0;
   }
 
   return {
@@ -183,6 +200,30 @@ function applyVerifiedDailyCheckIn(user, txHash, now = new Date()) {
   };
 }
 
+async function hasCheckedInDay(telegramId, dayKey) {
+  return Boolean(await CheckIn.exists({ telegramId, dayKey }));
+}
+
+async function hasCheckInTx(telegramId, txHash) {
+  if (!txHash) return false;
+  return Boolean(await CheckIn.exists({ telegramId, txHash }));
+}
+
+async function getUserCheckIns(telegramId, limit = 50) {
+  return CheckIn.find({ telegramId })
+    .sort({ createdAt: -1 })
+    .limit(limit)
+    .lean();
+}
+
+async function getUserBadges(telegramId, limit = 20) {
+  const docs = await UserBadge.find({ telegramId })
+    .sort({ awardedAt: -1 })
+    .limit(limit)
+    .lean();
+  return docs.map((d) => d.badge);
+}
+
 module.exports = {
   DAILY_CHECKIN_REWARD,
   PERFECT_STREAK_BADGE,
@@ -191,5 +232,9 @@ module.exports = {
   getNextResetAtUtc,
   normalizeStreakIfMissed,
   buildCheckInCalendar,
-  applyVerifiedDailyCheckIn
+  applyVerifiedDailyCheckIn,
+  hasCheckedInDay,
+  hasCheckInTx,
+  getUserCheckIns,
+  getUserBadges
 };

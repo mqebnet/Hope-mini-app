@@ -17,6 +17,10 @@ async function authenticateWithTelegram() {
   tg.expand();
 
   const initData = tg.initData;
+  const startParam =
+    tg.initDataUnsafe?.start_param ||
+    new URLSearchParams(window.location.search).get('tgWebAppStartParam') ||
+    '';
   if (!initData) {
     showError('Telegram initData missing');
     return;
@@ -27,7 +31,7 @@ async function authenticateWithTelegram() {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ initData })
+      body: JSON.stringify({ initData, startParam })
     });
 
     const data = await res.json();
