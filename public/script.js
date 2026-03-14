@@ -1,10 +1,22 @@
 // public/script.js
 import { i18n } from './i18n.js';
-import { fetchUserDataOnce, getCachedUser } from './cache.js';
-import { initializeWebSocketSync } from './wsync.js';
+import { fetchUserDataOnce, getCachedUser, setCachedUser, updateTopBar } from './userData.js';
+import { initializeWebSocketSync, disconnectWebSocketSync } from './wsync.js';
 
 // Track if auth has already been attempted
 let authAttempted = false;
+
+window.onUserDataUpdate = function(user) {
+  if (!user || typeof user !== 'object') return;
+  const merged = { ...(getCachedUser() || {}), ...user };
+  setCachedUser(merged);
+  updateTopBar(merged);
+  window.dispatchEvent(new CustomEvent('hope:userUpdated', { detail: merged }));
+};
+
+window.addEventListener('beforeunload', () => {
+  disconnectWebSocketSync();
+});
 
 document.addEventListener('DOMContentLoaded', async () => {
   try {

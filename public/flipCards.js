@@ -10,7 +10,7 @@
  * - Responsive mobile design
  */
 
-import { debounceButton, cacheGameConfig, getCachedGameConfig } from './utils.js';
+import { debounceButton } from './utils.js';
 const FLIPCARDS_PASS_USD = 0.55;
 
 export class FlipCardsGame {
@@ -65,11 +65,11 @@ export class FlipCardsGame {
       this.isGameActive = true;
       this.startTime = Date.now();
 
-      // Start timer
-      this.startTimer();
-
       // Render game board
       this.renderBoard();
+
+      // Start timer
+      this.startTimer();
 
       return { success: true, gameSessionId: this.gameSessionId };
     } catch (err) {
@@ -176,7 +176,9 @@ export class FlipCardsGame {
 
       // Click handler
       if (!card.revealed) {
-        cardEl.addEventListener('click', () => this.onCardClick(card.id));
+        const clickHandler = () => this.onCardClick(card.id);
+        cardEl.__flipClickHandler = clickHandler;
+        cardEl.addEventListener('click', clickHandler);
       } else {
         cardEl.classList.add('revealed');
       }
@@ -204,6 +206,7 @@ export class FlipCardsGame {
     // Already matched?
     const card = this.cards.find((c) => c.id === cardId);
     if (!card) return;
+    if (card.revealed) return;
 
     const cardEl = document.querySelector(`[data-card-id="${cardId}"]`);
     if (!cardEl) return;
@@ -254,7 +257,11 @@ export class FlipCardsGame {
           if (cardEl) {
             cardEl.classList.add('matched');
             cardEl.classList.remove('flipped');
-            cardEl.removeEventListener('click', this.onCardClick);
+            const handler = cardEl.__flipClickHandler;
+            if (handler) {
+              cardEl.removeEventListener('click', handler);
+              delete cardEl.__flipClickHandler;
+            }
           }
         });
 
@@ -366,7 +373,21 @@ export class FlipCardsGame {
   /**
    * Display reward screen
    */
-  showRewardScreen(reward, stats, newStats) {
+  showRewardScreen(reward = {}, stats = {}, newStats = {}) {
+    const safeReward = {
+      points: Number(reward?.points || 0),
+      xp: Number(reward?.xp || 0),
+      bronzeTickets: Number(reward?.bronzeTickets || 0)
+    };
+    const safeStats = {
+      moves: Number(stats?.moves || 0),
+      time: Number(stats?.time || 0)
+    };
+    const safeNewStats = {
+      points: Number(newStats?.points || 0),
+      level: newStats?.level || 'Seeker'
+    };
+
     const modal = document.createElement('div');
     modal.className = 'reward-modal';
     modal.innerHTML = `
@@ -376,11 +397,11 @@ export class FlipCardsGame {
         <div class="game-stats">
           <div class="stat">
             <span class="stat-label">Moves Made:</span>
-            <span class="stat-value">${stats.moves}</span>
+            <span class="stat-value">${safeStats.moves}</span>
           </div>
           <div class="stat">
             <span class="stat-label">Time Used:</span>
-            <span class="stat-value">${this.formatTime(stats.time)}</span>
+            <span class="stat-value">${this.formatTime(safeStats.time)}</span>
           </div>
         </div>
 
@@ -388,23 +409,23 @@ export class FlipCardsGame {
           <h3>Rewards Earned</h3>
           <div class="reward-item">
             <span>⭐ Points</span>
-            <span class="reward-amount">+${reward.points}</span>
+            <span class="reward-amount">+${safeReward.points}</span>
           </div>
           <div class="reward-item">
             <span>✨ XP</span>
-            <span class="reward-amount">+${reward.xp}</span>
+            <span class="reward-amount">+${safeReward.xp}</span>
           </div>
-          ${reward.bronzeTickets > 0 ? `
+          ${safeReward.bronzeTickets > 0 ? `
             <div class="reward-item">
               <span>🎫 Bronze Tickets</span>
-              <span class="reward-amount">+${reward.bronzeTickets}</span>
+              <span class="reward-amount">+${safeReward.bronzeTickets}</span>
             </div>
           ` : ''}
         </div>
 
         <div class="new-stats">
-          <p><strong>Total Points:</strong> ${newStats.points}</p>
-          <p><strong>Level:</strong> ${newStats.level}</p>
+          <p><strong>Total Points:</strong> ${safeNewStats.points}</p>
+          <p><strong>Level:</strong> ${safeNewStats.level}</p>
         </div>
 
         <button class="btn-primary" onclick="window.location.href='marketPlace.html'">Back to Games</button>
@@ -474,6 +495,7 @@ export class FlipCardsGame {
       window.location.href = 'marketPlace.html';
     } catch (err) {
       console.error('Failed to abandon game:', err);
+      this.showNotification(err.message || 'Failed to abandon game', 'error');
       this.isAbandoningGame = false;
     }
   }
@@ -488,6 +510,8 @@ window.flipCardsGame = null;
 export function initFlipCardsGame() {
   const gameContainer = document.getElementById('flipcards-game');
   if (!gameContainer) return;
+
+  let isStartingGame = false;
 
   // Render difficulty selector
   const difficultySelector = document.createElement('div');
@@ -517,6 +541,8 @@ export function initFlipCardsGame() {
     btn.addEventListener('click', async () => {
       // Debounce button: prevent double clicks
       if (!debounceButton(btn, 500)) return;
+      if (isStartingGame || window.flipCardsGame?.isGameActive) return;
+      isStartingGame = true;
 
       const difficulty = btn.dataset.difficulty;
       const game = new FlipCardsGame();
@@ -530,7 +556,10 @@ export function initFlipCardsGame() {
       const result = await game.startGame(difficulty);
       if (!result.success) {
         console.error('Failed to start game');
+        isStartingGame = false;
+        return;
       }
+      isStartingGame = false;
     });
   });
 }

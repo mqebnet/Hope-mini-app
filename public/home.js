@@ -73,28 +73,25 @@ async function bootstrap() {
   }
 }
 
-// Handler for real-time WebSocket user data updates
-// Called when server pushes user balance changes (mining, tasks, etc.)
-window.onUserDataUpdate = function(user) {
+function handleUserUpdate(user) {
   if (!user) return;
-  const mergedUser = { ...(getCachedUser() || {}), ...user };
-  setCachedUser(mergedUser);
 
-  // Update DOM elements with new data
-  updateUI(mergedUser);
-  updateTopBar(mergedUser);
-  updateWeeklyDropEligibility(mergedUser);
+  updateUI(user);
+  updateTopBar(user);
+  updateWeeklyDropEligibility(user);
 
-  // If mining just completed, sync the progress bar
-  if (mergedUser.miningStartedAt) {
-    syncMiningUI(mergedUser.miningStartedAt);
-  } else if (!mergedUser.miningStartedAt && miningIsComplete) {
-    // Mining was just claimed (cleared), reset UI
+  if (user.miningStartedAt) {
+    syncMiningUI(user.miningStartedAt);
+  } else if (!user.miningStartedAt && miningIsComplete) {
     resetMiningUI();
   }
 
   console.log('[Home] User data synced via WebSocket');
-};
+}
+
+window.addEventListener('hope:userUpdated', (event) => {
+  handleUserUpdate(event.detail);
+});
 
 async function fetchUser(options = {}) {
   const force = Boolean(options.force);
@@ -304,17 +301,6 @@ function syncMiningUI(miningStartedAt) {
   miningBtn.classList.remove('mining-ready');
   const miningTrack = document.getElementById('mining-bar');
   if (miningTrack) miningTrack.classList.add('mining-active');
-
-  miningInterval = setInterval(() => {
-    const nowElapsed = Date.now() - startTime;
-    const nowProgress = Math.min(Math.max(nowElapsed / MINING_DURATION_MS, 0), 1);
-    miningBar.style.width = `${nowProgress * 100}%`;
-
-    if (nowElapsed >= MINING_DURATION_MS) {
-      if (miningInterval) clearInterval(miningInterval);
-      setMiningCompleteUI();
-    }
-  }, 1000);
 
   const animateProgress = () => {
     const nowElapsed = Date.now() - startTime;

@@ -3,7 +3,7 @@
 // Reduces backend requests by ~90% by pushing updates instead of fetching
 // Falls back to polling (every 30s) if WebSocket unavailable
 
-import { setCachedUser, getCachedUser } from './cache.js';
+import { setCachedUser, getCachedUser } from './userData.js';
 
 let socket = null;
 let isConnected = false;
@@ -197,10 +197,6 @@ function startPollingFallback() {
       // Trigger UI update
       if (window.onUserDataUpdate) {
         window.onUserDataUpdate(user);
-      }
-
-      if (window.updateTopBar) {
-        window.updateTopBar(user);
       }
 
       console.log('[WSync] Poll: Updated user data');

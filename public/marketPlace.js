@@ -9,6 +9,8 @@ let selectedTradeAmount = null;
 let selectedTradeType = null;
 let cachedBoxStatus = null;
 let activeMarketTab = 'games';
+let exchangeUIInitialized = false;
+let refreshExchangeAvailability = null;
 
 const mysteryBtn = document.getElementById('open-market-mystery-box-button');
 const mysteryInfo = document.getElementById('mystery-box-info');
@@ -30,29 +32,45 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (window.Telegram?.WebApp) window.Telegram.WebApp.ready();
   initMarketplaceTabs();
   initMysteryLauncher();
+  initMysteryBoxUI();
 
   try {
-    // Use cached user data (populated by script.js during auth)
-    // If not cached yet, fetch it once
-    if (!user) {
-      user = await fetchUserData();
-    } else {
-      user = getCachedUser() || user;
-    }
-    
-    if (!user) {
-      throw new Error('Failed to load user data');
+    const cachedUser = getCachedUser();
+    if (cachedUser) {
+      applyUserData(cachedUser);
     }
 
-    updateTopBar(user);
-    initExchangeUI();
-    initMysteryBoxUI();
-    await refreshMysteryStatus();
+    const freshUser = await fetchUserData();
+    applyUserData(freshUser);
   } catch (err) {
     console.error('Failed to initialize marketplace:', err);
     showNotification(err.message || 'Failed to load marketplace. Please refresh.', 'error');
   }
+
+  setTimeout(() => {
+    refreshMysteryStatus();
+  }, 200);
 });
+
+window.addEventListener('hope:userUpdated', (event) => {
+  applyUserData(event.detail);
+});
+
+function applyUserData(nextUser) {
+  if (!nextUser) return;
+  user = nextUser;
+  updateTopBar(user);
+
+  if (!exchangeUIInitialized) {
+    initExchangeUI();
+    exchangeUIInitialized = true;
+    return;
+  }
+
+  if (typeof refreshExchangeAvailability === 'function') {
+    refreshExchangeAvailability();
+  }
+}
 
 function initMarketplaceTabs() {
   const tabs = document.querySelectorAll('.market-tab');
@@ -146,6 +164,8 @@ function updateExchangePreview(tradeType, amount) {
 }
 
 function initExchangeUI() {
+  if (!user) return;
+
   const typeSelect = document.getElementById('exchange-type');
   const amountButtons = document.querySelectorAll('.amount-option');
   const tradeBtn = document.getElementById('trade-button');
@@ -188,6 +208,8 @@ function initExchangeUI() {
       tradeBtn.disabled = true;
     }
   }
+
+  refreshExchangeAvailability = refreshAvailability;
 
   renderAmountLabels();
   refreshAvailability();
@@ -236,10 +258,9 @@ function initExchangeUI() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Trade failed');
 
-      user = await fetchUserData();
-      updateTopBar(user);
+      const nextUser = await fetchUserData();
+      applyUserData(nextUser);
       clearAmountSelection();
-      refreshAvailability();
       tradeBtn.disabled = true;
       selectedTradeAmount = null;
       selectedTradeType = null;
@@ -411,8 +432,8 @@ async function openMysteryBox() {
     console.warn('showRewardPopup function not available');
   }
 
-  user = await fetchUserData();
-  updateTopBar(user);
+  const nextUser = await fetchUserData();
+  applyUserData(nextUser);
   await refreshMysteryStatus();
 }
 

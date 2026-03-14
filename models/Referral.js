@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 const ReferralSchema = new mongoose.Schema({
   inviterId: { type: Number, required: true, index: true },
-  invitedId: { type: Number, required: true, index: true },
+  invitedId: { type: Number, required: true },
   joinedAt: { type: Date, default: Date.now }
 }, {
   versionKey: false,

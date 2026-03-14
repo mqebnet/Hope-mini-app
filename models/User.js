@@ -67,8 +67,6 @@ UserSchema.pre('save', async function(next) {
 });
 
 // Indexes
-UserSchema.index({ telegramId: 1 }, { unique: true });
-UserSchema.index({ inviteCode: 1 }, { unique: true, sparse: true });
 UserSchema.index({ points: -1 });
 UserSchema.index({ level: 1, points: -1 });
 UserSchema.index({ invitedCount: -1 });
