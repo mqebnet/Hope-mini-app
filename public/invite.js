@@ -2,6 +2,12 @@
 import { fetchUserData, updateTopBar } from './userData.js';
 import { canBootstrap, debounceButton } from './utils.js';
 
+window.addEventListener('hope:userUpdated', (event) => {
+  const user = event.detail;
+  if (!user) return;
+  updateTopBar(user);
+});
+
 document.addEventListener("DOMContentLoaded", async () => {
   // Bootstrap lock: prevent running twice
   if (!canBootstrap('invite')) return;

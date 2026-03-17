@@ -5,6 +5,8 @@ const User = require('../models/User');
 const Referral = require('../models/Referral');
 const { generateUniqueInviteCode } = require('../utils/inviteCode');
 const { getUserLevel } = require('../utils/levelUtil');
+const stateEmitter = require('../utils/stateEmitter');
+const { applyReferralAttribution } = require('../utils/referral');
 
 const rewards = {
   1: { points: 100, xp: 1 },
@@ -83,6 +85,23 @@ router.post('/register', async (req, res) => {
   } catch (err) {
     console.error('Invite register error:', err);
     res.status(500).json({ error: 'Invite registration failed' });
+  }
+});
+
+// Called when an authenticated returning user opens the app via an invite link.
+router.post('/register-session', async (req, res) => {
+  try {
+    const telegramId = req.user.telegramId;
+    const startParam = typeof req.body?.startParam === 'string' ? req.body.startParam.trim() : '';
+    if (!startParam) return res.json({ skipped: true });
+
+    const user = await User.findOne({ telegramId });
+    if (!user || user.invitedBy) return res.json({ skipped: true });
+
+    await applyReferralAttribution(user, startParam);
+    res.json({ success: true });
+  } catch (err) {
+    res.json({ skipped: true });
   }
 });
 
@@ -186,6 +205,18 @@ router.post('/claim', async (req, res) => {
   user.completedInviteTasks.push(target);
 
   await user.save();
+  stateEmitter.emit('user:updated', {
+    telegramId: user.telegramId,
+    points: user.points,
+    xp: user.xp,
+    level: user.level,
+    nextLevelAt: user.nextLevelAt,
+    bronzeTickets: user.bronzeTickets || 0,
+    silverTickets: user.silverTickets || 0,
+    goldTickets: user.goldTickets || 0,
+    streak: user.streak || 0,
+    miningStartedAt: user.miningStartedAt
+  });
   res.json({
     success: true,
     reward,

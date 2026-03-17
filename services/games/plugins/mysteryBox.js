@@ -3,8 +3,10 @@ const MysteryBox = require('../../../models/MysteryBox');
 const { getUserLevel } = require('../../../utils/levelUtil');
 const { verifyTransaction } = require('../../../utils/tonHandler');
 const { GameEngineError } = require('../GameEngine');
+const stateEmitter = require('../../../utils/stateEmitter');
 
-const DAILY_LIMIT = 3;
+const DAILY_LIMIT = 9;
+const ROUNDS_TOTAL = 3;
 const BOX_ORDER = ['bronze', 'silver', 'gold'];
 const BOX_PRICE_USD = 0.15;
 
@@ -41,8 +43,17 @@ function getRewardForBoxType(boxType) {
 
 function statusPayload(todayBoxes) {
   const purchasedToday = todayBoxes.length;
-  const nextBoxType = purchasedToday < DAILY_LIMIT ? BOX_ORDER[purchasedToday] : null;
+  const nextBoxType = purchasedToday < DAILY_LIMIT ? BOX_ORDER[purchasedToday % 3] : null;
   const activeBox = todayBoxes.find((b) => b.status === 'purchased') || null;
+
+  const currentRound = purchasedToday < DAILY_LIMIT
+    ? Math.floor(purchasedToday / 3) + 1
+    : ROUNDS_TOTAL;
+
+  const roundIndex = Math.min(Math.floor(purchasedToday / 3), ROUNDS_TOTAL - 1);
+  const roundBoxes = todayBoxes
+    .slice(roundIndex * 3, (roundIndex + 1) * 3)
+    .map((b) => ({ boxType: b.boxType, status: b.status }));
 
   return {
     success: true,
@@ -50,6 +61,9 @@ function statusPayload(todayBoxes) {
     limit: DAILY_LIMIT,
     boxPriceUsd: BOX_PRICE_USD,
     nextBoxType,
+    currentRound,
+    totalRounds: ROUNDS_TOTAL,
+    roundBoxes,
     todayBoxes: todayBoxes.map((b) => ({ boxType: b.boxType, status: b.status })),
     activeBox: activeBox
       ? { boxType: activeBox.boxType, status: activeBox.status, purchaseTime: activeBox.purchaseTime }
@@ -114,14 +128,14 @@ module.exports = {
       purchaseTime: { $gte: start, $lt: end }
     }).sort({ purchaseTime: 1 }).lean();
     if (todayBoxes.length >= DAILY_LIMIT) {
-      throw new GameEngineError('Daily limit reached (3 boxes)', 400);
+      throw new GameEngineError(`Daily limit reached (${DAILY_LIMIT} boxes - ${ROUNDS_TOTAL} rounds)`, 400);
     }
     const hasPending = todayBoxes.some((b) => b.status === 'purchased');
     if (hasPending) {
       throw new GameEngineError('Open your current box before purchasing the next one', 400);
     }
 
-    const boxType = BOX_ORDER[todayBoxes.length];
+    const boxType = BOX_ORDER[todayBoxes.length % 3];
     await MysteryBox.create({
       telegramId,
       boxType,
@@ -166,6 +180,19 @@ module.exports = {
     user.level = getUserLevel(user.points || 0);
 
     await Promise.all([box.save(), user.save()]);
+
+    stateEmitter.emit('user:updated', {
+      telegramId: user.telegramId,
+      points: user.points,
+      xp: user.xp || 0,
+      level: user.level,
+      nextLevelAt: user.nextLevelAt,
+      bronzeTickets: user.bronzeTickets || 0,
+      silverTickets: user.silverTickets || 0,
+      goldTickets: user.goldTickets || 0,
+      streak: user.streak || 0,
+      miningStartedAt: user.miningStartedAt
+    });
 
     const todayBoxes = await MysteryBox.find({
       telegramId,

@@ -70,5 +70,6 @@ UserSchema.pre('save', async function(next) {
 UserSchema.index({ points: -1 });
 UserSchema.index({ level: 1, points: -1 });
 UserSchema.index({ invitedCount: -1 });
+UserSchema.index({ invitedBy: 1 });
 
 module.exports = mongoose.models.User || mongoose.model('User', UserSchema);

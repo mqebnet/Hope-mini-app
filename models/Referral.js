@@ -11,6 +11,5 @@ const ReferralSchema = new mongoose.Schema({
 
 ReferralSchema.index({ inviterId: 1, joinedAt: -1 });
 ReferralSchema.index({ invitedId: 1 }, { unique: true });
-ReferralSchema.index({ inviterId: 1, invitedId: 1 }, { unique: true });
 
 module.exports = mongoose.models.Referral || mongoose.model('Referral', ReferralSchema);

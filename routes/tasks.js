@@ -5,6 +5,7 @@ const User = require('../models/User');
 const CompletedTask = require('../models/CompletedTask');
 const { verifyTransaction } = require('../utils/tonHandler');
 const { getUserLevel } = require('../utils/levelUtil');
+const stateEmitter = require('../utils/stateEmitter');
 const {
   DAILY_CHECKIN_REWARD,
   getCheckInDayKey,
@@ -72,6 +73,20 @@ router.post('/daily-checkin', async (req, res) => {
     }
 
     await user.save();
+    stateEmitter.emit('user:updated', {
+      telegramId: user.telegramId,
+      points: user.points,
+      xp: user.xp || 0,
+      level: user.level,
+      nextLevelAt: user.nextLevelAt,
+      bronzeTickets: user.bronzeTickets || 0,
+      silverTickets: user.silverTickets || 0,
+      goldTickets: user.goldTickets || 0,
+      streak: user.streak || 0,
+      miningStartedAt: user.miningStartedAt,
+      lastCheckInAt: user.lastCheckInAt,
+      transactionsCount: user.transactionsCount
+    });
     const badges = await getUserBadges(telegramId);
 
     res.json({
@@ -124,6 +139,20 @@ router.post('/complete', async (req, res) => {
     user.level = getUserLevel(user.points);
 
     await user.save();
+    stateEmitter.emit('user:updated', {
+      telegramId: user.telegramId,
+      points: user.points,
+      xp: user.xp || 0,
+      level: user.level,
+      nextLevelAt: user.nextLevelAt,
+      bronzeTickets: user.bronzeTickets || 0,
+      silverTickets: user.silverTickets || 0,
+      goldTickets: user.goldTickets || 0,
+      streak: user.streak || 0,
+      miningStartedAt: user.miningStartedAt,
+      lastCheckInAt: user.lastCheckInAt,
+      transactionsCount: user.transactionsCount
+    });
 
     res.json({
       success: true,
@@ -180,6 +209,20 @@ router.post('/verify-proof', async (req, res) => {
     user.level = getUserLevel(user.points);
 
     await user.save();
+    stateEmitter.emit('user:updated', {
+      telegramId: user.telegramId,
+      points: user.points,
+      xp: user.xp || 0,
+      level: user.level,
+      nextLevelAt: user.nextLevelAt,
+      bronzeTickets: user.bronzeTickets || 0,
+      silverTickets: user.silverTickets || 0,
+      goldTickets: user.goldTickets || 0,
+      streak: user.streak || 0,
+      miningStartedAt: user.miningStartedAt,
+      lastCheckInAt: user.lastCheckInAt,
+      transactionsCount: user.transactionsCount
+    });
 
     res.json({
       success: true,

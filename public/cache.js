@@ -48,6 +48,7 @@ export async function fetchUserDataOnce() {
       });
 
       if (res.status === 429) {
+        window.showWarningToast?.('Server busy — retrying shortly...');
         throw new Error('RATE_LIMITED');
       }
 

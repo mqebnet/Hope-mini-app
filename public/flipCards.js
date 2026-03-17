@@ -11,6 +11,7 @@
  */
 
 import { debounceButton } from './utils.js';
+import { updateTopBar, getCachedUser, setCachedUser } from './userData.js';
 const FLIPCARDS_PASS_USD = 0.55;
 
 export class FlipCardsGame {
@@ -121,7 +122,7 @@ export class FlipCardsGame {
           Purchase Daily Pass
         </button>
 
-        <button class="btn-cancel-pass" onclick="window.location.href='marketPlace.html'">
+        <button class="btn-cancel-pass" onclick="window.location.href='flipcards.html'">
           Back to Games
         </button>
       </div>
@@ -362,6 +363,12 @@ export class FlipCardsGame {
         throw new Error(data.error || 'Failed to claim reward');
       }
 
+      if (data.newStats) {
+        const mergedUser = { ...(getCachedUser() || {}), ...data.newStats };
+        setCachedUser(mergedUser);
+        updateTopBar(mergedUser);
+      }
+
       // Show reward screen
       this.showRewardScreen(data.reward, data.stats, data.newStats);
     } catch (err) {
@@ -428,7 +435,7 @@ export class FlipCardsGame {
           <p><strong>Level:</strong> ${safeNewStats.level}</p>
         </div>
 
-        <button class="btn-primary" onclick="window.location.href='marketPlace.html'">Back to Games</button>
+        <button class="btn-primary" onclick="window.location.href='flipcards.html'">Back to Games</button>
       </div>
     `;
 
@@ -445,7 +452,7 @@ export class FlipCardsGame {
       <div class="reward-content">
         <h2>${isVictory ? '🎉' : '😞'} ${title}</h2>
         <p>${message}</p>
-        <button class="btn-primary" onclick="window.location.href='marketPlace.html'">Back to Games</button>
+        <button class="btn-primary" onclick="window.location.href='flipcards.html'">Back to Games</button>
       </div>
     `;
 
@@ -492,7 +499,7 @@ export class FlipCardsGame {
         method: 'DELETE',
         credentials: 'include'
       });
-      window.location.href = 'marketPlace.html';
+      window.location.href = 'flipcards.html';
     } catch (err) {
       console.error('Failed to abandon game:', err);
       this.showNotification(err.message || 'Failed to abandon game', 'error');

@@ -3,6 +3,7 @@ const User = require('../../../models/User');
 const Transaction = require('../../../models/Transaction');
 const { getUserLevel } = require('../../../utils/levelUtil');
 const { verifyTransaction } = require('../../../utils/tonHandler');
+const stateEmitter = require('../../../utils/stateEmitter');
 const { GameEngineError } = require('../GameEngine');
 
 const FLIPCARDS_PASS_USD = Number(process.env.FLIPCARDS_PASS_USD || 0.55);
@@ -220,6 +221,19 @@ module.exports = {
     user.bronzeTickets = (user.bronzeTickets || 0) + (session.reward.bronzeTickets || 0);
     user.level = getUserLevel(user.points || 0);
     await user.save();
+
+    stateEmitter.emit('user:updated', {
+      telegramId: user.telegramId,
+      points: user.points,
+      xp: user.xp || 0,
+      level: user.level,
+      nextLevelAt: user.nextLevelAt,
+      bronzeTickets: user.bronzeTickets || 0,
+      silverTickets: user.silverTickets || 0,
+      goldTickets: user.goldTickets || 0,
+      streak: user.streak || 0,
+      miningStartedAt: user.miningStartedAt
+    });
 
     session.rewardClaimed = true;
     await session.save();

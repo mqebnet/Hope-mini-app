@@ -2,7 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
-const { verifyTonPayment } = require('../utils/tonHandler');
+const stateEmitter = require('../utils/stateEmitter');
 
 /**
  * POST /api/exchangeTickets
@@ -16,25 +16,10 @@ const { verifyTonPayment } = require('../utils/tonHandler');
 router.post('/', async (req, res) => {
   try {
     const telegramId = req.user.telegramId;
-    const { fromType, quantity, txHash } = req.body;
-    const requirePayment =
-      process.env.REQUIRE_EXCHANGE_PAYMENT === 'true' ||
-      process.env.NODE_ENV === 'production';
+    const { fromType, quantity } = req.body;
 
     if (!fromType || !quantity || quantity <= 0) {
       return res.status(400).json({ error: 'Invalid parameters' });
-    }
-
-    if (requirePayment) {
-      if (!txHash) {
-        return res.status(400).json({ error: 'Missing transaction hash' });
-      }
-
-      // Verify TON payment (0.1 USDT equivalent in TON)
-      const paid = await verifyTonPayment(txHash, 0.1);
-      if (!paid) {
-        return res.status(400).json({ error: 'Invalid or unverified payment' });
-      }
     }
 
     const conversionRate = 100; // 100 -> 1
@@ -64,6 +49,19 @@ router.post('/', async (req, res) => {
       update,
       { new: true }
     );
+
+    stateEmitter.emit('user:updated', {
+      telegramId: updatedUser.telegramId,
+      points: updatedUser.points,
+      xp: updatedUser.xp || 0,
+      level: updatedUser.level,
+      nextLevelAt: updatedUser.nextLevelAt,
+      bronzeTickets: updatedUser.bronzeTickets || 0,
+      silverTickets: updatedUser.silverTickets || 0,
+      goldTickets: updatedUser.goldTickets || 0,
+      streak: updatedUser.streak || 0,
+      miningStartedAt: updatedUser.miningStartedAt
+    });
 
     res.json({
       message: 'Ticket exchange successful',

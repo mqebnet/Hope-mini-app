@@ -12,6 +12,22 @@ let currentUser = null;
 let taskDefinitions = null;
 let dailyCheckInCheckedToday = false;
 
+window.addEventListener('hope:userUpdated', (event) => {
+  const user = event.detail;
+  if (!user) return;
+  updateTopBar(user);
+});
+
+window.addEventListener('hope:globalEvent', (event) => {
+  const detail = event.detail || {};
+  if (detail.type !== 'tasks_updated') return;
+  const data = detail.data || {};
+  if (!data.daily || !data.oneTime) return;
+  if (!currentUser) return;
+  taskDefinitions = data;
+  renderAllTasks();
+});
+
 document.addEventListener('DOMContentLoaded', async () => {
   // Bootstrap lock: prevent running twice
   if (!canBootstrap('tasks')) return;

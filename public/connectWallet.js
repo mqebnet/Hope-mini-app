@@ -59,7 +59,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   };
 
   try {
-    // API compatibility across TonConnect UI versions
     if (typeof tonConnectUI.restoreConnection === 'function') {
       await tonConnectUI.restoreConnection();
     } else if (tonConnectUI.connectionRestored && typeof tonConnectUI.connectionRestored.then === 'function') {

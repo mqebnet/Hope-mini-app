@@ -57,20 +57,6 @@
     }
   });
 
-  // Intercept fetch to handle 429 responses
-  const originalFetch = window.fetch;
-  window.fetch = function(...args) {
-    return originalFetch.apply(this, args).then((response) => {
-      if (response.status === 429) {
-        // Show error notification for rate limit
-        setTimeout(() => {
-          showNotification('Server busy - too many requests. Retrying...', 'warn');
-        }, 100);
-      }
-      return response;
-    });
-  };
-
   function formatCompact(value) {
     const n = Number(value) || 0;
     if (n >= 1e9) return `${(n / 1e9).toFixed(1)}B`;
@@ -136,8 +122,57 @@
     }, Number(options.durationMs || 2400));
   }
 
+  function fireConfetti(options = {}) {
+    if (typeof confetti !== 'function') return;
+    try {
+      // Always create a fresh canvas — reusing a canvas whose OffscreenCanvas
+      // was already transferred to a worker causes a persistent white overlay
+      // on Android WebView after particles finish.
+      let canvas = document.getElementById('__confetti-canvas');
+      if (!canvas) {
+        canvas = document.createElement('canvas');
+        canvas.id = '__confetti-canvas';
+        canvas.style.cssText = [
+          'position:fixed',
+          'inset:0',
+          'width:100%',
+          'height:100%',
+          'pointer-events:none',
+          'z-index:4100',
+          'background:transparent'
+        ].join(';');
+        document.body.appendChild(canvas);
+      }
+
+      if (!canvas.__confettiInstance) {
+        canvas.__confettiInstance = confetti.create(canvas, {
+          resize: true,
+          useWorker: false  // true causes persistent white screen on Android WebView:
+                            // transferControlToOffscreen() makes the canvas render white
+                            // after the OffscreenCanvas worker finishes rendering
+        });
+      }
+
+      canvas.__confettiInstance(options);
+
+      // Remove canvas after the animation completes so the full-screen
+      // transparent-but-white-rendering canvas doesn't sit over the page.
+      clearTimeout(canvas.__cleanupTimer);
+      canvas.__cleanupTimer = setTimeout(() => {
+        if (canvas.__confettiInstance) {
+          canvas.__confettiInstance.reset();
+          canvas.__confettiInstance = null;
+        }
+        canvas.remove();
+      }, 3500);
+    } catch (_) {
+      confetti(options);
+    }
+  }
+
   window.showNotification = showNotification;
   window.showRewardPopup = showRewardPopup;
+  window.fireConfetti = fireConfetti;
   window.showSuccessToast = (msg) => showNotification(msg, 'success');
   window.showErrorToast = (msg) => showNotification(msg, 'error');
 

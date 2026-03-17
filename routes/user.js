@@ -11,6 +11,9 @@ const {
   getUserBadges
 } = require('../utils/dailyCheckIn');
 
+const userDataCache = new Map();
+const CACHE_TTL_MS = 30 * 1000;
+
 /**
  * GET current authenticated user
  * Route: GET /api/user/me
@@ -18,6 +21,10 @@ const {
 router.get('/me', async (req, res) => {
   try {
     const telegramId = req.user.telegramId;
+    const cached = userDataCache.get(telegramId);
+    if (cached && Date.now() - cached.ts < CACHE_TTL_MS) {
+      return res.json(cached.data);
+    }
 
     const user = await User.findOne({ telegramId })
       .select('-__v -createdAt -updatedAt');
@@ -48,7 +55,7 @@ router.get('/me', async (req, res) => {
     const todayDayKey = getCheckInDayKey(now);
     const checkedInToday = checkIns.some((c) => c.dayKey === todayDayKey);
 
-    res.json({
+    const responseData = {
       success: true,
       user: {
         telegramId: user.telegramId,
@@ -70,7 +77,10 @@ router.get('/me', async (req, res) => {
         miningStartedAt: user.miningStartedAt,
         nextLevelAt: getNextLevelThreshold(user.points || 0)
       }
-    });
+    };
+
+    userDataCache.set(telegramId, { data: responseData, ts: Date.now() });
+    res.json(responseData);
   } catch (error) {
     console.error('User fetch error:', error);
     res.status(500).json({

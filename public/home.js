@@ -1,5 +1,5 @@
 // home.js
-import { updateTopBar, formatPoints, formatCompact, fetchUserDataOnce, getCachedUser, setCachedUser, invalidateCache } from './userData.js';
+import { updateTopBar, formatPoints, formatCompact, fetchUserDataOnce, getCachedUser, setCachedUser } from './userData.js';
 import { tonConnectUI } from './tonconnect.js';
 import { canBootstrap } from './utils.js';
 
@@ -8,6 +8,7 @@ let miningInterval = null;
 let miningCompletionTimeout = null;
 let miningAnimationFrame = null;
 let miningIsComplete = false;
+let weeklyContestEnabled = true;
 
 const miningBar = document.getElementById('mining-progress');
 const miningBtn = document.getElementById('farm-btn');
@@ -23,6 +24,12 @@ let dailyCheckInStatus = null;
 function updateWeeklyDropEligibility(user) {
   const btn = document.getElementById('go-to-weekly-contest');
   if (!btn || !user) return;
+
+  if (!weeklyContestEnabled) {
+    btn.disabled = true;
+    btn.textContent = 'Weekly Drop (Disabled)';
+    return;
+  }
 
   const isBelieverOrAbove = [
     'Believer', 'Challenger', 'Navigator', 'Ascender',
@@ -47,13 +54,6 @@ async function bootstrap() {
   if (!canBootstrap('home')) return;
 
   try {
-    // Check if authenticated by pinging /api/me
-    const sessionRes = await fetch('/api/me', { credentials: 'include' });
-    if (!sessionRes.ok) {
-      window.location.replace('/auth');
-      return;
-    }
-
     // Get user data from cache (populated by script.js auth flow)
     // If not cached yet, fetch it
     let user = getCachedUser();
@@ -93,6 +93,15 @@ window.addEventListener('hope:userUpdated', (event) => {
   handleUserUpdate(event.detail);
 });
 
+window.addEventListener('hope:globalEvent', (event) => {
+  const detail = event.detail || {};
+  if (detail.type === 'weekly_contest_toggled') {
+    weeklyContestEnabled = Boolean(detail.data?.enabled);
+    const user = getCachedUser();
+    if (user) updateWeeklyDropEligibility(user);
+  }
+});
+
 async function fetchUser(options = {}) {
   const force = Boolean(options.force);
   try {
@@ -101,9 +110,12 @@ async function fetchUser(options = {}) {
     if (!force) user = getCachedUser();
 
     if (!user) {
-      if (force) invalidateCache();
-      user = await fetchUserDataOnce();
-      if (user) setCachedUser(user);
+      const fresh = await fetchUserDataOnce();
+      if (fresh) {
+        const existing = getCachedUser() || {};
+        user = { ...existing, ...fresh };
+        setCachedUser(user);
+      }
     }
 
     if (!user) {
@@ -486,13 +498,16 @@ async function handleCheckIn(button) {
 
     const verifyData = await verifyRes.json();
     const reward = verifyData.reward || { points: 1000, bronzeTickets: 100, xp: 5 };
-    confetti({ particleCount: 120, spread: 85, origin: { y: 0.55 } });
+    closeDailyCheckInModal();
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    if (typeof window.fireConfetti === 'function') {
+      window.fireConfetti({ particleCount: 120, spread: 85, origin: { y: 0.55 } });
+    }
     if (typeof window.showRewardPopup === 'function') {
       window.showRewardPopup(reward, { title: 'Check-in Complete' });
     } else {
       showCheckInSuccessAnimation(reward);
     }
-    closeDailyCheckInModal();
     await fetchUser();
     await refreshDailyCheckInStatus();
   } catch (err) {

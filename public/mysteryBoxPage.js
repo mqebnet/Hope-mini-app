@@ -1,7 +1,8 @@
-import { fetchUserData, updateTopBar } from './userData.js';
+import { fetchUserData, updateTopBar, getCachedUser, setCachedUser } from './userData.js';
 import { tonConnectUI } from './tonconnect.js';
 
 const BOX_PRICE_USD = 0.15;
+const BOX_ORDER = ['bronze', 'silver', 'gold'];
 
 let user = null;
 let cachedBoxStatus = null;
@@ -71,7 +72,7 @@ function initMysteryBoxUI() {
         await purchaseMysteryBox();
         return;
       }
-      showNotification('Daily mystery box limit reached', 'info');
+      showNotification('All 3 rounds complete for today. Come back tomorrow!', 'info');
     } catch (err) {
       showNotification(err.message || 'Mystery box action failed', 'error');
     }
@@ -90,15 +91,17 @@ function renderMysteryStatus(status) {
   if (!mysteryBtn || !mysteryInfo) return;
 
   const purchasedToday = status.purchasedToday || 0;
-  const limit = status.limit || 3;
+  const limit = status.limit || 9;
   const nextBox = status.nextBoxType;
   const activeBox = status.activeBox;
-  const todayBoxes = status.todayBoxes || [];
+  const currentRound = status.currentRound || 1;
+  const totalRounds = status.totalRounds || 3;
+  const roundBoxes = status.roundBoxes || [];
 
   mysteryBtn.textContent = activeBox
     ? `Open ${activeBox.boxType.toUpperCase()} Box`
     : nextBox
-      ? `Get ${nextBox.toUpperCase()} Mystery Box`
+      ? `Get ${nextBox.toUpperCase()} Box`
       : 'Daily Limit Reached';
 
   mysteryBtn.disabled = !activeBox && !nextBox;
@@ -106,12 +109,16 @@ function renderMysteryStatus(status) {
   if (activeBox) mysteryBtn.classList.add('open-ready');
   else if (nextBox) mysteryBtn.classList.add('buy-ready');
 
-  const progressLabel = `${purchasedToday}/${limit} purchased today`;
+  const allDone = purchasedToday >= limit;
+  const progressLabel = allDone
+    ? `All ${totalRounds} rounds complete for today`
+    : `Round ${currentRound}/${totalRounds} - ${purchasedToday}/${limit} boxes today`;
+
   const nextLabel = activeBox
-    ? `Ready to open: ${activeBox.boxType}`
+    ? `Ready to open: ${activeBox.boxType.toUpperCase()}`
     : nextBox
-      ? `Next box: ${nextBox}`
-      : 'All 3 boxes purchased today';
+      ? `Next: ${nextBox.toUpperCase()} box`
+      : 'Come back tomorrow!';
 
   mysteryInfo.innerHTML = `
     <p>${progressLabel}</p>
@@ -119,15 +126,24 @@ function renderMysteryStatus(status) {
   `;
 
   if (mysteryTrack) {
-    const statusMap = new Map(todayBoxes.map((b) => [b.boxType, b.status]));
     mysteryTrack.innerHTML = '';
-    ['bronze', 'silver', 'gold'].forEach((boxType) => {
+
+    const roundBadge = document.createElement('div');
+    roundBadge.className = 'round-badge';
+    roundBadge.textContent = allDone
+      ? `All ${totalRounds} rounds done`
+      : `Round ${currentRound} / ${totalRounds}`;
+    mysteryTrack.appendChild(roundBadge);
+
+    BOX_ORDER.forEach((boxType, i) => {
       const card = document.createElement('div');
-      const recorded = statusMap.get(boxType);
+      const roundBox = roundBoxes[i];
+
       let state = 'locked';
-      if (recorded === 'claimed') state = 'claimed';
-      else if (recorded === 'purchased') state = 'ready';
-      else if (nextBox === boxType) state = 'next';
+      if (roundBox?.status === 'claimed') state = 'claimed';
+      else if (roundBox?.status === 'purchased') state = 'ready';
+      else if (!roundBox && i === roundBoxes.length && nextBox === boxType) state = 'next';
+
       card.className = `box-card ${boxType} ${state}`;
       card.innerHTML = `
         <span class="box-title">${boxType.toUpperCase()}</span>
@@ -188,8 +204,8 @@ async function openMysteryBox() {
   if (!openRes.ok) throw new Error(data.error || 'Failed to open box');
 
   const reward = data.reward || boxRewards[data.boxType] || {};
-  if (typeof confetti === 'function') {
-    confetti({ particleCount: 110, spread: 78, origin: { y: 0.62 } });
+  if (typeof window.fireConfetti === 'function') {
+    window.fireConfetti({ particleCount: 110, spread: 78, origin: { y: 0.62 } });
   }
 
   if (typeof window.showRewardPopup === 'function') {
@@ -198,8 +214,15 @@ async function openMysteryBox() {
     showNotification('Box opened! Rewards added.', 'success');
   }
 
-  user = await fetchUserData();
-  updateTopBar(user);
+  if (data.user) {
+    const mergedUser = { ...(getCachedUser() || {}), ...data.user };
+    setCachedUser(mergedUser);
+    user = mergedUser;
+    updateTopBar(user);
+  } else {
+    user = await fetchUserData();
+    updateTopBar(user);
+  }
   await refreshMysteryStatus();
 }
 
@@ -218,4 +241,3 @@ function showNotification(message, type = 'info') {
   }
   alert(message);
 }
-

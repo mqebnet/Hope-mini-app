@@ -6,21 +6,47 @@
   <title>HOPE Admin</title>
   <link rel="stylesheet" href="/styles.css" />
   <style>
-    .admin-wrap { max-width: 980px; margin: 16px auto 120px; padding: 16px; }
-    .admin-card { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); border-radius: 12px; padding: 14px; margin-bottom: 14px; }
+    .admin-wrap { max-width: 1100px; margin: 16px auto 120px; padding: 16px; }
+    .admin-header { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+    .admin-sub { color: #9bb3c2; font-size: 0.9rem; margin: 0; }
+    .admin-card { background: rgba(6, 16, 28, 0.92); border: 1px solid rgba(0, 255, 170, 0.18); border-radius: 14px; padding: 16px; margin-bottom: 16px; box-shadow: 0 12px 24px rgba(0, 0, 0, 0.25); }
     .admin-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(220px,1fr)); gap: 10px; }
-    .admin-input, .admin-textarea { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.25); color: #fff; }
+    .admin-input, .admin-textarea, .admin-select { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.35); color: #fff; }
     .admin-textarea { min-height: 120px; resize: vertical; }
     .admin-btn { padding: 10px 12px; border: 0; border-radius: 8px; cursor: pointer; background: #1f8f45; color: #fff; font-weight: 700; }
     .admin-btn.alt { background: #116ca8; }
     .admin-btn.warn { background: #a86d11; }
     .admin-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; }
-    .admin-mono { font-family: Consolas, Monaco, monospace; white-space: pre-wrap; }
+    .admin-mono { font-family: Consolas, Monaco, monospace; white-space: pre-wrap; color: #9bb3c2; }
+    .is-error { color: #ff6b6b; }
+    .muted { color: #8aa6b8; font-size: 0.82rem; }
+    .error { color: #ff6b6b; font-size: 0.82rem; }
+
+    .user-table, .entries-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.85rem; }
+    .user-table th, .user-table td, .entries-table th, .entries-table td { padding: 8px 6px; border-bottom: 1px solid rgba(255,255,255,0.08); text-align: left; }
+    .user-table th { cursor: pointer; color: #9eead7; font-weight: 700; }
+    .user-table th[data-dir="asc"]::after { content: ' ?'; font-size: 0.7rem; }
+    .user-table th[data-dir="desc"]::after { content: ' ?'; font-size: 0.7rem; }
+    .badge-admin { display: inline-block; padding: 2px 6px; border-radius: 999px; background: rgba(0, 255, 170, 0.18); color: #00ffaa; font-size: 0.7rem; font-weight: 700; }
+    .btn-sm { padding: 6px 8px; border-radius: 6px; border: 0; cursor: pointer; font-size: 0.75rem; font-weight: 700; }
+    .btn-edit { background: #1b6ea8; color: #fff; }
+    .btn-reset { background: #a84611; color: #fff; margin-left: 4px; }
+    .pagination { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; gap: 10px; }
+    .cell-ellipsis { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .contest-summary { margin: 8px 0; font-size: 0.82rem; color: #cfe5f2; }
+    .dot { padding: 0 6px; color: #6f8a9c; }
+
+    .toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .toggle-status { font-weight: 700; color: #00ffaa; }
+    .toggle-status.off { color: #ff8c66; }
   </style>
 </head>
 <body>
   <main class="admin-wrap">
-    <h1>Admin Dashboard</h1>
+    <header class="admin-header">
+      <h1>Admin Dashboard</h1>
+      <p class="admin-sub">System controls, user management, and contest operations.</p>
+    </header>
 
     <section class="admin-card">
       <h2>Overview</h2>
@@ -28,12 +54,28 @@
     </section>
 
     <section class="admin-card">
+      <h2>Weekly Contest</h2>
+      <div class="toggle-row">
+        <div>
+          <div class="muted">Current status</div>
+          <div id="contest-toggle-status" class="toggle-status">Loading...</div>
+        </div>
+        <button id="btn-toggle-contest" class="admin-btn warn">Disable</button>
+      </div>
+    </section>
+
+    <section class="admin-card">
       <h2>Users</h2>
       <div class="admin-row">
         <input id="user-search" class="admin-input" placeholder="Search telegramId or username" />
-        <button id="btn-load-users" class="admin-btn alt">Load</button>
+        <button id="btn-load-users" class="admin-btn alt">Search</button>
       </div>
-      <div id="users-result" class="admin-mono"></div>
+      <div id="users-table-wrap"></div>
+      <div class="pagination">
+        <button id="btn-prev-page" class="admin-btn alt">Prev</button>
+        <div id="pagination-label" class="muted"></div>
+        <button id="btn-next-page" class="admin-btn alt">Next</button>
+      </div>
     </section>
 
     <section class="admin-card">
@@ -43,16 +85,43 @@
         <input id="edit-points" class="admin-input" placeholder="points (optional)" />
         <input id="edit-xp" class="admin-input" placeholder="xp (optional)" />
         <input id="edit-streak" class="admin-input" placeholder="streak (optional)" />
+        <input id="edit-bronze" class="admin-input" placeholder="bronzeTickets (optional)" />
+        <input id="edit-silver" class="admin-input" placeholder="silverTickets (optional)" />
+        <input id="edit-gold" class="admin-input" placeholder="goldTickets (optional)" />
         <input id="edit-level" class="admin-input" placeholder="level (optional)" />
         <input id="edit-admin" class="admin-input" placeholder="isAdmin true/false (optional)" />
       </div>
-      <button id="btn-update-user" class="admin-btn">Save User</button>
+      <div class="admin-row" style="margin-top:10px;">
+        <button id="btn-update-user" class="admin-btn">Save User</button>
+        <button id="btn-reset-user" class="admin-btn warn">Reset User</button>
+      </div>
       <div id="update-user-result" class="admin-mono"></div>
     </section>
 
     <section class="admin-card">
+      <h2>Broadcast</h2>
+      <textarea id="broadcast-message" class="admin-textarea" placeholder="Message to send to users"></textarea>
+      <div class="admin-grid">
+        <select id="broadcast-level" class="admin-select">
+          <option value="">All Levels</option>
+          <option value="Seeker">Seeker</option>
+          <option value="Believer">Believer</option>
+          <option value="Challenger">Challenger</option>
+          <option value="Navigator">Navigator</option>
+          <option value="Ascender">Ascender</option>
+          <option value="Master">Master</option>
+          <option value="Grandmaster">Grandmaster</option>
+          <option value="Legend">Legend</option>
+          <option value="Eldrin">Eldrin</option>
+        </select>
+        <button id="btn-send-broadcast" class="admin-btn">Send Broadcast</button>
+      </div>
+      <div id="broadcast-result" class="admin-mono"></div>
+    </section>
+
+    <section class="admin-card">
       <h2>Task Catalog</h2>
-      <p>JSON with keys: <code>daily</code> and <code>oneTime</code>.</p>
+      <p class="muted">JSON with keys: daily and oneTime.</p>
       <textarea id="tasks-json" class="admin-textarea"></textarea>
       <div class="admin-grid">
         <button id="btn-load-tasks" class="admin-btn alt">Load Tasks</button>
@@ -74,6 +143,7 @@
       <textarea id="result-message" class="admin-textarea" placeholder="Contest result message"></textarea>
       <button id="btn-publish-result" class="admin-btn warn">Publish Result + Notify</button>
       <div id="contest-result" class="admin-mono"></div>
+      <div id="contest-overview"></div>
     </section>
 
     <section class="admin-card">

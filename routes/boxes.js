@@ -20,4 +20,3 @@ router.post('/open', async (req, res) => {
 });
 
 module.exports = router;
-

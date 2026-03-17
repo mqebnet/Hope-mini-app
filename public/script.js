@@ -14,6 +14,10 @@ window.onUserDataUpdate = function(user) {
   window.dispatchEvent(new CustomEvent('hope:userUpdated', { detail: merged }));
 };
 
+window.onGlobalEvent = function(event) {
+  window.dispatchEvent(new CustomEvent('hope:globalEvent', { detail: event }));
+};
+
 window.addEventListener('beforeunload', () => {
   disconnectWebSocketSync();
 });
@@ -24,6 +28,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (authAttempted) return;
     authAttempted = true;
 
+    const tg = window.Telegram?.WebApp;
+    if (tg) {
+      tg.ready();
+      tg.expand();
+    }
+
+    const startParam =
+      tg?.initDataUnsafe?.start_param ||
+      new URLSearchParams(window.location.search).get('tgWebAppStartParam') ||
+      '';
+
     // Check if already authenticated
     const hasSession = await checkSession();
     
@@ -31,6 +46,15 @@ document.addEventListener('DOMContentLoaded', async () => {
       // Initialize Telegram and authenticate
       initializeTelegramWebApp();
     } else {
+      if (startParam) {
+        fetch('/api/invite/register-session', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ startParam })
+        }).catch(() => {});
+      }
+
       // Already authenticated, fetch user data once
       try {
         await fetchUserDataOnce();
