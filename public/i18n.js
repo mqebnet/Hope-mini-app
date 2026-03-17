@@ -11,8 +11,7 @@ class I18n {
         },
         notifications: {
           checkInSuccess: 'Check-in successful!',
-          insufficient_tickets: 'Insufficient tickets! Keep playing to earn more',
-          puzzle_success: 'Congratulations! Puzzle solved!'
+          insufficient_tickets: 'Insufficient tickets! Keep playing to earn more'
         }
       }
     };

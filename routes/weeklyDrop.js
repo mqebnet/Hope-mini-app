@@ -58,6 +58,13 @@ router.post('/enter', async (req, res) => {
       return res.status(400).json({ error: 'Not enough Gold tickets' });
     }
 
+    // Wallet is required to receive prize if user wins
+    if (!user.wallet) {
+      return res.status(400).json({
+        error: 'You must connect a TON wallet before entering. Your wallet address is needed to receive prizes.'
+      });
+    }
+
     // TODO: Verify BOC against TON blockchain here
     // For now we trust it as valid
 

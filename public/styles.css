@@ -331,9 +331,9 @@ main {
 }
 
 #settings-button {
-    background: #0f3d36;
-    border: 1px solid rgba(0, 255, 170, 0.18);
-    color: #0b201c;
+    background: none;
+    border: none;
+    color: #00ffaa;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -341,26 +341,19 @@ main {
     height: 40px;
     cursor: pointer;
     flex-shrink: 0;
-    border-radius: 10px;
-    box-shadow:
-      inset 0 0 0 1px rgba(0, 0, 0, 0.2),
-      0 6px 14px rgba(0, 0, 0, 0.35);
-    transition: background 0.2s ease-in-out, color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+    transition: color 0.3s ease-in-out;
     order: 3;
   }
   
 #settings-button:hover {
-    background: #12473f;
-    color: #0a1c18;
-    box-shadow:
-      inset 0 0 0 1px rgba(0, 0, 0, 0.22),
-      0 6px 16px rgba(0, 0, 0, 0.38);
+    color: #00ffaa;
   }
 
 #settings-button .settings-icon {
-    width: 20px;
-    height: 20px;
-    stroke-width: 2.4;
+    width: 32px;
+    height: 32px;
+    stroke-width: 2.3;
+    filter: drop-shadow(0 0 6px rgba(0, 255, 170, 0.55));
   }
 
 /* Bottom Navigation Bar */
@@ -849,58 +842,6 @@ button:disabled {
   }
 }
 
-/* Puzzle Game Section */
-#puzzle-section {
-  margin: 30px 0;
-  padding: 15px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
-}
-#puzzle-section h2 {
-  font-size: 24px;
-  margin-bottom: 10px;
-}
-#puzzle-section p {
-  font-size: 16px;
-  margin-bottom: 10px;
-}
-#puzzle-progress {
-  margin-top: 15px;
-  padding: 10px;
-  background: rgba(0, 0, 0, 0.3);
-  border-radius: 8px;
-}
-#puzzle-progress h3 {
-  margin: 0 0 10px 0;
-  font-size: 18px;
-}
-#puzzle-pieces p {
-  font-size: 16px;
-  margin: 5px 0;
-}
-.puzzle-piece {
-  cursor: grab;
-  position: relative;
-  width: 20%; /* For 5-col grid */
-  height: 50%; /* For 2-row */
-  background-size: cover; /* For image pieces */
-  transition: transform 0.2s;
-}
-#puzzle-board {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr); /* 5 cols */
-  grid-template-rows: repeat(2, 1fr); /* 2 rows */
-  gap: 2px;
-  max-width: 300px;
-  margin: 0 auto;
-}
-#puzzle-pieces {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  margin-top: 10px;
-}
 
 /* Leaderboard Styles (completed cutoff) */
 #leaderboard-container {
@@ -1395,102 +1336,6 @@ button:disabled {
     box-shadow: 0 0 16px rgba(255, 191, 94, 0.7), 0 0 24px rgba(255, 191, 94, 0.45);
     transform: translateY(-1px);
   }
-}
-
-#puzzle-game {
-  position: fixed;
-  inset: 0;
-  z-index: 3300;
-  background: radial-gradient(circle at top, rgba(9, 33, 48, 0.98), rgba(4, 10, 20, 0.98));
-  padding: 14px 10px 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-#puzzle-game.hidden {
-  display: none;
-}
-
-.game-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.reference-image {
-  width: 76px;
-  height: 76px;
-  border-radius: 10px;
-  border: 2px solid rgba(0, 255, 170, 0.45);
-  background-color: rgba(0, 0, 0, 0.35);
-  background-size: cover;
-  background-position: center;
-}
-
-.timer {
-  font-size: 24px;
-  font-weight: 700;
-  color: #ffd366;
-  text-shadow: 0 0 8px rgba(255, 211, 102, 0.35);
-}
-
-.puzzle-close-button {
-  margin: 0;
-  padding: 2px 10px;
-  border-radius: 999px;
-  font-size: 24px;
-  line-height: 1;
-  box-shadow: none;
-  background: rgba(255, 255, 255, 0.08);
-  color: #d2eef2;
-}
-
-.puzzle-board {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 6px;
-  padding: 8px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.06);
-  min-height: 210px;
-}
-
-.market-puzzle-slot {
-  aspect-ratio: 1.25 / 1;
-  border: 1px dashed rgba(0, 255, 170, 0.4);
-  border-radius: 8px;
-  background: rgba(11, 27, 38, 0.85);
-  display: flex;
-  align-items: stretch;
-  justify-content: stretch;
-  overflow: hidden;
-}
-
-.puzzle-pieces {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 6px;
-  padding: 8px;
-  border-radius: 12px;
-  background: rgba(0, 0, 0, 0.2);
-  min-height: 180px;
-}
-
-.market-puzzle-piece {
-  width: 100%;
-  aspect-ratio: 1.25 / 1;
-  border-radius: 7px;
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  cursor: grab;
-  background-repeat: no-repeat;
-  background-color: rgba(255, 255, 255, 0.05);
-}
-
-#puzzle-claim-button {
-  width: min(360px, 100%);
-  margin: 0 auto;
 }
 
 /* Weekly Drop */
@@ -2310,4 +2155,5 @@ input:checked + .slider:before {
   background: rgba(0, 255, 170, 0.1);
   border-color: rgba(0, 255, 170, 0.6);
 }
+
 

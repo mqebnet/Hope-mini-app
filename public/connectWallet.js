@@ -45,6 +45,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     addressEl.title = fullAddress;
   };
 
+  const saveWalletToServer = async (address) => {
+    if (!address) return;
+    try {
+      await fetch('/api/user/wallet', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ wallet: address })
+      });
+    } catch (err) {
+      console.warn('Failed to save wallet address:', err);
+    }
+  };
+
   const updateUI = (wallet) => {
     if (wallet) {
       button.innerHTML = `<i data-lucide="wallet"></i> Connected`;
@@ -70,6 +84,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   updateUI(tonConnectUI.wallet);
   updateMenu(tonConnectUI.wallet);
+  if (tonConnectUI.wallet) {
+    saveWalletToServer(getWalletAddress(tonConnectUI.wallet));
+  }
 
   tonConnectUI.onStatusChange((wallet) => {
     const chain = getWalletChain(wallet);
@@ -87,6 +104,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     updateUI(wallet);
     updateMenu(wallet);
+
+    // Persist wallet address to DB whenever wallet connects
+    if (wallet) {
+      saveWalletToServer(getWalletAddress(wallet));
+    }
   });
 
   button.addEventListener('click', async () => {

@@ -37,6 +37,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
+    const hasWallet = Boolean(user.wallet);
+    if (!hasWallet) {
+      statusEl.textContent = 'You must connect a TON wallet to enter. Your wallet address is needed to receive prizes.';
+      return;
+    }
+
     statusEl.textContent = 'You are eligible to enter the Weekly Drop.';
 
     rulesCheckbox.addEventListener('change', () => {

@@ -101,7 +101,7 @@ function initMarketplaceTabs() {
     activateTab('exchange');
   } else {
     activateTab('games');
-    if (tabParam === 'boxes' || tabParam === 'puzzles') {
+    if (tabParam === 'boxes') {
       showMysteryLauncher();
     }
   }

@@ -61,6 +61,7 @@ router.get('/me', async (req, res) => {
         telegramId: user.telegramId,
         username: user.username,
         isAdmin: Boolean(user.isAdmin),
+        wallet: user.wallet,
         points: user.points,
         level: user.level,
         streak: user.streak,
@@ -87,6 +88,31 @@ router.get('/me', async (req, res) => {
       success: false,
       message: 'Error fetching user data'
     });
+  }
+});
+
+// POST /api/user/wallet - save connected TON wallet address to user record
+router.post('/wallet', async (req, res) => {
+  try {
+    const telegramId = req.user.telegramId;
+    const { wallet } = req.body;
+
+    if (!wallet || typeof wallet !== 'string' || wallet.trim().length === 0) {
+      return res.status(400).json({ error: 'Invalid wallet address' });
+    }
+
+    const user = await User.findOneAndUpdate(
+      { telegramId },
+      { $set: { wallet: wallet.trim() } },
+      { new: true }
+    );
+
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    res.json({ success: true, wallet: user.wallet });
+  } catch (err) {
+    console.error('Save wallet error:', err);
+    res.status(500).json({ error: 'Failed to save wallet address' });
   }
 });
 

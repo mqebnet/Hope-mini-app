@@ -10,16 +10,28 @@ let miningAnimationFrame = null;
 let miningIsComplete = false;
 let weeklyContestEnabled = true;
 
-const miningBar = document.getElementById('mining-progress');
-const miningBtn = document.getElementById('farm-btn');
-const checkInBtn = document.getElementById('check-in-button');
-const dailyCheckInModal = document.getElementById('daily-checkin-modal');
-const dailyCheckInClose = document.getElementById('daily-checkin-close');
-const dailyCheckInModalBtn = document.getElementById('daily-checkin-modal-btn');
-const dailyCheckInCalendar = document.getElementById('daily-checkin-calendar');
-const dailyCheckInStreakText = document.getElementById('daily-checkin-streak-text');
-const dailyCheckInResetTime = document.getElementById('daily-checkin-reset-time');
+let miningBar = null;
+let miningBtn = null;
+let checkInBtn = null;
+let dailyCheckInModal = null;
+let dailyCheckInClose = null;
+let dailyCheckInModalBtn = null;
+let dailyCheckInCalendar = null;
+let dailyCheckInStreakText = null;
+let dailyCheckInResetTime = null;
 let dailyCheckInStatus = null;
+
+function initDomRefs() {
+  miningBar = document.getElementById('mining-progress');
+  miningBtn = document.getElementById('farm-btn');
+  checkInBtn = document.getElementById('check-in-button');
+  dailyCheckInModal = document.getElementById('daily-checkin-modal');
+  dailyCheckInClose = document.getElementById('daily-checkin-close');
+  dailyCheckInModalBtn = document.getElementById('daily-checkin-modal-btn');
+  dailyCheckInCalendar = document.getElementById('daily-checkin-calendar');
+  dailyCheckInStreakText = document.getElementById('daily-checkin-streak-text');
+  dailyCheckInResetTime = document.getElementById('daily-checkin-reset-time');
+}
 
 function updateWeeklyDropEligibility(user) {
   const btn = document.getElementById('go-to-weekly-contest');
@@ -54,6 +66,7 @@ async function bootstrap() {
   if (!canBootstrap('home')) return;
 
   try {
+    initDomRefs();
     // Get user data from cache (populated by script.js auth flow)
     // If not cached yet, fetch it
     let user = getCachedUser();
@@ -284,6 +297,11 @@ async function refreshDailyCheckInStatus({ autoOpen } = { autoOpen: false }) {
 }
 
 function syncMiningUI(miningStartedAt) {
+  if (!miningBar || !miningBtn) {
+    initDomRefs();
+  }
+  if (!miningBar || !miningBtn) return;
+
   if (miningInterval) clearInterval(miningInterval);
   if (miningCompletionTimeout) clearTimeout(miningCompletionTimeout);
   if (miningAnimationFrame) cancelAnimationFrame(miningAnimationFrame);
@@ -331,6 +349,11 @@ function syncMiningUI(miningStartedAt) {
 }
 
 function resetMiningUI() {
+  if (!miningBar || !miningBtn) {
+    initDomRefs();
+  }
+  if (!miningBar || !miningBtn) return;
+
   if (miningInterval) clearInterval(miningInterval);
   if (miningCompletionTimeout) clearTimeout(miningCompletionTimeout);
   if (miningAnimationFrame) cancelAnimationFrame(miningAnimationFrame);
@@ -344,6 +367,11 @@ function resetMiningUI() {
 }
 
 function setMiningCompleteUI() {
+  if (!miningBar || !miningBtn) {
+    initDomRefs();
+  }
+  if (!miningBar || !miningBtn) return;
+
   if (miningInterval) clearInterval(miningInterval);
   if (miningCompletionTimeout) clearTimeout(miningCompletionTimeout);
   if (miningAnimationFrame) cancelAnimationFrame(miningAnimationFrame);
@@ -530,6 +558,7 @@ document.addEventListener('DOMContentLoaded', () => {
     tg.expand();
   }
 
+  initDomRefs();
   bootstrap();
   refreshDailyCheckInStatus({ autoOpen: true });
 
