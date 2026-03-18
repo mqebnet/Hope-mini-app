@@ -1,5 +1,5 @@
 // invite.js (Frontend)
-import { fetchUserData, updateTopBar } from './userData.js';
+import { fetchUserData, updateTopBar, getCachedUser } from './userData.js';
 import { canBootstrap, debounceButton } from './utils.js';
 
 window.addEventListener('hope:userUpdated', (event) => {
@@ -17,12 +17,21 @@ document.addEventListener("DOMContentLoaded", async () => {
   tg.expand();
 
   try {
-    const userData = await fetchUserData();
+    // Render top bar instantly from cache — no network wait
+    const cached = getCachedUser();
+    if (cached) updateTopBar(cached);
+
+    // Fire all independent fetches in parallel
+    const [userData, linkRes] = await Promise.all([
+      fetchUserData(),
+      fetch('/api/invite/link', { credentials: 'include' })
+    ]);
+
+    // Update top bar with fresh data
     updateTopBar(userData);
 
     // Load invite link for the current user
     const inviteLinkInput = document.getElementById("invite-link");
-    const linkRes = await fetch('/api/invite/link', { credentials: 'include' });
     const { inviteLink } = await linkRes.json();
     inviteLinkInput.value = inviteLink;
 
@@ -33,9 +42,11 @@ document.addEventListener("DOMContentLoaded", async () => {
       showNotification('Link copied to clipboard!', 'success');
     });
 
-    // Load progress
-    await loadProgress();
-    await loadReferralLeaderboard();
+    // Load progress + leaderboard in parallel
+    await Promise.all([
+      loadProgress(),
+      loadReferralLeaderboard()
+    ]);
 
     lucide.createIcons();
   } catch (err) {

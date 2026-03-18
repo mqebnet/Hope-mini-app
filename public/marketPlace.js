@@ -48,9 +48,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     showNotification(err.message || 'Failed to load marketplace. Please refresh.', 'error');
   }
 
-  setTimeout(() => {
-    refreshMysteryStatus();
-  }, 200);
+  refreshMysteryStatus();
 });
 
 window.addEventListener('hope:userUpdated', (event) => {

@@ -1,5 +1,5 @@
 // public/weeklyDrop.js
-import { fetchUserData, updateTopBar } from './userData.js';
+import { fetchUserData, updateTopBar, getCachedUser } from './userData.js';
 import { canBootstrap, debounceButton } from './utils.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -11,6 +11,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   const statusEl = document.getElementById('eligibility-status');
 
   try {
+    // Render top bar instantly from cache
+    const cached = getCachedUser();
+    if (cached) updateTopBar(cached);
+
+    // Fetch fresh user data (may return from server-side cache instantly)
     const user = await fetchUserData();
     updateTopBar(user);
 

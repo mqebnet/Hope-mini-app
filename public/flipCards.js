@@ -384,7 +384,8 @@ export class FlipCardsGame {
     const safeReward = {
       points: Number(reward?.points || 0),
       xp: Number(reward?.xp || 0),
-      bronzeTickets: Number(reward?.bronzeTickets || 0)
+      bronzeTickets: Number(reward?.bronzeTickets || 0),
+      silverTickets: Number(reward?.silverTickets || 0)
     };
     const safeStats = {
       moves: Number(stats?.moves || 0),
@@ -426,6 +427,12 @@ export class FlipCardsGame {
             <div class="reward-item">
               <span>🎫 Bronze Tickets</span>
               <span class="reward-amount">+${safeReward.bronzeTickets}</span>
+            </div>
+          ` : ''}
+          ${safeReward.silverTickets > 0 ? `
+            <div class="reward-item">
+              <span>🥈 Silver Tickets</span>
+              <span class="reward-amount">+${safeReward.silverTickets}</span>
             </div>
           ` : ''}
         </div>

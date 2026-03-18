@@ -214,7 +214,7 @@ function closeDailyCheckInModal() {
 
 function showCheckInSuccessAnimation(reward) {
   const points = Number(reward?.points || 1000);
-  const bronze = Number(reward?.bronzeTickets || 100);
+  const bronze = Number(reward?.bronzeTickets || 250);
   const xp = Number(reward?.xp || 5);
 
   const existing = document.getElementById('checkin-success-pop');
@@ -401,28 +401,37 @@ async function startMining() {
 }
 
 async function claimMining() {
+  // Optimistic update — show reward immediately, confirm with server in background.
+  // The mining bar is only claimable when full, so rejection is extremely rare.
+  const miningReward = { points: 250 };
+
+  // Update UI instantly — don't wait for server
+  if (typeof window.showRewardPopup === 'function') {
+    window.showRewardPopup(miningReward, { title: 'Mining Reward Claimed', durationMs: 2600 });
+  } else if (typeof window.showSuccessToast === 'function') {
+    window.showSuccessToast('+250 points!');
+  }
+  launchMiningClaimConfetti();
+  resetMiningUI();
+
+  // Confirm with server in background
   try {
     const res = await fetch('/api/mining/claim', { method: 'POST', credentials: 'include' });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Claim failed');
 
-    const miningReward = { points: 250 };
-    if (typeof window.showRewardPopup === 'function') {
-      window.showRewardPopup(miningReward, { title: 'Mining Reward Claimed', durationMs: 2600 });
-    } else if (typeof window.showSuccessToast === 'function') {
-      window.showSuccessToast('+250 points!');
-    } else {
-      alert('+250 points!');
+    if (!res.ok) {
+      // Server rejected — restore mining UI and inform user
+      throw new Error(data.error || 'Claim failed');
     }
-    launchMiningClaimConfetti();
-    resetMiningUI();
+
+    // Refresh user data silently after server confirms
     await fetchUser({ force: true });
   } catch (err) {
-    console.error(err);
+    console.error('Mining claim failed:', err);
+    // Rollback: restore the mining complete state so user can try again
+    setMiningCompleteUI();
     if (typeof window.showErrorToast === 'function') {
-      window.showErrorToast(err.message || 'Mining claim failed');
-    } else {
-      alert(err.message);
+      window.showErrorToast(err.message || 'Mining claim failed — please try again');
     }
   }
 }
@@ -529,7 +538,7 @@ async function handleCheckIn(button) {
     }
 
     const verifyData = await verifyRes.json();
-    const reward = verifyData.reward || { points: 1000, bronzeTickets: 100, xp: 5 };
+    const reward = verifyData.reward || { points: 1000, bronzeTickets: 250, xp: 5 };
     closeDailyCheckInModal();
     await new Promise((resolve) => requestAnimationFrame(resolve));
     if (typeof window.fireConfetti === 'function') {

@@ -22,8 +22,20 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (window.Telegram?.WebApp) window.Telegram.WebApp.ready();
 
   try {
-    await ensureSessionReady();
-    user = await fetchUserData();
+    // Render top bar from cache immediately — script.js already authenticated
+    const cached = getCachedUser();
+    if (cached) {
+      user = cached;
+      updateTopBar(user);
+    }
+
+    // Fetch fresh user data and mystery status in parallel
+    const [freshUser] = await Promise.all([
+      fetchUserData(),
+      refreshMysteryStatus()
+    ]);
+
+    user = freshUser;
     updateTopBar(user);
   } catch (err) {
     console.error('Failed to load mystery box page:', err);
@@ -32,27 +44,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   initMysteryBoxUI();
-  await refreshMysteryStatus();
 });
-
-async function ensureSessionReady() {
-  const meRes = await fetch('/api/me', { credentials: 'include', cache: 'no-store' });
-  if (meRes.ok) return true;
-
-  const initData = window.Telegram?.WebApp?.initData;
-  if (!initData) return false;
-
-  const authRes = await fetch('/api/auth/telegram', {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ initData })
-  });
-  if (!authRes.ok) return false;
-
-  const meRetry = await fetch('/api/me', { credentials: 'include', cache: 'no-store' });
-  return meRetry.ok;
-}
 
 function initMysteryBoxUI() {
   if (backBtn) {

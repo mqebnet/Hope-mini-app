@@ -84,11 +84,12 @@ const GameSessionSchema = new mongoose.Schema({
 
   // Reward data
   reward: {
-    points: { type: Number, default: 0 },
-    xp: { type: Number, default: 0 },
-    bronzeTickets: { type: Number, default: 0 },
-    earnedAt: { type: Date, default: null }
-  },
+      points: { type: Number, default: 0 },
+      xp: { type: Number, default: 0 },
+      bronzeTickets: { type: Number, default: 0 },
+      silverTickets: { type: Number, default: 0 },
+      earnedAt: { type: Date, default: null }
+    },
   rewardClaimed: { type: Boolean, default: false },
 
   // Anti-cheat verification
@@ -196,15 +197,18 @@ GameSessionSchema.methods.checkTripletMatch = function(cardIds) {
 GameSessionSchema.methods.calculateReward = function() {
   const perfect = this.matchAttempts === this.totalTriplets ? 1.5 : 1; // bonus for perfect play
   const speed = Math.max(1, 2 - this.timeUsedSeconds / 30); // faster = more points
-  const basePoints = 50;
+  const isHard = this.totalTriplets >= 5;
+  const basePoints = isHard ? 100 : 50;
 
   const points = Math.floor(basePoints * perfect * speed);
   const xp = 1; // Fixed XP reward: 1 per game
+  const bonusHit = Math.random() > 0.7; // 30% chance
 
   return {
-    points: Math.max(20, points),
+    points: Math.max(isHard ? 100 : 20, points),
     xp: Math.max(1, xp),
-    bronzeTickets: Math.random() > 0.7 ? 5 : 0 // 30% chance
+    bronzeTickets: isHard ? (bonusHit ? 20 : 0) : (bonusHit ? 5 : 0),
+    silverTickets: isHard ? (bonusHit ? 1 : 0) : 0
   };
 };
 

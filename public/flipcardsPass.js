@@ -1,4 +1,4 @@
-import { fetchUserData, updateTopBar } from './userData.js';
+import { fetchUserData, updateTopBar, getCachedUser } from './userData.js';
 import { tonConnectUI } from './tonconnect.js';
 
 const PASS_USD_DEFAULT = 0.55;
@@ -10,32 +10,22 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (window.Telegram?.WebApp) window.Telegram.WebApp.ready();
 
   try {
-    await ensureSessionReady();
-    const user = await fetchUserData();
+    // Render top bar from cache immediately — script.js already authenticated
+    const cached = getCachedUser();
+    if (cached) updateTopBar(cached);
+
+    // Fetch fresh user data and render pass UI in parallel
+    const [user] = await Promise.all([
+      fetchUserData(),
+      renderPassUI()
+    ]);
+
     updateTopBar(user);
-    await renderPassUI();
   } catch (err) {
     console.error('Flipcards pass init failed:', err);
     showNotification('Failed to load pass page', 'error');
   }
 });
-
-async function ensureSessionReady() {
-  const meRes = await fetch('/api/me', { credentials: 'include', cache: 'no-store' });
-  if (meRes.ok) return true;
-
-  const initData = window.Telegram?.WebApp?.initData;
-  if (!initData) return false;
-  const authRes = await fetch('/api/auth/telegram', {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ initData })
-  });
-  if (!authRes.ok) return false;
-  const meRetry = await fetch('/api/me', { credentials: 'include', cache: 'no-store' });
-  return meRetry.ok;
-}
 
 async function getPassStatus() {
   const res = await fetch('/api/games/flipcards/status', { credentials: 'include', cache: 'no-store' });

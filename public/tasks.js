@@ -39,6 +39,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       user = await fetchUserDataOnce();
     }
 
+    // Render top bar immediately — user data is already in memory
+    updateTopBar(user);
+
     const [definitions, checkInStatus] = await Promise.all([
       fetchTaskDefinitions(),
       fetchDailyCheckInStatus()
@@ -47,8 +50,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     taskDefinitions = definitions;
     currentUser = user;
     dailyCheckInCheckedToday = Boolean(checkInStatus?.checkedInToday);
-
-    updateTopBar(user);
 
     setupTabs();
     renderAllTasks();

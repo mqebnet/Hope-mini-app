@@ -23,7 +23,7 @@ const DEFAULT_TASK_CATALOG = {
       action: 'visit',
       reward: 100,
       description: 'Check our Telegram updates',
-      url: 'https://t.me/yourchannel'
+      url: 'https://t.me/+uu0M2YGzaaowOTBk'
     },
     {
       id: 'twitter-engage',
@@ -47,15 +47,15 @@ const DEFAULT_TASK_CATALOG = {
       id: 'join-telegram',
       title: 'Subscribe to Telegram Channel',
       action: 'verify',
-      reward: 200,
+      reward: 1000,
       description: 'Become a member',
-      url: 'https://t.me/yourchannel'
+      url: 'https://t.me/+uu0M2YGzaaowOTBk'
     },
     {
       id: 'subscribe-youtube',
       title: 'Subscribe to YouTube',
       action: 'verify',
-      reward: 200,
+      reward: 1000,
       description: 'Join our video hub',
       url: 'https://youtube.com/yourchannel'
     },
@@ -63,7 +63,7 @@ const DEFAULT_TASK_CATALOG = {
       id: 'follow-twitter',
       title: 'Follow Twitter Handle',
       action: 'verify',
-      reward: 200,
+      reward: 1000,
       description: 'Stay updated',
       url: 'https://twitter.com/yourhandle'
     },
@@ -71,15 +71,15 @@ const DEFAULT_TASK_CATALOG = {
       id: 'join-group',
       title: 'Join Chat Group',
       action: 'verify',
-      reward: 200,
+      reward: 1000,
       description: 'Meet the community',
-      url: 'https://t.me/yourgroup'
+      url: 'https://t.me/+xV2HZt47EEMyYmE0'
     },
     {
       id: 'future-task',
       title: 'Special Mission',
       action: 'verify',
-      reward: 500,
+      reward: 1000,
       description: 'Coming soon',
       comingSoon: true
     }

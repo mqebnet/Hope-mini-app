@@ -219,6 +219,7 @@ module.exports = {
     user.points = (user.points || 0) + pointsAward;
     user.xp = (user.xp || 0) + xpAward;
     user.bronzeTickets = (user.bronzeTickets || 0) + (session.reward.bronzeTickets || 0);
+    user.silverTickets = (user.silverTickets || 0) + (session.reward.silverTickets || 0);
     user.level = getUserLevel(user.points || 0);
     await user.save();
 
@@ -243,7 +244,8 @@ module.exports = {
       reward: {
         points: pointsAward,
         xp: xpAward,
-        bronzeTickets: session.reward.bronzeTickets || 0
+        bronzeTickets: session.reward.bronzeTickets || 0,
+        silverTickets: session.reward.silverTickets || 0
       },
       stats: {
         moves: session.matchAttempts,
@@ -254,7 +256,8 @@ module.exports = {
         points: user.points,
         xp: user.xp,
         level: user.level,
-        bronzeTickets: user.bronzeTickets
+        bronzeTickets: user.bronzeTickets,
+        silverTickets: user.silverTickets
       }
     };
   },

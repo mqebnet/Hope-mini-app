@@ -11,7 +11,7 @@ const UserBadge = require('../models/UserBadge');
  */
 const DAILY_CHECKIN_REWARD = {
   points: 1000,
-  bronzeTickets: 100,
+  bronzeTickets: 250,
   xp: 5
 };
 

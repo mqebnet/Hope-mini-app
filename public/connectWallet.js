@@ -26,7 +26,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     // TonConnect wallet format varies by version/wallet app.
     return wallet?.account?.chain || wallet?.chain || null;
   };
-  const getWalletAddress = (wallet) => wallet?.account?.address || '';
+  const getWalletAddress = (wallet) => {
+  const raw = wallet?.account?.address || '';
+  if (!raw) return '';
+  try {
+    // TonConnect UI exposes Address from @ton/core internally
+    // Use the address directly — most wallets accept raw format fine
+    // For friendly format, convert using the Address class:
+    const { Address } = window.TON_CONNECT_UI || {};
+    if (Address) {
+      return Address.parse(raw).toString({ bounceable: false });
+    }
+  } catch (_) {}
+  return raw; // fallback to raw if conversion fails
+};
   const shortAddress = (address) => {
     if (!address || address.length < 13) return address || '-';
     return `${address.slice(0, 6)}...${address.slice(-6)}`;
