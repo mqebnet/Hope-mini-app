@@ -13,9 +13,9 @@ const mysteryTrack = document.getElementById('mystery-box-track');
 const backBtn = document.getElementById('back-to-market-btn');
 
 const boxRewards = {
-  bronze: { points: 200, bronzeTickets: 10, xp: 1 },
-  silver: { points: 300, bronzeTickets: 20, xp: 2 },
-  gold: { points: 500, bronzeTickets: 20, silverTickets: 1, xp: 5 }
+  bronze: { points: 200, bronzeTickets: 50, xp: 1 },
+  silver: { points: 300, bronzeTickets: 50, xp: 2 },
+  gold: { points: 500, bronzeTickets: 50, silverTickets: 1, xp: 5 }
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -63,6 +63,8 @@ function initMysteryBoxUI() {
 
   if (!mysteryBtn) return;
   mysteryBtn.addEventListener('click', async () => {
+    if (mysteryBtn.disabled) return;
+    mysteryBtn.disabled = true;
     try {
       if (cachedBoxStatus?.activeBox) {
         await openMysteryBox();
@@ -75,6 +77,9 @@ function initMysteryBoxUI() {
       showNotification('All 3 rounds complete for today. Come back tomorrow!', 'info');
     } catch (err) {
       showNotification(err.message || 'Mystery box action failed', 'error');
+    } finally {
+      mysteryBtn.disabled = false;
+      await refreshMysteryStatus();
     }
   });
 }

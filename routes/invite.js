@@ -80,6 +80,19 @@ router.post('/register', async (req, res) => {
       inviter.invitedCount = (inviter.invitedCount || 0) + 1;
     }
     await inviter.save();
+    stateEmitter.emit('user:updated', {
+      telegramId: inviter.telegramId,
+      points: inviter.points || 0,
+      xp: inviter.xp || 0,
+      level: inviter.level,
+      nextLevelAt: inviter.nextLevelAt,
+      bronzeTickets: inviter.bronzeTickets || 0,
+      silverTickets: inviter.silverTickets || 0,
+      goldTickets: inviter.goldTickets || 0,
+      streak: inviter.streak || 0,
+      miningStartedAt: inviter.miningStartedAt,
+      invitedCount: inviter.invitedCount || 0
+    });
 
     res.json({ success: true });
   } catch (err) {

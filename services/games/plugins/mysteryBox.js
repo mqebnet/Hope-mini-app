@@ -35,9 +35,9 @@ function getTodayBoxes(boxes) {
 }
 
 function getRewardForBoxType(boxType) {
-  if (boxType === 'bronze') return { points: 200, bronzeTickets: 10, xp: 1 };
-  if (boxType === 'silver') return { points: 300, bronzeTickets: 20, xp: 2 };
-  if (boxType === 'gold') return { points: 500, bronzeTickets: 20, silverTickets: 1, xp: 5 };
+  if (boxType === 'bronze') return { points: 200, bronzeTickets: 50, xp: 1 };
+  if (boxType === 'silver') return { points: 300, bronzeTickets: 50, xp: 2 };
+  if (boxType === 'gold') return { points: 500, bronzeTickets: 50, silverTickets: 1, xp: 5 };
   return { points: 0, bronzeTickets: 0, silverTickets: 0, goldTickets: 0, xp: 0 };
 }
 

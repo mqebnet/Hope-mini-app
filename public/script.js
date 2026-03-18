@@ -144,4 +144,6 @@ function applyTranslations() {
     const key = el.dataset.i18n;
     el.textContent = i18n.t(key);
   });
+  // Apply RTL layout for Arabic and other RTL languages on every page
+  document.documentElement.dir = i18n.direction;
 }

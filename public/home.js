@@ -2,6 +2,7 @@
 import { updateTopBar, formatPoints, formatCompact, fetchUserDataOnce, getCachedUser, setCachedUser } from './userData.js';
 import { tonConnectUI } from './tonconnect.js';
 import { canBootstrap } from './utils.js';
+import { i18n } from './i18n.js';
 
 const MINING_DURATION_MS = 6 * 60 * 60 * 1000;
 let miningInterval = null;
@@ -39,7 +40,7 @@ function updateWeeklyDropEligibility(user) {
 
   if (!weeklyContestEnabled) {
     btn.disabled = true;
-    btn.textContent = 'Weekly Drop (Disabled)';
+    btn.textContent = i18n.t('home.weekly_drop_disabled');
     return;
   }
 
@@ -53,11 +54,11 @@ function updateWeeklyDropEligibility(user) {
 
   if (isBelieverOrAbove && hasPerfectStreak && hasGold) {
     btn.disabled = false;
-    btn.textContent = 'Enter Weekly Drop';
+    btn.textContent = i18n.t('home.enter_weekly_drop');
     btn.onclick = () => { window.location.href = 'weeklyDrop.html'; };
   } else {
     btn.disabled = true;
-    btn.textContent = 'Weekly Drop (Locked)';
+    btn.textContent = i18n.t('home.weekly_drop_locked');
   }
 }
 
@@ -172,7 +173,9 @@ function setDailyCheckInButtonState(status) {
   if (!dailyCheckInModalBtn) return;
   const done = Boolean(status?.checkedInToday);
   dailyCheckInModalBtn.disabled = done;
-  dailyCheckInModalBtn.textContent = done ? 'Checked Today' : 'Check In';
+  dailyCheckInModalBtn.textContent = done
+    ? i18n.t('home.checked_today')
+    : i18n.t('home.check_in');
 }
 
 function renderDailyCheckInCalendar(status) {
@@ -274,7 +277,8 @@ async function refreshDailyCheckInStatus({ autoOpen } = { autoOpen: false }) {
     dailyCheckInStatus = data;
 
     if (dailyCheckInStreakText) {
-      dailyCheckInStreakText.textContent = `Current streak: ${data.streak || 0} day${(data.streak || 0) === 1 ? '' : 's'}`;
+      dailyCheckInStreakText.textContent =
+        `${i18n.t('checkin.current_streak')}: ${data.streak || 0} ${i18n.t('home.days')}`;
     }
     if (dailyCheckInResetTime) {
       const resetAt = formatUtcTime(data.resetAtUtc);
@@ -361,7 +365,7 @@ function resetMiningUI() {
   if (miningTrack) miningTrack.classList.remove('mining-active');
   miningBar.style.transition = 'width 0.25s ease';
   miningBar.style.width = '0%';
-  miningBtn.textContent = 'Start Mining';
+  miningBtn.textContent = i18n.t('home.start_mining');
   miningIsComplete = false;
   miningBtn.classList.remove('mining-ready');
 }
@@ -379,7 +383,7 @@ function setMiningCompleteUI() {
   if (miningTrack) miningTrack.classList.remove('mining-active');
   miningBar.style.transition = 'width 0.3s ease';
   miningBar.style.width = '100%';
-  miningBtn.textContent = 'Claim';
+  miningBtn.textContent = i18n.t('home.claim');
   miningIsComplete = true;
   miningBtn.classList.add('mining-ready');
 }

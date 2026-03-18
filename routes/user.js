@@ -12,7 +12,13 @@ const {
 } = require('../utils/dailyCheckIn');
 
 const userDataCache = new Map();
-const CACHE_TTL_MS = 30 * 1000;
+const USER_CACHE_TTL_MS = 30 * 1000; // 30 seconds
+
+// Call this after any write that changes user data (points, tickets, level etc.)
+// so the next read gets fresh data instead of a stale cached response.
+function invalidateUserCache(telegramId) {
+  userDataCache.delete(telegramId);
+}
 
 /**
  * GET current authenticated user
@@ -22,7 +28,7 @@ router.get('/me', async (req, res) => {
   try {
     const telegramId = req.user.telegramId;
     const cached = userDataCache.get(telegramId);
-    if (cached && Date.now() - cached.ts < CACHE_TTL_MS) {
+    if (cached && Date.now() - cached.ts < USER_CACHE_TTL_MS) {
       return res.json(cached.data);
     }
 
@@ -45,6 +51,7 @@ router.get('/me', async (req, res) => {
     }
     if (streakChanged || levelChanged) {
       await user.save();
+      invalidateUserCache(telegramId);
     }
     const [checkIns, badges, completedTaskDocs] = await Promise.all([
       getUserCheckIns(user.telegramId, 120),
@@ -108,6 +115,7 @@ router.post('/wallet', async (req, res) => {
     );
 
     if (!user) return res.status(404).json({ error: 'User not found' });
+    invalidateUserCache(telegramId);
 
     res.json({ success: true, wallet: user.wallet });
   } catch (err) {

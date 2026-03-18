@@ -92,7 +92,7 @@ module.exports = {
     const tripletMap = { easy: 3, normal: 4, hard: 5 };
     const numTriplets = tripletMap[difficulty] || 4;
     const gameData = GameSession.generateGame(numTriplets);
-    const timeLimitMap = { easy: 60, normal: 45, hard: 40 };
+    const timeLimitMap = { easy: 60, normal: 45, hard: 45 };
     const timeLimit = timeLimitMap[difficulty] || 45;
 
     const session = new GameSession({
