@@ -1,8 +1,8 @@
-// routes/tasks.js
 const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
 const CompletedTask = require('../models/CompletedTask');
+const PendingTaskVerification = require('../models/PendingTaskVerification');
 const { verifyTransaction } = require('../utils/tonHandler');
 const { getUserLevel } = require('../utils/levelUtil');
 const stateEmitter = require('../utils/stateEmitter');
@@ -16,6 +16,8 @@ const {
 } = require('../utils/dailyCheckIn');
 const { getTaskCatalog } = require('../utils/taskCatalog');
 
+const VERIFY_DELAY_MS = 24 * 60 * 60 * 1000;
+
 async function findTaskById(taskId) {
   const catalog = await getTaskCatalog();
   const daily = Array.isArray(catalog?.daily) ? catalog.daily : [];
@@ -23,10 +25,6 @@ async function findTaskById(taskId) {
   return [...daily, ...oneTime].find((t) => t.id === taskId) || null;
 }
 
-/**
- * POST /api/tasks/daily-checkin
- * Body: { txHash }
- */
 router.post('/daily-checkin', async (req, res) => {
   try {
     const telegramId = req.user.telegramId;
@@ -105,11 +103,6 @@ router.post('/daily-checkin', async (req, res) => {
   }
 });
 
-/**
- * POST /api/tasks/complete
- * Body: { taskId }
- * For non-TON daily/social tasks that do not require proof
- */
 router.post('/complete', async (req, res) => {
   try {
     const telegramId = req.user.telegramId;
@@ -172,11 +165,7 @@ router.post('/complete', async (req, res) => {
   }
 });
 
-/**
- * POST /api/tasks/verify-proof
- * Multipart form with: proof (image), taskId
- */
-router.post('/verify-proof', async (req, res) => {
+router.post('/start-verify', async (req, res) => {
   try {
     const telegramId = req.user.telegramId;
     const { taskId } = req.body;
@@ -186,29 +175,115 @@ router.post('/verify-proof', async (req, res) => {
     }
 
     const task = await findTaskById(taskId);
-    if (!task) return res.status(400).json({ error: 'Unknown task' });
-    if (task.action !== 'verify') {
-      return res.status(400).json({ error: 'Task does not require proof verification' });
+    if (!task || task.action !== 'verify') {
+      return res.status(400).json({ error: 'Invalid task' });
+    }
+
+    const alreadyDone = await CompletedTask.exists({ telegramId, taskId });
+    if (alreadyDone) {
+      return res.status(400).json({ error: 'Task already completed' });
+    }
+
+    const existing = await PendingTaskVerification.findOne({ telegramId, taskId }).lean();
+    if (existing) {
+      const elapsed = Date.now() - new Date(existing.submittedAt).getTime();
+      const readyAt = new Date(existing.submittedAt).getTime() + VERIFY_DELAY_MS;
+      return res.json({
+        success: true,
+        pending: true,
+        readyAt,
+        readyNow: elapsed >= VERIFY_DELAY_MS
+      });
+    }
+
+    const now = new Date();
+    await PendingTaskVerification.create({ telegramId, taskId, submittedAt: now });
+
+    const readyAt = now.getTime() + VERIFY_DELAY_MS;
+
+    res.json({
+      success: true,
+      pending: true,
+      readyAt,
+      readyNow: false
+    });
+  } catch (err) {
+    if (err?.code === 11000) {
+      const existing = await PendingTaskVerification.findOne({
+        telegramId: req.user.telegramId,
+        taskId: req.body?.taskId
+      }).lean();
+      if (existing) {
+        const readyAt = new Date(existing.submittedAt).getTime() + VERIFY_DELAY_MS;
+        return res.json({
+          success: true,
+          pending: true,
+          readyAt,
+          readyNow: Date.now() >= readyAt
+        });
+      }
+    }
+    console.error('Start verify error:', err);
+    res.status(500).json({ error: 'Failed to start verification' });
+  }
+});
+
+router.post('/claim-verify', async (req, res) => {
+  try {
+    const telegramId = req.user.telegramId;
+    const { taskId } = req.body;
+
+    if (!taskId) {
+      return res.status(400).json({ error: 'Missing taskId' });
+    }
+
+    const task = await findTaskById(taskId);
+    if (!task || task.action !== 'verify') {
+      return res.status(400).json({ error: 'Invalid task' });
+    }
+
+    const alreadyDone = await CompletedTask.exists({ telegramId, taskId });
+    if (alreadyDone) {
+      return res.status(400).json({ error: 'Task already completed' });
+    }
+
+    const pending = await PendingTaskVerification.findOne({ telegramId, taskId }).lean();
+    if (!pending) {
+      return res.status(400).json({
+        error: 'Task verification not started. Click Go first.'
+      });
+    }
+
+    const elapsed = Date.now() - new Date(pending.submittedAt).getTime();
+    if (elapsed < VERIFY_DELAY_MS) {
+      const remainingMs = VERIFY_DELAY_MS - elapsed;
+      const remainingHrs = Math.ceil(remainingMs / (1000 * 60 * 60));
+      return res.status(400).json({
+        error: `Verification still in progress. Ready in ~${remainingHrs} hour${remainingHrs === 1 ? '' : 's'}.`,
+        readyAt: new Date(pending.submittedAt).getTime() + VERIFY_DELAY_MS
+      });
     }
 
     const user = await User.findOne({ telegramId });
     if (!user) return res.status(404).json({ error: 'User not found' });
 
-    const exists = await CompletedTask.exists({ telegramId, taskId });
-    if (exists) {
-      return res.status(400).json({ error: 'Task already completed' });
+    const rewardPoints = Number(task.reward || 0);
+
+    try {
+      await CompletedTask.create({ telegramId, taskId, completedAt: new Date() });
+    } catch (dbErr) {
+      if (dbErr?.code === 11000) {
+        return res.status(400).json({ error: 'Task already completed' });
+      }
+      throw dbErr;
     }
 
-    // TODO:
-    // - Save image
-    // - Send to email: admin@yourdomain.com
+    await PendingTaskVerification.deleteOne({ telegramId, taskId });
 
-    const rewardPoints = Number(task.reward || 0);
-    await CompletedTask.create({ telegramId, taskId, completedAt: new Date() });
     user.points = (user.points || 0) + rewardPoints;
     user.level = getUserLevel(user.points);
-
     await user.save();
+
     stateEmitter.emit('user:updated', {
       telegramId: user.telegramId,
       points: user.points,
@@ -219,9 +294,7 @@ router.post('/verify-proof', async (req, res) => {
       silverTickets: user.silverTickets || 0,
       goldTickets: user.goldTickets || 0,
       streak: user.streak || 0,
-      miningStartedAt: user.miningStartedAt,
-      lastCheckInAt: user.lastCheckInAt,
-      transactionsCount: user.transactionsCount
+      miningStartedAt: user.miningStartedAt
     });
 
     res.json({
@@ -234,17 +307,29 @@ router.post('/verify-proof', async (req, res) => {
       }
     });
   } catch (err) {
-    if (err?.code === 11000) {
-      return res.status(400).json({ error: 'Task already completed' });
-    }
-    console.error('Verify Proof Error:', err);
-    res.status(500).json({ error: 'Verification failed' });
+    console.error('Claim verify error:', err);
+    res.status(500).json({ error: 'Claim failed' });
   }
 });
 
-/**
- * GET /api/tasks/definitions
- */
+router.get('/pending-verifications', async (req, res) => {
+  try {
+    const telegramId = req.user.telegramId;
+    const records = await PendingTaskVerification.find({ telegramId }).lean();
+
+    const result = records.map((r) => ({
+      taskId: r.taskId,
+      readyAt: new Date(r.submittedAt).getTime() + VERIFY_DELAY_MS,
+      readyNow: Date.now() >= new Date(r.submittedAt).getTime() + VERIFY_DELAY_MS
+    }));
+
+    res.json({ success: true, pending: result });
+  } catch (err) {
+    console.error('Pending verifications error:', err);
+    res.status(500).json({ error: 'Failed to load pending verifications' });
+  }
+});
+
 router.get('/definitions', (_, res) => {
   getTaskCatalog()
     .then((catalog) => res.json(catalog))

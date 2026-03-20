@@ -370,19 +370,24 @@ async function loadContestOverview() {
     const rows = (data.latestEntries || []).map((e) => `
       <tr>
         <td>${fmt(e.telegramId)}</td>
+        <td>${fmt(e.username)}</td>
         <td class="cell-ellipsis">${fmt(e.wallet)}</td>
         <td>${fmtDate(e.enteredAt)}</td>
       </tr>
-    `).join('') || '<tr><td colspan="3" class="muted">No entries</td></tr>';
+    `).join('') || '<tr><td colspan="4" class="muted">No entries yet this week</td></tr>';
 
     document.getElementById('contest-overview').innerHTML = `
       <div class="contest-summary">
-        Week: <b>${fmt(data.week)}</b>
+        <span>Active week: <b style="color:#00ffaa">${fmt(data.currentWeek)}</b></span>
         <span class="dot">|</span>
-        Total entries: <b>${fmt(data.totalEntries)}</b>
+        <span>Viewing: <b>${fmt(data.week)}</b></span>
+        <span class="dot">|</span>
+        <span>Entries: <b>${fmt(data.totalEntries)}</b></span>
+        <span class="dot">|</span>
+        <span>Next: <b>${fmt(data.nextWeek)}</b></span>
       </div>
       <table class="entries-table">
-        <thead><tr><th>Telegram ID</th><th>Wallet</th><th>Entered</th></tr></thead>
+        <thead><tr><th>Telegram ID</th><th>Username</th><th>Wallet</th><th>Entered</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
       ${data.result ? `<div class="muted">Result published: ${fmtDate(data.result.publishedAt)}</div>` : ''}
@@ -405,6 +410,17 @@ async function setWeek() {
       body: JSON.stringify({ week })
     });
     showResult('contest-result', `Current week set to "${data.week}"`);
+    await loadContestOverview();
+  } catch (err) {
+    showResult('contest-result', `Error: ${err.message}`, true);
+  }
+}
+
+async function advanceWeek() {
+  if (!confirm('Advance to the next week? This will change the active week for ALL users immediately.')) return;
+  try {
+    const data = await api('/api/admin/contests/advance', { method: 'POST' });
+    showResult('contest-result', `Advanced: "${data.previousWeek}" -> "${data.week}"`);
     await loadContestOverview();
   } catch (err) {
     showResult('contest-result', `Error: ${err.message}`, true);
@@ -520,6 +536,10 @@ const btnSaveTasks = document.getElementById('btn-save-tasks');
 if (btnSaveTasks) btnSaveTasks.addEventListener('click', saveTasks);
 const btnSetWeek = document.getElementById('btn-set-week');
 if (btnSetWeek) btnSetWeek.addEventListener('click', setWeek);
+const btnAdvanceWeek = document.getElementById('btn-advance-week');
+if (btnAdvanceWeek) btnAdvanceWeek.addEventListener('click', advanceWeek);
+const btnLoadContestOverview = document.getElementById('btn-load-contest-overview');
+if (btnLoadContestOverview) btnLoadContestOverview.addEventListener('click', loadContestOverview);
 const btnPublish = document.getElementById('btn-publish-result');
 if (btnPublish) btnPublish.addEventListener('click', publishResult);
 const btnBroadcast = document.getElementById('btn-send-broadcast');

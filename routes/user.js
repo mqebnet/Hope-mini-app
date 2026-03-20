@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const { Address } = require('@ton/core');
 const User = require('../models/User');
 const CompletedTask = require('../models/CompletedTask');
 const { getNextLevelThreshold, getUserLevel } = require('../utils/levelUtil');
@@ -102,15 +103,21 @@ router.get('/me', async (req, res) => {
 router.post('/wallet', async (req, res) => {
   try {
     const telegramId = req.user.telegramId;
-    const { wallet } = req.body;
+    let { wallet } = req.body;
 
     if (!wallet || typeof wallet !== 'string' || wallet.trim().length === 0) {
       return res.status(400).json({ error: 'Invalid wallet address' });
     }
 
+    try {
+      wallet = Address.parse(wallet.trim()).toString({ bounceable: false });
+    } catch (_) {
+      wallet = wallet.trim();
+    }
+
     const user = await User.findOneAndUpdate(
       { telegramId },
-      { $set: { wallet: wallet.trim() } },
+      { $set: { wallet } },
       { new: true }
     );
 

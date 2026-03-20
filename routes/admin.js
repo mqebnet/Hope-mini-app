@@ -4,7 +4,11 @@ const Contestant = require('../models/Contestant');
 const KeyValue = require('../models/KeyValue');
 const { getTaskCatalog, setTaskCatalog } = require('../utils/taskCatalog');
 const { sendBulkTelegramMessage } = require('../utils/telegramNotifier');
-const { getCurrentContestWeek, CONTEST_WEEK_KEY } = require('../utils/contestWeek');
+const {
+  getCurrentContestWeek,
+  getNextWeekLabel,
+  setCurrentContestWeek
+} = require('../utils/contestWeek');
 const { processMiningReminders } = require('../utils/notificationScheduler');
 const { getUserLevel } = require('../utils/levelUtil');
 const stateEmitter = require('../utils/stateEmitter');
@@ -249,7 +253,7 @@ router.get('/contests/overview', async (req, res) => {
       Contestant.find({ week })
         .sort({ enteredAt: -1 })
         .limit(50)
-        .select('telegramId wallet week enteredAt')
+        .select('telegramId username wallet week enteredAt')
     ]);
 
     const resultKey = `contest_result_${week}`;
@@ -258,6 +262,8 @@ router.get('/contests/overview', async (req, res) => {
     res.json({
       success: true,
       week,
+      currentWeek,
+      nextWeek: getNextWeekLabel(currentWeek),
       totalEntries,
       latestEntries,
       result: resultDoc?.value || null
@@ -275,11 +281,7 @@ router.post('/contests/set-week', async (req, res) => {
       return res.status(400).json({ error: 'week is required' });
     }
 
-    await KeyValue.findOneAndUpdate(
-      { key: CONTEST_WEEK_KEY },
-      { value: week },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
-    );
+    await setCurrentContestWeek(week);
 
     stateEmitter.emit('global:event', {
       type: 'contest_week_changed',
@@ -291,6 +293,25 @@ router.post('/contests/set-week', async (req, res) => {
   } catch (err) {
     console.error('Admin set week error:', err);
     res.status(500).json({ error: 'Failed to update week' });
+  }
+});
+
+router.post('/contests/advance', async (req, res) => {
+  try {
+    const current = await getCurrentContestWeek();
+    const nextWeek = getNextWeekLabel(current);
+    await setCurrentContestWeek(nextWeek);
+
+    stateEmitter.emit('global:event', {
+      type: 'contest_week_changed',
+      data: { week: nextWeek, previousWeek: current },
+      timestamp: Date.now()
+    });
+
+    res.json({ success: true, previousWeek: current, week: nextWeek });
+  } catch (err) {
+    console.error('Admin advance week error:', err);
+    res.status(500).json({ error: 'Failed to advance week' });
   }
 });
 

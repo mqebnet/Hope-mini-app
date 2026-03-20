@@ -1,16 +1,14 @@
-//tasks.js
-import { fetchUserData, updateTopBar, fetchUserDataOnce, getCachedUser, setCachedUser } from './userData.js';
+import { fetchUserData, updateTopBar, fetchUserDataOnce, getCachedUser } from './userData.js';
 import { tonConnectUI } from './tonconnect.js';
 import { canBootstrap, debounceButton } from './utils.js';
 
-const TASK_TYPES = {
-  DAILY: 'daily',
-  ONE_TIME: 'one-time'
-};
+const VERIFY_DELAY_MS = 24 * 60 * 60 * 1000;
 
 let currentUser = null;
 let taskDefinitions = null;
 let dailyCheckInCheckedToday = false;
+let pendingVerifications = {};
+let countdownTimers = {};
 
 window.addEventListener('hope:userUpdated', (event) => {
   const user = event.detail;
@@ -26,33 +24,38 @@ window.addEventListener('hope:globalEvent', (event) => {
   if (!currentUser) return;
   taskDefinitions = data;
   renderAllTasks();
+  startCountdowns();
 });
 
 document.addEventListener('DOMContentLoaded', async () => {
-  // Bootstrap lock: prevent running twice
   if (!canBootstrap('tasks')) return;
 
   try {
-    // Use cached user data (populated by script.js)
-    let user = getCachedUser();
-    if (!user) {
-      user = await fetchUserDataOnce();
-    }
+    const cached = getCachedUser();
+    if (cached) updateTopBar(cached);
 
-    // Render top bar immediately — user data is already in memory
+    let user = getCachedUser();
+    if (!user) user = await fetchUserDataOnce();
+
     updateTopBar(user);
 
-    const [definitions, checkInStatus] = await Promise.all([
+    const [definitions, checkInStatus, pendingRes] = await Promise.all([
       fetchTaskDefinitions(),
-      fetchDailyCheckInStatus()
+      fetchDailyCheckInStatus(),
+      fetchPendingVerifications()
     ]);
 
     taskDefinitions = definitions;
     currentUser = user;
     dailyCheckInCheckedToday = Boolean(checkInStatus?.checkedInToday);
 
+    (pendingRes.pending || []).forEach((p) => {
+      pendingVerifications[p.taskId] = p.readyAt;
+    });
+
     setupTabs();
     renderAllTasks();
+    startCountdowns();
     setupGlobalHandlers();
   } catch (err) {
     console.error('Tasks init failed:', err);
@@ -60,25 +63,36 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 });
 
-/* =======================
-   Fetching
-======================= */
-
 async function fetchTaskDefinitions() {
-  const res = await fetch('/api/tasks/definitions', { credentials: 'include', cache: 'no-store' });
+  const res = await fetch('/api/tasks/definitions', {
+    credentials: 'include',
+    cache: 'no-store'
+  });
   if (!res.ok) throw new Error('Failed to fetch task definitions');
   return res.json();
 }
 
 async function fetchDailyCheckInStatus() {
-  const res = await fetch('/api/dailyCheckIn/status', { credentials: 'include', cache: 'no-store' });
+  const res = await fetch('/api/dailyCheckIn/status', {
+    credentials: 'include',
+    cache: 'no-store'
+  });
   if (!res.ok) throw new Error('Failed to fetch daily check-in status');
   return res.json();
 }
 
-/* =======================
-   Rendering
-======================= */
+async function fetchPendingVerifications() {
+  try {
+    const res = await fetch('/api/tasks/pending-verifications', {
+      credentials: 'include',
+      cache: 'no-store'
+    });
+    if (!res.ok) return { pending: [] };
+    return res.json();
+  } catch {
+    return { pending: [] };
+  }
+}
 
 function renderAllTasks() {
   renderDailyTasks();
@@ -88,18 +102,16 @@ function renderAllTasks() {
 function renderDailyTasks() {
   const container = document.getElementById('daily-task-list');
   container.innerHTML = '';
-
-  taskDefinitions.daily.forEach(task => {
-    container.appendChild(createTaskElement(task, TASK_TYPES.DAILY));
+  taskDefinitions.daily.forEach((task) => {
+    container.appendChild(createTaskElement(task, 'daily'));
   });
 }
 
 function renderOneTimeTasks() {
   const container = document.getElementById('one-time-task-list');
   container.innerHTML = '';
-
-  taskDefinitions.oneTime.forEach(task => {
-    container.appendChild(createTaskElement(task, TASK_TYPES.ONE_TIME));
+  taskDefinitions.oneTime.forEach((task) => {
+    container.appendChild(createTaskElement(task, 'one-time'));
   });
 }
 
@@ -108,33 +120,72 @@ function createTaskElement(task, type) {
     ? dailyCheckInCheckedToday
     : currentUser.completedTasks?.includes(task.id);
 
+  const isPending = !completed
+    && type === 'one-time'
+    && task.action === 'verify'
+    && pendingVerifications[task.id] !== undefined;
+
+  const isReadyNow = isPending && Date.now() >= pendingVerifications[task.id];
+
   const wrapper = document.createElement('div');
   wrapper.className = 'task-item';
   wrapper.dataset.taskId = task.id;
+
+  let buttonHtml;
+  let statusHtml = '';
+
+  if (completed) {
+    buttonHtml = '<button class="task-button disabled" disabled>Done</button>';
+  } else if (type === 'one-time' && task.action === 'verify') {
+    if (!isPending) {
+      buttonHtml = `
+        <button class="task-button"
+          data-task-id="${task.id}"
+          data-action="verify"
+          ${task.url ? `data-url="${task.url}"` : ''}>
+          Go
+        </button>`;
+    } else if (isReadyNow) {
+      buttonHtml = `
+        <button class="task-button claim-btn"
+          data-task-id="${task.id}"
+          data-action="claim-verify">
+          Claim
+        </button>`;
+    } else {
+      buttonHtml = '<button class="task-button disabled" disabled>Verifying...</button>';
+      statusHtml = `
+        <div class="verify-status" data-task-id="${task.id}">
+          <span class="verify-spinner">...</span>
+          <span class="verify-countdown" data-ready-at="${pendingVerifications[task.id]}">
+            Calculating...
+          </span>
+        </div>`;
+    }
+  } else {
+    buttonHtml = `
+      <button class="task-button"
+        data-task-id="${task.id}"
+        data-action="${task.action}"
+        ${task.url ? `data-url="${task.url}"` : ''}>
+        ${getButtonLabel(task, false)}
+      </button>`;
+  }
 
   wrapper.innerHTML = `
     <div class="task-info">
       <h3>${task.title}</h3>
       <p>${task.description}</p>
     </div>
-
-    <button class="task-button ${completed ? 'disabled' : ''}"
-            data-task-id="${task.id}"
-            data-action="${task.action}"
-            ${task.url ? `data-url="${task.url}"` : ''}
-            ${completed ? 'disabled' : ''}>
-      ${getButtonLabel(task, completed)}
-    </button>
-
-    ${type === TASK_TYPES.ONE_TIME && !completed ? createVerificationFormHTML(task.id) : ''}
+    ${buttonHtml}
+    ${statusHtml}
   `;
 
   return wrapper;
-} 
+}
 
 function getButtonLabel(task, completed) {
   if (completed) return 'Done';
-
   switch (task.action) {
     case 'check-in': return 'Check In';
     case 'visit': return 'Check';
@@ -143,47 +194,66 @@ function getButtonLabel(task, completed) {
   }
 }
 
-function createVerificationFormHTML(taskId) {
-  return `
-    <form class="verification-form hidden" data-task-id="${taskId}">
-      <input type="file" name="proof" accept="image/*" required />
-      <button type="submit">Submit Proof</button>
-    </form>
-  `;
+function startCountdowns() {
+  Object.values(countdownTimers).forEach(clearInterval);
+  countdownTimers = {};
+
+  document.querySelectorAll('.verify-countdown[data-ready-at]').forEach((el) => {
+    const readyAt = Number(el.dataset.readyAt);
+    const taskItem = el.closest('.task-item');
+    const taskId = taskItem?.dataset.taskId;
+    if (!taskId || !readyAt) return;
+
+    function updateCountdown() {
+      const remaining = Math.min(Math.max(readyAt - Date.now(), 0), VERIFY_DELAY_MS);
+      if (remaining <= 0) {
+        clearInterval(countdownTimers[taskId]);
+        delete countdownTimers[taskId];
+        pendingVerifications[taskId] = readyAt;
+        const task = findLocalTask(taskId);
+        if (task && taskItem.parentNode) {
+          const newEl = createTaskElement(task, 'one-time');
+          taskItem.parentNode.replaceChild(newEl, taskItem);
+        }
+        return;
+      }
+
+      const hrs = Math.floor(remaining / (1000 * 60 * 60));
+      const mins = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60));
+      const secs = Math.floor((remaining % (1000 * 60)) / 1000);
+      el.textContent = `Under review - ${hrs}h ${mins}m ${secs}s remaining`;
+    }
+
+    updateCountdown();
+    countdownTimers[taskId] = setInterval(updateCountdown, 1000);
+  });
 }
 
-/* =======================
-   Tabs
-======================= */
+function findLocalTask(taskId) {
+  if (!taskDefinitions) return null;
+  return [...(taskDefinitions.daily || []), ...(taskDefinitions.oneTime || [])]
+    .find((t) => t.id === taskId) || null;
+}
 
 function setupTabs() {
-  document.querySelectorAll('.task-tab').forEach(tab => {
+  document.querySelectorAll('.task-tab').forEach((tab) => {
     tab.addEventListener('click', () => {
       const target = tab.dataset.target;
-
-      document.querySelectorAll('.task-tab').forEach(t => t.classList.remove('active'));
-      document.querySelectorAll('.task-section').forEach(s => s.classList.remove('active'));
-
+      document.querySelectorAll('.task-tab').forEach((t) => t.classList.remove('active'));
+      document.querySelectorAll('.task-section').forEach((s) => s.classList.remove('active'));
       tab.classList.add('active');
       document.getElementById(target).classList.add('active');
     });
   });
 }
 
-/* =======================
-   Event Delegation
-======================= */
-
 function setupGlobalHandlers() {
   document.body.addEventListener('click', handleButtonClick);
-  document.body.addEventListener('submit', handleVerificationSubmit);
 }
 
 async function handleButtonClick(e) {
   const btn = e.target.closest('.task-button');
   if (!btn || btn.disabled) return;
-
-  // Debounce button: prevent double clicks
   if (!debounceButton(btn, 500)) return;
 
   const taskId = btn.dataset.taskId;
@@ -194,27 +264,78 @@ async function handleButtonClick(e) {
     if (action === 'check-in') {
       await handleDailyCheckIn();
       renderAllTasks();
+      startCountdowns();
       return;
     }
 
-    if (action === 'visit' || action === 'verify') {
-      window.open(url, '_blank');
+    if (action === 'verify') {
+      if (url) window.open(url, '_blank');
 
-      if (action === 'verify') {
-        showVerificationForm(taskId);
+      btn.disabled = true;
+      btn.textContent = 'Submitting...';
+
+      const res = await fetch('/api/tasks/start-verify', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taskId })
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        showErrorToast(data.error || 'Failed to start verification');
+        btn.disabled = false;
+        btn.textContent = 'Go';
         return;
       }
 
-      await completeTask(taskId);
+      pendingVerifications[taskId] = data.readyAt;
+      renderAllTasks();
+      startCountdowns();
+      showSuccessToast('Task submitted for review. Come back in 24 hours to claim your reward.');
+      return;
     }
 
-    markButtonDone(btn);
+    if (action === 'claim-verify') {
+      btn.disabled = true;
+      btn.textContent = 'Claiming...';
+
+      const res = await fetch('/api/tasks/claim-verify', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taskId })
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        showErrorToast(data.error || 'Claim failed');
+        btn.disabled = false;
+        btn.textContent = 'Claim';
+        return;
+      }
+
+      delete pendingVerifications[taskId];
+      await refreshUser();
+      renderAllTasks();
+      startCountdowns();
+      showSuccessToast(`+${data.reward?.points || 0} points claimed!`);
+      return;
+    }
+
+    if (action === 'visit') {
+      if (url) window.open(url, '_blank');
+      await completeTask(taskId);
+      markButtonDone(btn);
+      return;
+    }
   } catch (err) {
     console.error('Task action error:', err);
-    if (err?.message === 'Already checked in today') {
+    if (err?.message?.toLowerCase().includes('already checked in')) {
       showSuccessToast('You already checked in today');
       await refreshUser();
       renderAllTasks();
+      startCountdowns();
       return;
     }
     showErrorToast(err?.message || 'Task failed');
@@ -227,10 +348,6 @@ function markButtonDone(btn) {
   btn.disabled = true;
 }
 
-/* =======================
-   Daily Check-in (TON)
-======================= */
-
 async function handleDailyCheckIn() {
   const preStatus = await fetchDailyCheckInStatus();
   if (preStatus?.checkedInToday) {
@@ -240,32 +357,21 @@ async function handleDailyCheckIn() {
 
   if (typeof tonConnectUI.restoreConnection === 'function') {
     await tonConnectUI.restoreConnection();
-  } else if (tonConnectUI.connectionRestored && typeof tonConnectUI.connectionRestored.then === 'function') {
+  } else if (tonConnectUI.connectionRestored?.then) {
     await tonConnectUI.connectionRestored;
   }
 
-  if (!tonConnectUI.wallet) {
-    await tonConnectUI.openModal();
-  }
-
-  if (!tonConnectUI.wallet) {
-    throw new Error('Please connect your TON wallet first');
-  }
+  if (!tonConnectUI.wallet) await tonConnectUI.openModal();
+  if (!tonConnectUI.wallet) throw new Error('Please connect your TON wallet first');
 
   const priceRes = await fetch('/api/tonAmount/ton-amount', { credentials: 'include' });
   if (!priceRes.ok) throw new Error('Failed to get TON amount');
   const { tonAmount, recipientAddress } = await priceRes.json();
-  if (!recipientAddress) throw new Error('Payment recipient is not configured');
-  if (typeof tonAmount !== 'number' || tonAmount <= 0) throw new Error('Invalid TON amount');
+  if (!recipientAddress) throw new Error('Payment recipient not configured');
 
   const tx = await tonConnectUI.sendTransaction({
     validUntil: Math.floor(Date.now() / 1000) + 300,
-    messages: [
-      {
-        address: recipientAddress,
-        amount: (tonAmount * 1e9).toFixed(0)
-      }
-    ]
+    messages: [{ address: recipientAddress, amount: (tonAmount * 1e9).toFixed(0) }]
   });
 
   const txHash = tx?.transaction?.hash || tx?.txid?.hash || tx?.hash || '';
@@ -278,7 +384,6 @@ async function handleDailyCheckIn() {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ txHash, txBoc })
   });
-
   const data = await res.json();
 
   if (!res.ok) {
@@ -291,13 +396,8 @@ async function handleDailyCheckIn() {
 
   dailyCheckInCheckedToday = true;
   await refreshUser();
-  renderAllTasks();
   showSuccessToast('Check-in successful +1000 points');
 }
-
-/* =======================
-   Complete task (no proof)
-======================= */
 
 async function completeTask(taskId) {
   const res = await fetch('/api/tasks/complete', {
@@ -306,52 +406,10 @@ async function completeTask(taskId) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ taskId })
   });
-
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'Failed to complete task');
-
   await refreshUser();
 }
-
-/* =======================
-   Verification (one-time)
-======================= */
-
-function showVerificationForm(taskId) {
-  const form = document.querySelector(`.verification-form[data-task-id="${taskId}"]`);
-  if (form) form.classList.remove('hidden');
-}
-
-async function handleVerificationSubmit(e) {
-  const form = e.target.closest('.verification-form');
-  if (!form) return;
-
-  e.preventDefault();
-
-  const taskId = form.dataset.taskId;
-  const formData = new FormData(form);
-  formData.append('taskId', taskId);
-
-  const res = await fetch('/api/tasks/verify-proof', {
-    method: 'POST',
-    credentials: 'include',
-    body: formData
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    showErrorToast(err.error || 'Verification failed');
-    return;
-  }
-
-  await refreshUser();
-  renderAllTasks();
-  showSuccessToast('Verification submitted');
-}
-
-/* =======================
-   Helpers
-======================= */
 
 async function refreshUser() {
   const [user, checkInStatus] = await Promise.all([

@@ -6,6 +6,8 @@ const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const mongoose = require('mongoose');
 const cookieParser = require('cookie-parser');
+const helmet = require('helmet');
+const compression = require('compression');
 
 const referralRouter = require('./routes/referral');
 const leaderboardRouter = require('./routes/leaderboard');
@@ -34,7 +36,13 @@ if (!process.env.MONGODB_URI) {
 
 const connectDB = async () => {
   try {
-    await mongoose.connect(process.env.MONGODB_URI);
+    await mongoose.connect(process.env.MONGODB_URI, {
+      maxPoolSize: 50,
+      minPoolSize: 5,
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 45000,
+      connectTimeoutMS: 10000
+    });
     console.log('Connected to MongoDB');
   } catch (err) {
     console.error('MongoDB connection error:', err.stack);
@@ -120,6 +128,8 @@ app.use('/api/dailyCheckIn', dailyCheckInRouter);
 app.use('/api/transactions', require('./routes/transactions'));
 app.use('/api/admin', adminAuth, require('./routes/admin'));
 app.use('/api/games', require('./routes/games'));
+app.use(helmet());
+app.use(compression());
 
 const routes = ['weeklyDrop', 'rewards', 'tonAmount', 'invite'];
 routes.forEach((route) => {

@@ -132,18 +132,25 @@
 
     <section class="admin-card">
       <h2>Contests</h2>
-      <div class="admin-grid">
+      <div id="contest-overview" style="margin-bottom:12px;"></div>
+
+      <div class="admin-grid" style="margin-bottom:8px;">
         <input id="contest-week" class="admin-input" placeholder="Week label (e.g. Week 8)" />
-        <button id="btn-set-week" class="admin-btn alt">Set Current Week</button>
+        <button id="btn-set-week" class="admin-btn alt">Set Week</button>
+        <button id="btn-advance-week" class="admin-btn">Advance to Next Week</button>
+        <button id="btn-load-contest-overview" class="admin-btn alt">Load Overview</button>
       </div>
+
+      <hr style="border-color:rgba(255,255,255,0.08);margin:12px 0;" />
+
+      <h3 style="font-size:0.9rem;color:#ccc;margin:0 0 8px;">Publish Results</h3>
       <div class="admin-grid">
-        <input id="result-week" class="admin-input" placeholder="Result week" />
+        <input id="result-week" class="admin-input" placeholder="Week label to publish results for" />
         <input id="winner-ids" class="admin-input" placeholder="Winner telegramIds, comma-separated" />
       </div>
-      <textarea id="result-message" class="admin-textarea" placeholder="Contest result message"></textarea>
+      <textarea id="result-message" class="admin-textarea" placeholder="Message to send to winners and participants..."></textarea>
       <button id="btn-publish-result" class="admin-btn warn">Publish Result + Notify</button>
       <div id="contest-result" class="admin-mono"></div>
-      <div id="contest-overview"></div>
     </section>
 
     <section class="admin-card">

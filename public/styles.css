@@ -844,9 +844,51 @@ button:disabled {
 
 
 /* Leaderboard Styles (completed cutoff) */
+#leaderboard-title {
+  width: min(94vw, 640px);
+  margin: 0 auto 14px;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  align-items: center;
+  gap: 10px;
+}
+.leaderboard-title-text {
+  margin: 0;
+  text-align: center;
+}
+.leaderboard-arrow {
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  border: 1px solid rgba(0, 255, 170, 0.28);
+  background: linear-gradient(180deg, rgba(8, 44, 54, 0.95), rgba(4, 23, 30, 0.92));
+  color: #ffd84d;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 8px 18px rgba(0, 0, 0, 0.28);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+.leaderboard-arrow:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255, 216, 77, 0.52);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 10px 22px rgba(0, 0, 0, 0.32);
+}
+.leaderboard-arrow:active {
+  transform: translateY(0);
+}
+.leaderboard-arrow i {
+  width: 28px;
+  height: 28px;
+  stroke-width: 2.7;
+}
 #leaderboard-container {
-  width: 100%;
-  max-width: 600px;
+    width: 100%;
+    max-width: 600px;
   margin: 20px auto;
   background: rgba(0, 0, 0, 0.4);
   border-radius: 10px;
@@ -1079,6 +1121,42 @@ button:disabled {
 .task-item button.done {
   background: #aaa;
   cursor: not-allowed;
+}
+
+.verify-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 0.78rem;
+  color: #8fd4c2;
+}
+
+.verify-spinner {
+  animation: spin 2s linear infinite;
+  display: inline-block;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.verify-countdown {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+.task-button.claim-btn {
+  background: linear-gradient(90deg, #00ffaa, #00eaff);
+  color: #0a1a2a;
+  font-weight: 700;
+  animation: claimPulse 1.4s ease-in-out infinite alternate;
+}
+
+@keyframes claimPulse {
+  from { box-shadow: 0 0 6px rgba(0, 255, 170, 0.4); }
+  to { box-shadow: 0 0 16px rgba(0, 255, 170, 0.85); }
 }
 
 /* Marketplace Tabs & Elements */
@@ -1485,6 +1563,19 @@ input:checked + .slider:before {
     column-gap: 6px;
     padding: 7px 8px;
     font-size: 12px;
+  }
+  #leaderboard-title {
+    grid-template-columns: 40px minmax(0, 1fr) 40px;
+    gap: 8px;
+  }
+  .leaderboard-arrow {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+  }
+  .leaderboard-arrow i {
+    width: 24px;
+    height: 24px;
   }
 }
 

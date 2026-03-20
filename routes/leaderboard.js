@@ -3,6 +3,17 @@ const router = express.Router();
 const User = require('../models/User');
 const Transaction = require('../models/Transaction');
 
+const leaderboardCache = new Map();
+const LEADERBOARD_TTL_MS = 60 * 1000;
+
+function invalidateLeaderboardCache(levelIndex) {
+  if (levelIndex !== undefined) {
+    leaderboardCache.delete(Number(levelIndex));
+  } else {
+    leaderboardCache.clear();
+  }
+}
+
 const LEVEL_MAP = {
   1: "Seeker",
   2: "Dreamer",
@@ -26,6 +37,11 @@ router.get('/by-level/:levelIndex', async (req, res) => {
   }
 
   try {
+    const cached = leaderboardCache.get(levelIndex);
+    if (cached && Date.now() - cached.ts < LEADERBOARD_TTL_MS) {
+      return res.json(cached.data);
+    }
+
     const users = await User.find({ level: levelName })
       .sort({ xp: -1, points: -1 }) // XP first, then points
       .limit(100)
@@ -50,11 +66,15 @@ router.get('/by-level/:levelIndex', async (req, res) => {
       transactionsCount: txCountMap.get(Number(u.telegramId)) || 0
     }));
 
-    res.json({
+    const responseData = {
       levelIndex,
       levelName,
       users: mappedUsers
-    });
+    };
+
+    leaderboardCache.set(levelIndex, { data: responseData, ts: Date.now() });
+
+    res.json(responseData);
   } catch (err) {
     console.error('Leaderboard error:', err);
     res.status(500).json({ error: 'Failed to load leaderboard' });

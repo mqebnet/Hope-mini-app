@@ -42,6 +42,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     currentUserId = user.telegramId;
     currentLevelIndex = LEVEL_INDEX[user.level] || 1;
 
+    initArrowNavigation();
     await loadLeaderboard(currentLevelIndex);
     enableSwipeNavigation();
   } catch (err) {
@@ -49,6 +50,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.location.href = '/auth';
   }
 });
+
+function navigateLeaderboard(delta) {
+  const nextLevel = Math.min(10, Math.max(1, currentLevelIndex + delta));
+  if (nextLevel === currentLevelIndex) return;
+  loadLeaderboard(nextLevel);
+}
+
+function initArrowNavigation() {
+  const prevBtn = document.getElementById('leaderboard-prev');
+  const nextBtn = document.getElementById('leaderboard-next');
+  if (!prevBtn || !nextBtn) return;
+
+  prevBtn.addEventListener('click', () => navigateLeaderboard(-1));
+  nextBtn.addEventListener('click', () => navigateLeaderboard(1));
+}
 
 // Global handler for WebSocket leaderboard updates
 // Called when other users' points change
@@ -119,8 +135,7 @@ function enableSwipeNavigation() {
 
     if (Math.abs(diff) < 50) return;
 
-    const next = diff > 0 ? Math.min(10, currentLevelIndex + 1) : Math.max(1, currentLevelIndex - 1);
-    if (next !== currentLevelIndex) loadLeaderboard(next);
+    navigateLeaderboard(diff > 0 ? 1 : -1);
   }, { passive: true });
 }
 

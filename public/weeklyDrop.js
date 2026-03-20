@@ -1,9 +1,8 @@
-// public/weeklyDrop.js
 import { fetchUserData, updateTopBar, getCachedUser } from './userData.js';
+import { tonConnectUI } from './tonconnect.js';
 import { canBootstrap, debounceButton } from './utils.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
-  // Bootstrap lock: prevent running twice
   if (!canBootstrap('weeklydrop')) return;
 
   const rulesCheckbox = document.getElementById('rules-checkbox');
@@ -11,70 +10,99 @@ document.addEventListener('DOMContentLoaded', async () => {
   const statusEl = document.getElementById('eligibility-status');
 
   try {
-    // Render top bar instantly from cache
     const cached = getCachedUser();
     if (cached) updateTopBar(cached);
 
-    // Fetch fresh user data (may return from server-side cache instantly)
     const user = await fetchUserData();
     updateTopBar(user);
 
-    const isBelieverOrAbove = [
-      'Believer', 'Challenger', 'Navigator', 'Ascender',
-      'Master', 'Grandmaster', 'Legend', 'Eldrin'
-    ].includes(user.level);
+    const eligRes = await fetch('/api/weeklyDrop/eligibility', {
+      credentials: 'include'
+    });
+    const eligData = await eligRes.json();
 
-    const hasPerfectStreak = (user.streak || 0) >= 10;
-    const hasGold = (user.goldTickets || 0) >= 10;
-
-    if (!isBelieverOrAbove) {
-      statusEl.textContent = 'You must reach Level 3 (Believer) to enter.';
+    if (eligData.disabled) {
+      statusEl.textContent = 'Weekly Drop is currently disabled. Check back soon.';
       return;
     }
 
-    if (!hasPerfectStreak) {
-      statusEl.textContent = 'You need a perfect 10-day streak.';
+    if (eligData.alreadyEntered) {
+      statusEl.textContent = `You have already entered ${eligData.currentWeek}. Good luck!`;
+      enterButton.disabled = true;
       return;
     }
 
-    if (!hasGold) {
-      statusEl.textContent = 'You need at least 10 Gold Tickets.';
+    if (!eligData.eligible) {
+      statusEl.textContent = eligData.reason || 'You are not eligible to enter.';
       return;
     }
 
-    const hasWallet = Boolean(user.wallet);
-    if (!hasWallet) {
-      statusEl.textContent = 'You must connect a TON wallet to enter. Your wallet address is needed to receive prizes.';
-      return;
-    }
-
-    statusEl.textContent = 'You are eligible to enter the Weekly Drop.';
+    statusEl.textContent =
+      `Eligible for ${eligData.currentWeek} - ${eligData.goldTickets} Gold tickets available.`;
 
     rulesCheckbox.addEventListener('change', () => {
       enterButton.disabled = !rulesCheckbox.checked;
     });
 
     enterButton.addEventListener('click', async () => {
-      // Debounce button: prevent double clicks
-      if (!debounceButton(enterButton, 1000)) return;
+      if (!debounceButton(enterButton, 3000)) return;
 
       try {
+        statusEl.textContent = 'Getting TON amount...';
+        enterButton.disabled = true;
+
+        const priceRes = await fetch('/api/tonAmount/ton-amount?usd=0.5', {
+          credentials: 'include'
+        });
+        if (!priceRes.ok) throw new Error('Failed to get TON amount');
+        const { tonAmount, recipientAddress } = await priceRes.json();
+        if (!recipientAddress) throw new Error('Payment recipient not configured');
+        if (!tonAmount || tonAmount <= 0) throw new Error('Invalid TON amount');
+
+        statusEl.textContent = 'Waiting for wallet confirmation...';
+
+        const tx = await tonConnectUI.sendTransaction({
+          validUntil: Math.floor(Date.now() / 1000) + 300,
+          messages: [{
+            address: recipientAddress,
+            amount: (tonAmount * 1e9).toFixed(0)
+          }]
+        });
+
+        const txHash = tx?.transaction?.hash
+          || tx?.txid?.hash
+          || tx?.hash
+          || '';
+        const txBoc = tx?.boc || '';
+
+        if (!txHash && !txBoc) {
+          throw new Error('Transaction proof missing - please try again');
+        }
+
+        statusEl.textContent = 'Verifying payment on-chain... please wait';
+
         const res = await fetch('/api/weeklyDrop/enter', {
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ boc: 'manual_pending' })
+          body: JSON.stringify({ txHash, txBoc })
         });
 
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Entry failed');
-        alert(data.message || 'Entry accepted');
+
+        statusEl.textContent =
+          `Entered ${data.week}! ${data.message} Gold tickets remaining: ${data.goldTickets}`;
+        enterButton.disabled = true;
+        rulesCheckbox.disabled = true;
       } catch (err) {
-        alert(err.message);
+        console.error('Weekly drop entry error:', err);
+        enterButton.disabled = !rulesCheckbox.checked;
+        statusEl.textContent = `Entry failed: ${err.message}`;
       }
     });
   } catch (err) {
     console.error(err);
-    statusEl.textContent = 'Unable to load user eligibility.';
+    statusEl.textContent = 'Unable to load eligibility. Please reopen the app.';
   }
 });
