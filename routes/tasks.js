@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
 const CompletedTask = require('../models/CompletedTask');
+const DailyTaskCompletion = require('../models/DailyTaskCompletion');
 const PendingTaskVerification = require('../models/PendingTaskVerification');
 const { verifyTransaction } = require('../utils/tonHandler');
 const { getUserLevel } = require('../utils/levelUtil');
@@ -22,7 +23,15 @@ async function findTaskById(taskId) {
   const catalog = await getTaskCatalog();
   const daily = Array.isArray(catalog?.daily) ? catalog.daily : [];
   const oneTime = Array.isArray(catalog?.oneTime) ? catalog.oneTime : [];
-  return [...daily, ...oneTime].find((t) => t.id === taskId) || null;
+  const dailyTask = daily.find((t) => t.id === taskId);
+  if (dailyTask) {
+    return { task: dailyTask, isDaily: true };
+  }
+  const oneTimeTask = oneTime.find((t) => t.id === taskId);
+  if (oneTimeTask) {
+    return { task: oneTimeTask, isDaily: false };
+  }
+  return null;
 }
 
 router.post('/daily-checkin', async (req, res) => {
@@ -112,8 +121,12 @@ router.post('/complete', async (req, res) => {
       return res.status(400).json({ error: 'Missing taskId' });
     }
 
-    const task = await findTaskById(taskId);
-    if (!task) return res.status(400).json({ error: 'Unknown task' });
+    const taskMeta = await findTaskById(taskId);
+    if (!taskMeta) return res.status(400).json({ error: 'Unknown task' });
+    const { task, isDaily } = taskMeta;
+    if (task.comingSoon) {
+      return res.status(400).json({ error: 'Task is not available yet' });
+    }
     if (task.action === 'check-in' || task.action === 'verify') {
       return res.status(400).json({ error: 'Use the correct flow for this task type' });
     }
@@ -121,13 +134,28 @@ router.post('/complete', async (req, res) => {
     const user = await User.findOne({ telegramId });
     if (!user) return res.status(404).json({ error: 'User not found' });
 
-    const exists = await CompletedTask.exists({ telegramId, taskId });
+    const now = new Date();
+    const completionQuery = isDaily
+      ? { telegramId, taskId, dayKey: getCheckInDayKey(now) }
+      : { telegramId, taskId };
+    const exists = isDaily
+      ? await DailyTaskCompletion.exists(completionQuery)
+      : await CompletedTask.exists(completionQuery);
     if (exists) {
-      return res.status(400).json({ error: 'Task already completed' });
+      return res.status(400).json({ error: isDaily ? 'Task already completed today' : 'Task already completed' });
     }
 
     const rewardPoints = Number(task.reward || 0);
-    await CompletedTask.create({ telegramId, taskId, completedAt: new Date() });
+    if (isDaily) {
+      await DailyTaskCompletion.create({
+        telegramId,
+        taskId,
+        dayKey: completionQuery.dayKey,
+        completedAt: now
+      });
+    } else {
+      await CompletedTask.create({ telegramId, taskId, completedAt: now });
+    }
     user.points = (user.points || 0) + rewardPoints;
     user.level = getUserLevel(user.points);
 
@@ -174,14 +202,23 @@ router.post('/start-verify', async (req, res) => {
       return res.status(400).json({ error: 'Missing taskId' });
     }
 
-    const task = await findTaskById(taskId);
-    if (!task || task.action !== 'verify') {
+    const taskMeta = await findTaskById(taskId);
+    if (!taskMeta || taskMeta.task.action !== 'verify') {
       return res.status(400).json({ error: 'Invalid task' });
     }
+    const { task, isDaily } = taskMeta;
+    if (task.comingSoon || !task.url) {
+      return res.status(400).json({ error: 'Task is not available yet' });
+    }
+    const completionQuery = isDaily
+      ? { telegramId, taskId, dayKey: getCheckInDayKey(new Date()) }
+      : { telegramId, taskId };
 
-    const alreadyDone = await CompletedTask.exists({ telegramId, taskId });
+    const alreadyDone = isDaily
+      ? await DailyTaskCompletion.exists(completionQuery)
+      : await CompletedTask.exists(completionQuery);
     if (alreadyDone) {
-      return res.status(400).json({ error: 'Task already completed' });
+      return res.status(400).json({ error: isDaily ? 'Task already completed today' : 'Task already completed' });
     }
 
     const existing = await PendingTaskVerification.findOne({ telegramId, taskId }).lean();
@@ -197,7 +234,11 @@ router.post('/start-verify', async (req, res) => {
     }
 
     const now = new Date();
-    await PendingTaskVerification.create({ telegramId, taskId, submittedAt: now });
+    await PendingTaskVerification.create({
+      telegramId,
+      taskId,
+      submittedAt: now
+    });
 
     const readyAt = now.getTime() + VERIFY_DELAY_MS;
 
@@ -237,14 +278,23 @@ router.post('/claim-verify', async (req, res) => {
       return res.status(400).json({ error: 'Missing taskId' });
     }
 
-    const task = await findTaskById(taskId);
-    if (!task || task.action !== 'verify') {
+    const taskMeta = await findTaskById(taskId);
+    if (!taskMeta || taskMeta.task.action !== 'verify') {
       return res.status(400).json({ error: 'Invalid task' });
     }
+    const { task, isDaily } = taskMeta;
+    if (task.comingSoon || !task.url) {
+      return res.status(400).json({ error: 'Task is not available yet' });
+    }
+    const completionQuery = isDaily
+      ? { telegramId, taskId, dayKey: getCheckInDayKey(new Date()) }
+      : { telegramId, taskId };
 
-    const alreadyDone = await CompletedTask.exists({ telegramId, taskId });
+    const alreadyDone = isDaily
+      ? await DailyTaskCompletion.exists(completionQuery)
+      : await CompletedTask.exists(completionQuery);
     if (alreadyDone) {
-      return res.status(400).json({ error: 'Task already completed' });
+      return res.status(400).json({ error: isDaily ? 'Task already completed today' : 'Task already completed' });
     }
 
     const pending = await PendingTaskVerification.findOne({ telegramId, taskId }).lean();
@@ -270,10 +320,19 @@ router.post('/claim-verify', async (req, res) => {
     const rewardPoints = Number(task.reward || 0);
 
     try {
-      await CompletedTask.create({ telegramId, taskId, completedAt: new Date() });
+      if (isDaily) {
+        await DailyTaskCompletion.create({
+          telegramId,
+          taskId,
+          dayKey: completionQuery.dayKey,
+          completedAt: new Date()
+        });
+      } else {
+        await CompletedTask.create({ telegramId, taskId, completedAt: new Date() });
+      }
     } catch (dbErr) {
       if (dbErr?.code === 11000) {
-        return res.status(400).json({ error: 'Task already completed' });
+        return res.status(400).json({ error: isDaily ? 'Task already completed today' : 'Task already completed' });
       }
       throw dbErr;
     }

@@ -1,5 +1,7 @@
 import { fetchUserData, updateTopBar, getCachedUser } from './userData.js';
 import { tonConnectUI } from './tonconnect.js';
+import { i18n } from './i18n.js';
+import { navigateWithFeedback } from './utils.js';
 
 const PASS_USD_DEFAULT = 0.55;
 let currentPassUsd = PASS_USD_DEFAULT;
@@ -10,11 +12,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (window.Telegram?.WebApp) window.Telegram.WebApp.ready();
 
   try {
-    // Render top bar from cache immediately — script.js already authenticated
     const cached = getCachedUser();
     if (cached) updateTopBar(cached);
 
-    // Fetch fresh user data and render pass UI in parallel
     const [user] = await Promise.all([
       fetchUserData(),
       renderPassUI()
@@ -23,14 +23,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateTopBar(user);
   } catch (err) {
     console.error('Flipcards pass init failed:', err);
-    showNotification('Failed to load pass page', 'error');
+    showNotification(i18n.t('pass.failed_load_page'), 'error');
   }
 });
 
 async function getPassStatus() {
   const res = await fetch('/api/games/flipcards/status', { credentials: 'include', cache: 'no-store' });
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Failed to check pass status');
+  if (!res.ok) throw new Error(data.error || i18n.t('pass.failed_check_status'));
   return data;
 }
 
@@ -39,33 +39,34 @@ function renderCard({ hasActivePass, passValidUntil, passCost, requiresRevalidat
   currentPassUsd = Number(passCost || PASS_USD_DEFAULT);
   const price = currentPassUsd.toFixed(2);
   const activeText = hasActivePass && passValidUntil
-    ? `Pass active until ${new Date(passValidUntil).toLocaleString()}`
-    : 'Unlock Flip Cards for 24 hours';
+    ? i18n.format('pass.active_until', { date: new Date(passValidUntil).toLocaleString() })
+    : i18n.t('pass.unlock_24h');
 
   root.innerHTML = `
     <div class="pass-card">
       <div class="pass-icon">🎴</div>
-      <h2>Flip Cards Pass</h2>
+      <h2>${i18n.t('pass.title')}</h2>
       <p class="pass-description">${activeText}</p>
 
       <div class="pass-features">
-        <div class="feature"><span class="feature-icon">♾️</span><span>Unlimited plays for 24h</span></div>
-        <div class="feature"><span class="feature-icon">⏱️</span><span>Difficulty-based timer challenge</span></div>
-        <div class="feature"><span class="feature-icon">🏆</span><span>Earn points, XP and tickets</span></div>
+        <div class="feature"><span class="feature-icon">♾️</span><span>${i18n.t('pass.feature_unlimited')}</span></div>
+        <div class="feature"><span class="feature-icon">⏱️</span><span>${i18n.t('pass.feature_timer')}</span></div>
+        <div class="feature"><span class="feature-icon">🏆</span><span>${i18n.t('pass.feature_rewards')}</span></div>
       </div>
 
       <div class="pass-price">
-        <span class="price-label">Daily Pass</span>
+        <span class="price-label">${i18n.t('pass.daily_pass')}</span>
         <span class="price-amount">$${price}</span>
       </div>
 
       <button id="flipcards-primary-btn" class="btn-purchase-pass">
-        ${hasActivePass ? 'Play Flip Cards' : 'Purchase Pass'}
+        ${hasActivePass ? i18n.t('pass.play_flipcards') : i18n.t('pass.purchase_pass')}
       </button>
-      <button id="flipcards-back-btn" class="btn-cancel-pass">Back to Games</button>
-      ${requiresRevalidation ? '<p class="pass-description" style="margin-top:10px;color:#ffd166;">Legacy pass detected. Re-purchase required for verified access.</p>' : ''}
+      <button id="flipcards-back-btn" class="btn-cancel-pass">${i18n.t('pass.back_to_games')}</button>
+      ${requiresRevalidation ? `<p class="pass-description" style="margin-top:10px;color:#ffd166;">${i18n.t('pass.legacy_pass')}</p>` : ''}
     </div>
   `;
+  window.hopeApplyTranslations?.();
 
   const primaryBtn = document.getElementById('flipcards-primary-btn');
   const backBtn = document.getElementById('flipcards-back-btn');
@@ -73,7 +74,7 @@ function renderCard({ hasActivePass, passValidUntil, passCost, requiresRevalidat
   if (primaryBtn) {
     primaryBtn.addEventListener('click', async () => {
       if (hasActivePass) {
-        window.location.href = 'flipcards.html';
+        navigateWithFeedback('flipcards.html', primaryBtn);
         return;
       }
       await purchasePass(primaryBtn);
@@ -82,7 +83,7 @@ function renderCard({ hasActivePass, passValidUntil, passCost, requiresRevalidat
 
   if (backBtn) {
     backBtn.addEventListener('click', () => {
-      window.location.href = 'marketPlace.html';
+      navigateWithFeedback('marketPlace.html', backBtn);
     });
   }
 }
@@ -95,7 +96,7 @@ async function renderPassUI() {
 async function purchasePass(button) {
   const original = button.textContent;
   button.disabled = true;
-  button.textContent = 'Preparing wallet...';
+  button.textContent = i18n.t('pass.preparing_wallet');
   try {
     if (typeof tonConnectUI.restoreConnection === 'function') {
       await tonConnectUI.restoreConnection();
@@ -106,15 +107,15 @@ async function purchasePass(button) {
     if (!tonConnectUI.wallet) {
       await tonConnectUI.openModal();
     }
-    if (!tonConnectUI.wallet) throw new Error('Please connect your TON wallet first');
+    if (!tonConnectUI.wallet) throw new Error(i18n.t('pass.wallet_required'));
 
-    button.textContent = 'Waiting for payment...';
+    button.textContent = i18n.t('pass.waiting_payment');
     const priceRes = await fetch(`/api/tonAmount/ton-amount?usd=${currentPassUsd}`, { credentials: 'include' });
     const priceData = await priceRes.json();
-    if (!priceRes.ok) throw new Error(priceData.error || 'Failed to get TON amount');
+    if (!priceRes.ok) throw new Error(priceData.error || i18n.t('pass.ton_amount_failed'));
 
     const { tonAmount, recipientAddress } = priceData;
-    if (!recipientAddress) throw new Error('Payment recipient is not configured');
+    if (!recipientAddress) throw new Error(i18n.t('pass.recipient_not_configured'));
 
     const tx = await tonConnectUI.sendTransaction({
       validUntil: Math.floor(Date.now() / 1000) + 300,
@@ -128,7 +129,7 @@ async function purchasePass(button) {
 
     const txHash = tx?.transaction?.hash || tx?.txid?.hash || tx?.hash || '';
     const txBoc = tx?.boc || '';
-    if (!txHash && !txBoc) throw new Error('Transaction proof missing');
+    if (!txHash && !txBoc) throw new Error(i18n.t('pass.tx_proof_missing'));
 
     const purchaseRes = await fetch('/api/games/flipcards/purchase', {
       method: 'POST',
@@ -137,13 +138,13 @@ async function purchasePass(button) {
       body: JSON.stringify({ txHash, txBoc })
     });
     const purchaseData = await purchaseRes.json();
-    if (!purchaseRes.ok) throw new Error(purchaseData.error || 'Purchase verification failed');
+    if (!purchaseRes.ok) throw new Error(purchaseData.error || i18n.t('pass.verification_failed'));
 
-    showNotification('Pass purchased successfully', 'success');
-    window.location.href = 'flipcards.html';
+    showNotification(i18n.t('pass.purchased_success'), 'success');
+    navigateWithFeedback('flipcards.html', button);
   } catch (err) {
     console.error('Flipcards pass purchase failed:', err);
-    showNotification(err.message || 'Pass purchase failed', 'error');
+    showNotification(err.message || i18n.t('pass.purchase_failed'), 'error');
     button.disabled = false;
     button.textContent = original;
   }

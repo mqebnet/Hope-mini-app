@@ -1,5 +1,7 @@
 import { fetchUserData, updateTopBar, getCachedUser, setCachedUser } from './userData.js';
 import { tonConnectUI } from './tonconnect.js';
+import { i18n } from './i18n.js';
+import { navigateWithFeedback } from './utils.js';
 
 const BOX_PRICE_USD = 0.15;
 const BOX_ORDER = ['bronze', 'silver', 'gold'];
@@ -39,7 +41,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateTopBar(user);
   } catch (err) {
     console.error('Failed to load mystery box page:', err);
-    showNotification('Session not ready. Please reopen the mini app.', 'error');
+    showNotification(i18n.t('mysteryBox.session_not_ready'), 'error');
     return;
   }
 
@@ -49,7 +51,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 function initMysteryBoxUI() {
   if (backBtn) {
     backBtn.addEventListener('click', () => {
-      window.location.href = 'marketPlace.html';
+      navigateWithFeedback('marketPlace.html', backBtn);
     });
   }
 
@@ -66,9 +68,9 @@ function initMysteryBoxUI() {
         await purchaseMysteryBox();
         return;
       }
-      showNotification('All 3 rounds complete for today. Come back tomorrow!', 'info');
+      showNotification(i18n.t('marketplace.come_back_tomorrow'), 'info');
     } catch (err) {
-      showNotification(err.message || 'Mystery box action failed', 'error');
+      showNotification(err.message || i18n.t('marketplace.mystery_action_failed'), 'error');
     } finally {
       mysteryBtn.disabled = false;
       await refreshMysteryStatus();
@@ -79,7 +81,7 @@ function initMysteryBoxUI() {
 async function fetchMysteryStatus() {
   const res = await fetch('/api/mysteryBox/status', { credentials: 'include', cache: 'no-store' });
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Failed to load mystery box status');
+  if (!res.ok) throw new Error(data.error || i18n.t('marketplace.status_failed'));
   return data;
 }
 
@@ -96,10 +98,10 @@ function renderMysteryStatus(status) {
   const roundBoxes = status.roundBoxes || [];
 
   mysteryBtn.textContent = activeBox
-    ? `Open ${activeBox.boxType.toUpperCase()} Box`
+    ? i18n.format('marketplace.open_box', { box: activeBox.boxType.toUpperCase() })
     : nextBox
-      ? `Get ${nextBox.toUpperCase()} Box`
-      : 'Daily Limit Reached';
+      ? i18n.format('marketplace.get_box_typed', { box: nextBox.toUpperCase() })
+      : i18n.t('marketplace.daily_limit_reached');
 
   mysteryBtn.disabled = !activeBox && !nextBox;
   mysteryBtn.classList.remove('buy-ready', 'open-ready');
@@ -108,14 +110,19 @@ function renderMysteryStatus(status) {
 
   const allDone = purchasedToday >= limit;
   const progressLabel = allDone
-    ? `All ${totalRounds} rounds complete for today`
-    : `Round ${currentRound}/${totalRounds} - ${purchasedToday}/${limit} boxes today`;
+    ? i18n.format('marketplace.all_rounds_complete', { total: totalRounds })
+    : i18n.format('marketplace.rounds_progress', {
+        current: currentRound,
+        total: totalRounds,
+        count: purchasedToday,
+        limit
+      });
 
   const nextLabel = activeBox
-    ? `Ready to open: ${activeBox.boxType.toUpperCase()}`
+    ? i18n.format('marketplace.ready_to_open', { box: activeBox.boxType.toUpperCase() })
     : nextBox
-      ? `Next: ${nextBox.toUpperCase()} box`
-      : 'Come back tomorrow!';
+      ? i18n.format('marketplace.next_box', { box: nextBox.toUpperCase() })
+      : i18n.t('marketplace.come_back_tomorrow');
 
   mysteryInfo.innerHTML = `
     <p>${progressLabel}</p>
@@ -128,8 +135,8 @@ function renderMysteryStatus(status) {
     const roundBadge = document.createElement('div');
     roundBadge.className = 'round-badge';
     roundBadge.textContent = allDone
-      ? `All ${totalRounds} rounds done`
-      : `Round ${currentRound} / ${totalRounds}`;
+      ? i18n.format('marketplace.rounds_done', { total: totalRounds })
+      : i18n.format('marketplace.round_badge', { current: currentRound, total: totalRounds });
     mysteryTrack.appendChild(roundBadge);
 
     BOX_ORDER.forEach((boxType, i) => {
@@ -160,14 +167,14 @@ async function purchaseMysteryBox() {
   if (!tonConnectUI.wallet && typeof tonConnectUI.openModal === 'function') {
     await tonConnectUI.openModal();
   }
-  if (!tonConnectUI.wallet) throw new Error('Please connect your wallet first');
+  if (!tonConnectUI.wallet) throw new Error(i18n.t('marketplace.wallet_required'));
 
   const amountRes = await fetch(`/api/tonAmount/ton-amount?usd=${BOX_PRICE_USD}`, { credentials: 'include' });
   const amountData = await amountRes.json();
-  if (!amountRes.ok) throw new Error(amountData.error || 'Failed to get TON amount');
+  if (!amountRes.ok) throw new Error(amountData.error || i18n.t('marketplace.ton_amount_failed'));
 
   const { tonAmount, recipientAddress } = amountData;
-  if (!recipientAddress) throw new Error('Payment recipient not configured');
+  if (!recipientAddress) throw new Error(i18n.t('marketplace.recipient_not_configured'));
 
   const tx = await tonConnectUI.sendTransaction({
     validUntil: Math.floor(Date.now() / 1000) + 300,
@@ -176,7 +183,7 @@ async function purchaseMysteryBox() {
 
   const txHash = tx?.transaction?.hash || tx?.txid?.hash || tx?.hash || '';
   const txBoc = tx?.boc || '';
-  if (!txHash && !txBoc) throw new Error('Transaction proof missing');
+  if (!txHash && !txBoc) throw new Error(i18n.t('marketplace.tx_proof_missing'));
 
   const purchaseRes = await fetch('/api/mysteryBox/purchase', {
     method: 'POST',
@@ -185,9 +192,9 @@ async function purchaseMysteryBox() {
     body: JSON.stringify({ txHash, txBoc })
   });
   const data = await purchaseRes.json();
-  if (!purchaseRes.ok) throw new Error(data.error || 'Purchase failed');
+  if (!purchaseRes.ok) throw new Error(data.error || i18n.t('marketplace.purchase_failed'));
 
-  showNotification(`${data.boxType.toUpperCase()} box purchased`, 'success');
+  showNotification(i18n.format('marketplace.box_purchased', { box: data.boxType.toUpperCase() }), 'success');
   await refreshMysteryStatus();
 }
 
@@ -198,7 +205,7 @@ async function openMysteryBox() {
     headers: { 'Content-Type': 'application/json' }
   });
   const data = await openRes.json();
-  if (!openRes.ok) throw new Error(data.error || 'Failed to open box');
+  if (!openRes.ok) throw new Error(data.error || i18n.t('marketplace.open_failed'));
 
   const reward = data.reward || boxRewards[data.boxType] || {};
   if (typeof window.fireConfetti === 'function') {
@@ -206,9 +213,11 @@ async function openMysteryBox() {
   }
 
   if (typeof window.showRewardPopup === 'function') {
-    window.showRewardPopup(reward, { title: `${String(data.boxType || '').toUpperCase()} Box Reward` });
+    window.showRewardPopup(reward, {
+      title: i18n.format('marketplace.box_reward_title', { box: String(data.boxType || '').toUpperCase() })
+    });
   } else {
-    showNotification('Box opened! Rewards added.', 'success');
+    showNotification(i18n.t('marketplace.box_opened'), 'success');
   }
 
   if (data.user) {

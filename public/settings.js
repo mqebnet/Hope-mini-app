@@ -11,12 +11,8 @@ function closeSettings() {
 }
 
 function applyTranslations() {
-  document.querySelectorAll('[data-i18n]').forEach(el => {
-    const key = el.getAttribute('data-i18n');
-    el.textContent = i18n.t(key);
-  });
-
-  document.documentElement.dir = i18n.direction;
+  i18n.applyTranslations(document);
+  window.dispatchEvent(new CustomEvent('hope:languageChanged', { detail: { lang: i18n.currentLang } }));
 }
 
 document.addEventListener('DOMContentLoaded', () => {

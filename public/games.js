@@ -3,6 +3,9 @@
  * New games become visible automatically once registered server-side.
  */
 
+import { i18n } from './i18n.js';
+import { navigateWithFeedback } from './utils.js';
+
 const FALLBACK_GAMES = [
   {
     id: 'mystery-box',
@@ -18,16 +21,36 @@ const FALLBACK_GAMES = [
   }
 ];
 
+function localizeFallbackGames() {
+  return FALLBACK_GAMES.map((game) => {
+    if (game.id === 'mystery-box') {
+      return {
+        ...game,
+        name: i18n.t('games.mystery_box_name'),
+        description: i18n.t('games.mystery_box_desc')
+      };
+    }
+    if (game.id === 'flipcards') {
+      return {
+        ...game,
+        name: i18n.t('games.flipcards_name'),
+        description: i18n.t('games.flipcards_desc')
+      };
+    }
+    return game;
+  });
+}
+
 export async function loadGamesCatalog() {
   try {
     const res = await fetch('/api/games/catalog', { credentials: 'include', cache: 'no-store' });
     const data = await res.json();
     if (!res.ok || !Array.isArray(data?.games)) {
-      return FALLBACK_GAMES;
+      return localizeFallbackGames();
     }
     return data.games;
   } catch (_) {
-    return FALLBACK_GAMES;
+    return localizeFallbackGames();
   }
 }
 
@@ -49,33 +72,34 @@ export async function renderGamesGrid(containerId = 'games-grid') {
         <h3 class="game-name">${game.name || game.id}</h3>
         <p class="game-description">${game.description || ''}</p>
         <button class="btn-play" data-game-id="${game.id}">
-          <span>Play</span>
+          <span>${i18n.t('games.play')}</span>
           <span class="arrow">→</span>
         </button>
       </div>
     `;
 
     const playBtn = card.querySelector('.btn-play');
-    playBtn?.addEventListener('click', () => openGame(game.id));
+    playBtn?.addEventListener('click', () => openGame(game.id, playBtn));
     container.appendChild(card);
   });
+  window.hopeApplyTranslations?.();
 }
 
-export function openGame(gameId) {
+export function openGame(gameId, trigger = null) {
   if (gameId === 'mystery-box') {
-    window.location.href = 'mysteryBox.html';
+    navigateWithFeedback('mysteryBox.html', trigger);
     return;
   }
 
   if (gameId === 'flipcards') {
-    window.location.href = 'flipcardsPass.html';
+    navigateWithFeedback('flipcardsPass.html', trigger);
     return;
   }
 
   if (typeof window.showWarningToast === 'function') {
-    window.showWarningToast('This game is coming soon.');
+    window.showWarningToast(i18n.t('games.coming_soon'));
   } else {
-    alert('This game is coming soon.');
+    alert(i18n.t('games.coming_soon'));
   }
 }
 

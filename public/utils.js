@@ -94,3 +94,144 @@ export function canBootstrap(lockName) {
 export function releaseBootstrapLock(lockName) {
   bootstrapLocks.delete(lockName);
 }
+
+let navigationInFlight = false;
+let navigationFeedbackBound = false;
+
+export function setButtonLoading(button, options = {}) {
+  if (!button) return null;
+
+  const {
+    text = null,
+    lockWidth = true
+  } = options;
+
+  const state = {
+    disabled: 'disabled' in button ? Boolean(button.disabled) : null,
+    minWidth: button.style?.minWidth || '',
+    textContent: text !== null ? button.textContent : null
+  };
+
+  if (lockWidth && typeof button.getBoundingClientRect === 'function' && button.style) {
+    const width = button.getBoundingClientRect().width;
+    if (width > 0) {
+      button.style.minWidth = `${Math.ceil(width)}px`;
+    }
+  }
+
+  button.classList?.add('is-loading');
+  button.setAttribute?.('aria-busy', 'true');
+
+  if ('disabled' in button) {
+    button.disabled = true;
+  } else if (button.style) {
+    button.style.pointerEvents = 'none';
+  }
+
+  if (text !== null) {
+    button.textContent = text;
+  }
+
+  return state;
+}
+
+export function clearButtonLoading(button, state = null) {
+  if (!button) return;
+
+  button.classList?.remove('is-loading');
+  button.removeAttribute?.('aria-busy');
+
+  if (state?.disabled !== null && 'disabled' in button) {
+    button.disabled = state.disabled;
+  } else if (!('disabled' in button) && button.style) {
+    button.style.pointerEvents = '';
+  }
+
+  if (state?.textContent !== null) {
+    button.textContent = state.textContent;
+  }
+
+  if (button.style) {
+    button.style.minWidth = state?.minWidth || '';
+  }
+}
+
+function resolveNavigationHref(target) {
+  if (!target || typeof window === 'undefined') return '';
+
+  try {
+    return new URL(String(target), window.location.href).href;
+  } catch (_) {
+    return '';
+  }
+}
+
+export function navigateWithFeedback(target, trigger = null, options = {}) {
+  const href = resolveNavigationHref(target);
+  if (!href || typeof window === 'undefined') return false;
+
+  const currentHref = window.location.href;
+  const reloadIfSame = Boolean(options.reloadIfSame);
+  if (href === currentHref && !reloadIfSame) return false;
+  if (navigationInFlight) return false;
+
+  navigationInFlight = true;
+  document.body?.classList.add('page-transitioning');
+  if (trigger) {
+    setButtonLoading(trigger, options.button || {});
+  }
+
+  const replace = Boolean(options.replace);
+  const navigate = () => {
+    if (replace) {
+      window.location.replace(href);
+      return;
+    }
+    window.location.href = href;
+  };
+
+  requestAnimationFrame(() => {
+    window.setTimeout(navigate, options.delayMs ?? 70);
+  });
+
+  return true;
+}
+
+function shouldHandleNavigationClick(event, element) {
+  if (!element) return false;
+  if (event.defaultPrevented) return false;
+  if (event.button !== 0) return false;
+  if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return false;
+  if (element.hasAttribute('download')) return false;
+
+  const href = element.getAttribute('data-loading-href') || element.getAttribute('href');
+  if (!href || href.startsWith('#')) return false;
+
+  try {
+    const resolved = new URL(href, window.location.href);
+    if (resolved.origin !== window.location.origin) return false;
+    const reloadIfSame = element.hasAttribute('data-loading-reload');
+    if (resolved.href === window.location.href && !reloadIfSame) return false;
+  } catch (_) {
+    return false;
+  }
+
+  return true;
+}
+
+export function wireNavigationFeedback(root = document) {
+  if (!root || navigationFeedbackBound) return;
+  navigationFeedbackBound = true;
+
+  root.addEventListener('click', (event) => {
+    const trigger = event.target.closest?.('a.nav-btn[href], a[data-loading-nav][href], button[data-loading-href], a[data-loading-href]');
+    if (!shouldHandleNavigationClick(event, trigger)) return;
+
+    event.preventDefault();
+    const target = trigger.getAttribute('data-loading-href') || trigger.getAttribute('href');
+    navigateWithFeedback(target, trigger, {
+      replace: trigger.hasAttribute('data-loading-replace'),
+      reloadIfSame: trigger.hasAttribute('data-loading-reload')
+    });
+  });
+}

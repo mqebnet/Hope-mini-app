@@ -3,6 +3,7 @@ const router = express.Router();
 const { Address } = require('@ton/core');
 const User = require('../models/User');
 const CompletedTask = require('../models/CompletedTask');
+const DailyTaskCompletion = require('../models/DailyTaskCompletion');
 const { getNextLevelThreshold, getUserLevel } = require('../utils/levelUtil');
 const {
   normalizeStreakIfMissed,
@@ -28,8 +29,10 @@ function invalidateUserCache(telegramId) {
 router.get('/me', async (req, res) => {
   try {
     const telegramId = req.user.telegramId;
+    const forceRefresh = String(req.query?.force || '').toLowerCase() === '1'
+      || String(req.query?.force || '').toLowerCase() === 'true';
     const cached = userDataCache.get(telegramId);
-    if (cached && Date.now() - cached.ts < USER_CACHE_TTL_MS) {
+    if (!forceRefresh && cached && Date.now() - cached.ts < USER_CACHE_TTL_MS) {
       return res.json(cached.data);
     }
 
@@ -54,13 +57,17 @@ router.get('/me', async (req, res) => {
       await user.save();
       invalidateUserCache(telegramId);
     }
-    const [checkIns, badges, completedTaskDocs] = await Promise.all([
+    const todayDayKey = getCheckInDayKey(now);
+    const [checkIns, badges, completedTaskDocs, completedDailyTaskDocs] = await Promise.all([
       getUserCheckIns(user.telegramId, 120),
       getUserBadges(user.telegramId),
-      CompletedTask.find({ telegramId: user.telegramId }, { taskId: 1, _id: 0 }).lean()
+      CompletedTask.find({ telegramId: user.telegramId }, { taskId: 1, _id: 0 }).lean(),
+      DailyTaskCompletion.find(
+        { telegramId: user.telegramId, dayKey: todayDayKey },
+        { taskId: 1, _id: 0 }
+      ).lean()
     ]);
 
-    const todayDayKey = getCheckInDayKey(now);
     const checkedInToday = checkIns.some((c) => c.dayKey === todayDayKey);
 
     const responseData = {
@@ -81,6 +88,7 @@ router.get('/me', async (req, res) => {
         checkIns,
         badges,
         completedTasks: completedTaskDocs.map((doc) => doc.taskId),
+        completedDailyTasksToday: completedDailyTaskDocs.map((doc) => doc.taskId),
         checkedInToday,
         dailyCheckInResetAtUtc: getNextResetAtUtc(now).toISOString(),
         miningStartedAt: user.miningStartedAt,

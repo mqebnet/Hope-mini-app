@@ -204,6 +204,42 @@ main {
   z-index: 2100;
 }
 
+#wallet-picker {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 10px;
+  width: 220px;
+  background: rgba(5, 12, 22, 0.97);
+  border: 1px solid rgba(0, 255, 170, 0.35);
+  border-radius: 10px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
+  padding: 10px;
+  z-index: 2100;
+}
+
+.wallet-picker-list {
+  display: grid;
+  gap: 8px;
+}
+
+.wallet-picker-btn {
+  width: 100%;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 255, 170, 0.22);
+  background: rgba(0, 255, 170, 0.08);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.wallet-picker-btn:hover {
+  background: rgba(0, 255, 170, 0.16);
+}
+
 .wallet-popover-title {
   margin: 0 0 6px;
   font-size: 12px;
@@ -391,6 +427,11 @@ main {
   height: 24px;
 }
 
+.nav-btn.is-loading {
+  opacity: 0.72;
+  pointer-events: none;
+}
+
 /* Main Content Area */
 main {
   margin-bottom: 80px; /* Avoid content overlap with bottom nav */
@@ -439,6 +480,59 @@ button:active {
 button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+button.is-loading,
+.btn-primary.is-loading,
+.btn-cancel-pass.is-loading,
+.mystery-box-back-button.is-loading,
+.btn-play.is-loading {
+  opacity: 0.78 !important;
+  pointer-events: none;
+}
+
+button.is-loading::after {
+  content: "";
+  display: inline-block;
+  width: 13px;
+  height: 13px;
+  margin-left: 8px;
+  vertical-align: -2px;
+  border-radius: 50%;
+  border: 2px solid rgba(0, 0, 0, 0.25);
+  border-top-color: rgba(0, 0, 0, 0.9);
+  animation: spin 0.8s linear infinite;
+}
+
+body.page-transitioning {
+  cursor: progress;
+}
+
+body.page-transitioning::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 4990;
+  pointer-events: auto;
+  background: rgba(3, 9, 18, 0.45);
+}
+
+body.page-transitioning::after {
+  content: "";
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  width: 44px;
+  height: 44px;
+  margin-left: -22px;
+  margin-top: -22px;
+  border-radius: 50%;
+  border: 4px solid rgba(0, 255, 170, 0.25);
+  border-top-color: #00ffaa;
+  box-shadow: 0 0 20px rgba(0, 255, 170, 0.35);
+  z-index: 4991;
+  animation: spin 0.75s linear infinite;
+  pointer-events: none;
 }
 
 /* Auth page */
@@ -570,6 +664,20 @@ button:disabled {
 #farm-btn {
   margin-top: 10px;
 } /* Inherits button styles */
+
+#go-to-weekly-contest {
+  transition: opacity 0.22s ease, filter 0.22s ease, transform 0.2s ease;
+}
+
+#go-to-weekly-contest.weekly-drop-faded {
+  opacity: 0.5;
+  filter: saturate(0.65);
+}
+
+#go-to-weekly-contest.weekly-drop-ready {
+  opacity: 1;
+  filter: saturate(1);
+}
 
 #daily-checkin-modal {
   position: fixed;
@@ -865,26 +973,25 @@ button:disabled {
   border-radius: 14px;
   border: 1px solid rgba(0, 255, 170, 0.28);
   background: linear-gradient(180deg, rgba(8, 44, 54, 0.95), rgba(4, 23, 30, 0.92));
-  color: #ffd84d;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    0 8px 18px rgba(0, 0, 0, 0.28);
-  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+  color: #e8fffb;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  transition: border-color 0.18s ease, background-color 0.18s ease;
 }
 .leaderboard-arrow:hover {
-  transform: translateY(-1px);
-  border-color: rgba(255, 216, 77, 0.52);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.1),
-    0 10px 22px rgba(0, 0, 0, 0.32);
+  transform: none;
+  border-color: rgba(0, 255, 170, 0.5);
+  background: linear-gradient(180deg, rgba(11, 51, 64, 0.97), rgba(4, 23, 30, 0.94));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
+.leaderboard-arrow:focus-visible,
 .leaderboard-arrow:active {
-  transform: translateY(0);
+  transform: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
-.leaderboard-arrow i {
-  width: 28px;
-  height: 28px;
-  stroke-width: 2.7;
+.leaderboard-arrow svg {
+  width: 30px;
+  height: 30px;
+  stroke-width: 3.1;
 }
 #leaderboard-container {
     width: 100%;
@@ -1573,9 +1680,10 @@ input:checked + .slider:before {
     height: 40px;
     border-radius: 12px;
   }
-  .leaderboard-arrow i {
-    width: 24px;
-    height: 24px;
+  .leaderboard-arrow svg {
+    width: 26px;
+    height: 26px;
+    stroke-width: 3.1;
   }
 }
 

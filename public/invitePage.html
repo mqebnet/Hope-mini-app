@@ -18,9 +18,9 @@
   </button>
 
   <div id="user-stats">
-    <p class="tag">Level</p>
+    <p class="tag" data-i18n="topbar.level">Level</p>
     <span id="current-level">-</span>
-    <p class="tag">XP</p>
+    <p class="tag" data-i18n="topbar.xp">XP</p>
     <span id="user-exp">-</span>
   </div>
 
@@ -35,7 +35,7 @@
   <button id="ton-connect-button" aria-label="Connect Wallet"></button>
 </header>
 <div id="display-panel">
-  <p class="tag">Points</p>
+  <p class="tag" data-i18n="topbar.points">Points</p>
   <div id="points-bar">
     <div id="points-progress"></div>
     <span id="points-display">—</span>
@@ -50,57 +50,57 @@
   <div class="invite-box">
     <input id="invite-link" readonly />
     <button id="copy-invite-btn">
-      <i data-lucide="copy"></i> Invite Frens
+      <i data-lucide="copy"></i> <span data-i18n="invite.copy_button">Invite Frens</span>
     </button>
   </div>
 
   <div class="invite-tasks">
     <div class="invite-task" data-target="1">
-      <p>Invite 1 friend</p>
+      <p data-i18n="invite.task_1">Invite 1 friend</p>
       <div class="progress">
         <div class="progress-bar"></div>
         <span class="progress-label">0/1</span>
       </div>
-      <button class="check-button">Check</button>
+      <button class="check-button" data-i18n="invite.check">Check</button>
     </div>
 
     <div class="invite-task" data-target="3">
-      <p>Invite 3 friends</p>
+      <p data-i18n="invite.task_3">Invite 3 friends</p>
       <div class="progress">
         <div class="progress-bar"></div>
         <span class="progress-label">0/3</span>
       </div>
-      <button class="check-button">Check</button>
+      <button class="check-button" data-i18n="invite.check">Check</button>
     </div>
 
     <div class="invite-task" data-target="5">
-      <p>Invite 5 friends</p>
+      <p data-i18n="invite.task_5">Invite 5 friends</p>
       <div class="progress">
         <div class="progress-bar"></div>
         <span class="progress-label">0/5</span>
       </div>
-      <button class="check-button">Check</button>
+      <button class="check-button" data-i18n="invite.check">Check</button>
     </div>
 
     <div class="invite-task" data-target="10">
-      <p>Invite 10 friends</p>
+      <p data-i18n="invite.task_10">Invite 10 friends</p>
       <div class="progress">
         <div class="progress-bar"></div>
         <span class="progress-label">0/10</span>
       </div>
-      <button class="check-button">Check</button>
+      <button class="check-button" data-i18n="invite.check">Check</button>
     </div>
   </div>
 </section>
 
 
 <section class="referral-leaderboard">
-  <h2>Top Referrers</h2>
+  <h2 data-i18n="invite.top_referrers">Top Referrers</h2>
   <div class="referral-board-container">
     <div class="referral-header">
-      <span>Rank</span>
-      <span>User</span>
-      <span>Referrals</span>
+      <span data-i18n="invite.rank">Rank</span>
+      <span data-i18n="invite.user">User</span>
+      <span data-i18n="invite.referrals">Referrals</span>
     </div>
     <div id="referral-leaderboard-list" class="leaderboard-list"></div>
   </div>

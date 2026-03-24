@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hope Universe - Signal Lost</title>
+  <style>
+    :root {
+      --bg0: #020713;
+      --bg1: #03172b;
+      --mint: #00ffaa;
+      --cyan: #00eaff;
+      --text: #e5f7ff;
+      --muted: #9fbaca;
+      --card: rgba(6, 18, 34, 0.84);
+      --border: rgba(0, 255, 170, 0.28);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: 'Poppins', Arial, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 14% 12%, rgba(0, 255, 170, 0.15), transparent 36%),
+        radial-gradient(circle at 84% 8%, rgba(0, 234, 255, 0.14), transparent 34%),
+        linear-gradient(155deg, var(--bg1) 0%, var(--bg0) 65%);
+      display: grid;
+      place-items: center;
+      padding: 20px;
+    }
+
+    .shell {
+      width: min(900px, 96vw);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 22px 18px;
+      background: var(--card);
+      box-shadow: 0 18px 44px rgba(0, 0, 0, 0.45);
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 12px;
+      border-radius: 999px;
+      color: #cbfff2;
+      border: 1px solid rgba(0, 255, 170, 0.4);
+      background: rgba(0, 255, 170, 0.1);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.4px;
+      text-transform: uppercase;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--mint);
+      box-shadow: 0 0 10px rgba(0, 255, 170, 0.8);
+      animation: pulse 1.2s ease-in-out infinite;
+    }
+
+    h1 {
+      margin: 12px 0 8px;
+      line-height: 1.03;
+      font-size: clamp(34px, 7vw, 64px);
+      color: var(--mint);
+      text-shadow: 0 0 20px rgba(0, 255, 170, 0.25);
+    }
+
+    .subtitle {
+      margin: 0;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.6;
+      max-width: 760px;
+    }
+
+    .grid {
+      margin-top: 18px;
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    }
+
+    .card {
+      border: 1px solid rgba(122, 164, 186, 0.26);
+      border-radius: 12px;
+      background: rgba(8, 24, 42, 0.68);
+      padding: 14px 12px;
+    }
+
+    .card h2 {
+      margin: 0 0 6px;
+      color: #b6ffea;
+      font-size: 16px;
+    }
+
+    .card p {
+      margin: 0;
+      color: #b9d7e7;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .actions {
+      margin-top: 18px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      border: none;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 700;
+      text-decoration: none;
+      cursor: pointer;
+      padding: 11px 14px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 132px;
+    }
+
+    .btn-primary {
+      color: #00251b;
+      background: linear-gradient(90deg, var(--mint), var(--cyan));
+    }
+
+    .btn-ghost {
+      color: #d7effa;
+      border: 1px solid rgba(0, 255, 170, 0.35);
+      background: rgba(0, 255, 170, 0.08);
+    }
+
+    .footer {
+      margin-top: 16px;
+      color: #87a7b9;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(0.9); opacity: 0.8; }
+      50% { transform: scale(1.2); opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+  <section class="shell">
+    <div class="badge"><span class="dot"></span> Hope Universe Status</div>
+    <h1>404 - Signal Lost</h1>
+    <p class="subtitle">
+      The page you requested is not available. You may have hit a missing route, temporary maintenance window,
+      or a brief server recovery period.
+    </p>
+
+    <div class="grid">
+      <article class="card">
+        <h2>Route Not Found</h2>
+        <p>The requested path does not exist or was moved.</p>
+      </article>
+      <article class="card">
+        <h2>Maintenance Mode</h2>
+        <p>We may be applying upgrades to improve performance and reliability.</p>
+      </article>
+      <article class="card">
+        <h2>Server Recovery</h2>
+        <p>Short infrastructure downtime can occur during scaling or failover.</p>
+      </article>
+    </div>
+
+    <div class="actions">
+      <a class="btn btn-primary" href="index.html">Go Home</a>
+      <button class="btn btn-ghost" type="button" onclick="window.location.reload()">Retry</button>
+      <a class="btn btn-ghost" href="terms.html">Terms</a>
+      <a class="btn btn-ghost" href="privacy.html">Privacy</a>
+    </div>
+
+    <p class="footer">
+      If this persists, reopen the mini app and try again in a few minutes.
+    </p>
+  </section>
+</body>
+</html>

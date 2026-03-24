@@ -1,6 +1,7 @@
 import { fetchUserData, updateTopBar, getCachedUser } from './userData.js';
 import { tonConnectUI } from './tonconnect.js';
 import { canBootstrap, debounceButton } from './utils.js';
+import { i18n } from './i18n.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
   if (!canBootstrap('weeklydrop')) return;
@@ -22,23 +23,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     const eligData = await eligRes.json();
 
     if (eligData.disabled) {
-      statusEl.textContent = 'Weekly Drop is currently disabled. Check back soon.';
+      statusEl.textContent = i18n.t('weekly.disabled_status');
       return;
     }
 
     if (eligData.alreadyEntered) {
-      statusEl.textContent = `You have already entered ${eligData.currentWeek}. Good luck!`;
+      statusEl.textContent = i18n.format('weekly.already_entered', { week: eligData.currentWeek });
       enterButton.disabled = true;
       return;
     }
 
     if (!eligData.eligible) {
-      statusEl.textContent = eligData.reason || 'You are not eligible to enter.';
+      statusEl.textContent = eligData.reason || i18n.t('weekly.not_eligible');
       return;
     }
 
-    statusEl.textContent =
-      `Eligible for ${eligData.currentWeek} - ${eligData.goldTickets} Gold tickets available.`;
+    statusEl.textContent = i18n.format('weekly.eligible_status', {
+      week: eligData.currentWeek,
+      tickets: eligData.goldTickets
+    });
 
     rulesCheckbox.addEventListener('change', () => {
       enterButton.disabled = !rulesCheckbox.checked;
@@ -48,18 +51,18 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (!debounceButton(enterButton, 3000)) return;
 
       try {
-        statusEl.textContent = 'Getting TON amount...';
+        statusEl.textContent = i18n.t('weekly.getting_ton_amount');
         enterButton.disabled = true;
 
         const priceRes = await fetch('/api/tonAmount/ton-amount?usd=0.5', {
           credentials: 'include'
         });
-        if (!priceRes.ok) throw new Error('Failed to get TON amount');
+        if (!priceRes.ok) throw new Error(i18n.t('weekly.ton_amount_failed'));
         const { tonAmount, recipientAddress } = await priceRes.json();
-        if (!recipientAddress) throw new Error('Payment recipient not configured');
-        if (!tonAmount || tonAmount <= 0) throw new Error('Invalid TON amount');
+        if (!recipientAddress) throw new Error(i18n.t('weekly.recipient_not_configured'));
+        if (!tonAmount || tonAmount <= 0) throw new Error(i18n.t('weekly.invalid_ton_amount'));
 
-        statusEl.textContent = 'Waiting for wallet confirmation...';
+        statusEl.textContent = i18n.t('weekly.waiting_wallet');
 
         const tx = await tonConnectUI.sendTransaction({
           validUntil: Math.floor(Date.now() / 1000) + 300,
@@ -76,10 +79,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         const txBoc = tx?.boc || '';
 
         if (!txHash && !txBoc) {
-          throw new Error('Transaction proof missing - please try again');
+          throw new Error(i18n.t('weekly.tx_proof_missing'));
         }
 
-        statusEl.textContent = 'Verifying payment on-chain... please wait';
+        statusEl.textContent = i18n.t('weekly.verifying_payment');
 
         const res = await fetch('/api/weeklyDrop/enter', {
           method: 'POST',
@@ -89,20 +92,23 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
 
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Entry failed');
+        if (!res.ok) throw new Error(data.error || i18n.t('weekly.entry_failed_generic'));
 
-        statusEl.textContent =
-          `Entered ${data.week}! ${data.message} Gold tickets remaining: ${data.goldTickets}`;
+        statusEl.textContent = i18n.format('weekly.entry_success', {
+          week: data.week,
+          message: data.message,
+          tickets: data.goldTickets
+        });
         enterButton.disabled = true;
         rulesCheckbox.disabled = true;
       } catch (err) {
         console.error('Weekly drop entry error:', err);
         enterButton.disabled = !rulesCheckbox.checked;
-        statusEl.textContent = `Entry failed: ${err.message}`;
+        statusEl.textContent = i18n.format('weekly.entry_failed', { error: err.message });
       }
     });
   } catch (err) {
     console.error(err);
-    statusEl.textContent = 'Unable to load eligibility. Please reopen the app.';
+    statusEl.textContent = i18n.t('weekly.load_failed');
   }
 });

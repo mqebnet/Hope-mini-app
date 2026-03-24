@@ -30,10 +30,10 @@
   </button>
 
   <div id="user-stats">
-    <p class="tag">Level</p>
+    <p class="tag" data-i18n="topbar.level">Level</p>
     <span id="current-level">—</span>
 
-    <p class="tag">XP</p>
+    <p class="tag" data-i18n="topbar.xp">XP</p>
     <span id="user-exp">—</span>
   </div>
 
@@ -50,7 +50,7 @@
 </header>
 
 <div id="display-panel">
-  <p class="tag">Points</p>
+  <p class="tag" data-i18n="topbar.points">Points</p>
 
   <div id="points-bar">
     <div id="points-progress"></div>
@@ -97,8 +97,8 @@
   <!-- Main Content: Home -->
   <main id="main-content">
   <section id="home-content">
-    <button id="go-to-weekly-contest" data-i18n="home.weekly_contest" disabled>
-  <i data-lucide="award"></i> Weekly Contest
+    <button id="go-to-weekly-contest" disabled>
+  <i data-lucide="award"></i> <span data-i18n="home.weekly_contest">Weekly Contest</span>
 </button>
 
 
@@ -117,7 +117,7 @@
       <div id="mining-progress"></div>
     </div>
 
-    <button id="farm-btn">Start</button>
+    <button id="farm-btn" data-i18n="home.start_mining">Start Mining</button>
   </section>
 </main>
 
@@ -129,9 +129,9 @@
       <div id="daily-checkin-streak-text" class="daily-checkin-streak-text">Current streak: 0 days</div>
       <div id="daily-checkin-calendar" class="daily-checkin-calendar"></div>
       <div class="daily-checkin-legend">
-        <span><i class="legend-dot checked"></i> Checked</span>
-        <span><i class="legend-dot missed"></i> Missed</span>
-        <span><i class="legend-dot available"></i> Today</span>
+        <span><i class="legend-dot checked"></i> <span data-i18n="checkin.checked">Checked</span></span>
+        <span><i class="legend-dot missed"></i> <span data-i18n="checkin.missed">Missed</span></span>
+        <span><i class="legend-dot available"></i> <span data-i18n="checkin.today">Today</span></span>
       </div>
       <button id="daily-checkin-modal-btn" class="daily-checkin-action" data-i18n="checkin.btn">Check In</button>
     </div>

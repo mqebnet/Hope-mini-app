@@ -190,10 +190,11 @@ router.post('/telegram', async (req, res) => {
     const isAdmin = getAdminIds().has(telegramId);
 
     let user = await User.findOne({ telegramId });
+    const normalizedUsername = username || `user_${telegramId}`;
     if (!user) {
       user = new User({
         telegramId,
-        username,
+        username: normalizedUsername,
         isAdmin,
         points: 0,
         xp: 0,
@@ -209,15 +210,28 @@ router.post('/telegram', async (req, res) => {
     } else if (!user.inviteCode) {
       // retroactively fill missing codes for existing accounts
       user.inviteCode = await generateUniqueInviteCode();
+      if (!user.username || !String(user.username).trim()) {
+        user.username = normalizedUsername;
+      }
+      await user.save();
+    } else if (!user.username || !String(user.username).trim()) {
+      user.username = normalizedUsername;
       await user.save();
     } else if (user.isAdmin !== isAdmin) {
       user.isAdmin = isAdmin;
       await user.save();
     }
 
+    let welcomeBonus = false;
+    let bonusAmount = 0;
+
     // Apply referral attribution whenever user has no inviter yet and deep-link param exists.
     if (!user.invitedBy && startParam) {
       const referralResult = await applyReferralAttribution(user, startParam);
+      if (referralResult?.applied) {
+        welcomeBonus = true;
+        bonusAmount = 100;
+      }
       if (process.env.NODE_ENV !== 'production') {
         console.log('Referral attribution result:', {
           startParam,
@@ -255,6 +269,8 @@ router.post('/telegram', async (req, res) => {
 
     res.json({
       success: true,
+      welcomeBonus,
+      bonusAmount,
       user: {
         id: user.telegramId,
         username: user.username,

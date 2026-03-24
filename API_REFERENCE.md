@@ -239,7 +239,7 @@ proof: <image file>
 
 ---
 
-## Referral Routes (`/api/invite`, `/api/referral`)
+## Referral Routes (`/api/invite`)
 
 ### GET `/api/invite/link`
 Get user's personal invite link.

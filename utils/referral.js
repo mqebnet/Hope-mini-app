@@ -1,9 +1,11 @@
 const User = require('../models/User');
 const Referral = require('../models/Referral');
-const { getUserLevel } = require('./levelUtil');
+const { getUserLevel, getNextLevelThreshold } = require('./levelUtil');
 const stateEmitter = require('./stateEmitter');
 
 const INVITE_JOIN_BONUS_POINTS = 100;
+const INVITER_AUTO_REWARD_POINTS = 50;
+const MIN_TELEGRAM_ID_DIGITS = 9;
 
 function parseInviteCandidates(startParam) {
   if (!startParam || typeof startParam !== 'string') return [];
@@ -17,7 +19,7 @@ function parseInviteCandidates(startParam) {
   for (const part of parts) candidates.add(part);
 
   // If token starts with numeric inviter id and has suffix, preserve id candidate.
-  const leadingNumeric = raw.match(/^(\d{5,})/);
+  const leadingNumeric = raw.match(new RegExp(`^(\\d{${MIN_TELEGRAM_ID_DIGITS},})`));
   if (leadingNumeric?.[1]) candidates.add(leadingNumeric[1]);
 
   return Array.from(candidates);
@@ -33,6 +35,7 @@ async function resolveInviterFromStartParam(startParam, currentTelegramId) {
   // 2) Fallback to numeric telegramId matches
   if (!inviter) {
     const numericCandidates = candidates
+      .filter((v) => new RegExp(`^\\d{${MIN_TELEGRAM_ID_DIGITS},}$`).test(String(v)))
       .map((v) => Number(v))
       .filter((v) => Number.isFinite(v));
     if (numericCandidates.length) {
@@ -70,31 +73,37 @@ async function applyReferralAttribution(user, startParam) {
   const inserted = Number(referralResult?.upsertedCount || 0) > 0;
 
   if (inserted) {
-    await User.updateOne(
-      { telegramId: inviter.telegramId },
-      { $inc: { invitedCount: 1 } }
-    );
+    inviter.invitedCount = (inviter.invitedCount || 0) + 1;
+    inviter.points = (inviter.points || 0) + INVITER_AUTO_REWARD_POINTS;
+    inviter.level = getUserLevel(inviter.points);
+    await inviter.save();
 
-    const nextInvitedCount = (inviter.invitedCount || 0) + 1;
     stateEmitter.emit('user:updated', {
       telegramId: inviter.telegramId,
       points: inviter.points,
       xp: inviter.xp,
       level: inviter.level,
-      nextLevelAt: inviter.nextLevelAt,
+      nextLevelAt: getNextLevelThreshold(inviter.points || 0),
       bronzeTickets: inviter.bronzeTickets || 0,
       silverTickets: inviter.silverTickets || 0,
       goldTickets: inviter.goldTickets || 0,
       streak: inviter.streak || 0,
       miningStartedAt: inviter.miningStartedAt,
-      invitedCount: nextInvitedCount
+      invitedCount: inviter.invitedCount || 0
+    });
+
+    stateEmitter.emitGlobalEvent('referral_joined', {
+      targetTelegramId: inviter.telegramId,
+      invitedUsername: user.username || null,
+      rewardPoints: INVITER_AUTO_REWARD_POINTS
     });
   }
 
   return {
     applied: true,
     inviterTelegramId: inviter.telegramId,
-    inviterUpdated: inserted ? 1 : 0
+    inviterUpdated: inserted ? 1 : 0,
+    inviterRewardPoints: inserted ? INVITER_AUTO_REWARD_POINTS : 0
   };
 }
 

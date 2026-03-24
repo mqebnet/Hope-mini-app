@@ -10,8 +10,9 @@
  * - Responsive mobile design
  */
 
-import { debounceButton } from './utils.js';
+import { debounceButton, navigateWithFeedback } from './utils.js';
 import { updateTopBar, getCachedUser, setCachedUser } from './userData.js';
+import { i18n } from './i18n.js';
 const FLIPCARDS_PASS_USD = 0.55;
 
 export class FlipCardsGame {
@@ -49,12 +50,12 @@ export class FlipCardsGame {
       
       // Check if daily pass is required (402 status from backend)
       if (response.status === 402) {
-        window.location.href = 'flipcardsPass.html';
+        navigateWithFeedback('flipcardsPass.html');
         return { success: false };
       }
 
       if (!data.success) {
-        throw new Error(data.error || 'Failed to start game');
+        throw new Error(data.error || i18n.t('flipcards.move_failed'));
       }
 
       this.gameSessionId = data.gameSessionId;
@@ -75,7 +76,7 @@ export class FlipCardsGame {
       return { success: true, gameSessionId: this.gameSessionId };
     } catch (err) {
       console.error('Failed to start game:', err);
-      this.showNotification(err.message || 'Failed to start game', 'error');
+      this.showNotification(err.message || i18n.t('flipcards.move_failed'), 'error');
       return { success: false };
     }
   }
@@ -95,47 +96,48 @@ export class FlipCardsGame {
     passScreen.innerHTML = `
       <div class="pass-card">
         <div class="pass-icon">🎫</div>
-        <h2>Daily Pass Required</h2>
-        <p class="pass-description">Unlock unlimited Flip Cards gameplay for 24 hours</p>
+        <h2>${i18n.t('flipcards.daily_pass_required')}</h2>
+        <p class="pass-description">${i18n.t('flipcards.pass_unlock_desc')}</p>
         
         <div class="pass-features">
           <div class="feature">
             <span class="feature-icon">♾️</span>
-            <span>Play unlimited games</span>
+            <span>${i18n.t('flipcards.unlimited_games')}</span>
           </div>
           <div class="feature">
             <span class="feature-icon">⏰</span>
-            <span>Valid for 24 hours</span>
+            <span>${i18n.t('flipcards.valid_24_hours')}</span>
           </div>
           <div class="feature">
             <span class="feature-icon">⭐</span>
-            <span>Earn full rewards</span>
+            <span>${i18n.t('flipcards.earn_full_rewards')}</span>
           </div>
         </div>
 
         <div class="pass-price">
-          <span class="price-label">Daily Pass</span>
+          <span class="price-label">${i18n.t('flipcards.daily_pass')}</span>
           <span class="price-amount">$${FLIPCARDS_PASS_USD.toFixed(2)}</span>
         </div>
 
         <button class="btn-purchase-pass" onclick="window.flipCardsGame.purchasePass()">
-          Purchase Daily Pass
+          ${i18n.t('flipcards.purchase_daily_pass')}
         </button>
 
-        <button class="btn-cancel-pass" onclick="window.location.href='flipcards.html'">
-          Back to Games
+        <button class="btn-cancel-pass" data-loading-href="flipcards.html" data-loading-reload>
+          ${i18n.t('flipcards.back_to_games')}
         </button>
       </div>
     `;
 
     gameContainer.appendChild(passScreen);
+    window.hopeApplyTranslations?.();
   }
 
   /**
    * Purchase daily pass
    */
   async purchasePass() {
-    window.location.href = 'flipcardsPass.html';
+    navigateWithFeedback('flipcardsPass.html');
   }
 
   /**
@@ -244,7 +246,7 @@ export class FlipCardsGame {
 
       const data = await response.json();
       if (!data.success) {
-        throw new Error(data.error || 'Move failed');
+        throw new Error(data.error || i18n.t('flipcards.move_failed'));
       }
 
       // Check if matched
@@ -267,7 +269,7 @@ export class FlipCardsGame {
         });
 
         // Success animation
-        this.showNotification('✓ Match! 🎉', 'success');
+        this.showNotification(i18n.t('flipcards.match_success'), 'success');
       } else {
         // No match - flip back after a delay
         await new Promise((resolve) => setTimeout(resolve, 800));
@@ -294,7 +296,7 @@ export class FlipCardsGame {
         if (cardEl) cardEl.classList.remove('flipped');
       });
       this.flippedCards = [];
-      this.showNotification(err.message || 'Move failed', 'error');
+      this.showNotification(err.message || i18n.t('flipcards.move_failed'), 'error');
     } finally {
       this.isProcessing = false;
     }
@@ -340,7 +342,7 @@ export class FlipCardsGame {
       console.error('Failed to abandon game:', err);
     }
 
-    this.showGameOverScreen('Time\'s Up!', 'Game Over', false);
+    this.showGameOverScreen(i18n.t('flipcards.time_up'), i18n.t('flipcards.game_over'), false);
   }
 
   /**
@@ -360,7 +362,7 @@ export class FlipCardsGame {
 
       const data = await response.json();
       if (!data.success) {
-        throw new Error(data.error || 'Failed to claim reward');
+        throw new Error(data.error || i18n.t('flipcards.failed_claim_reward'));
       }
 
       if (data.newStats) {
@@ -373,7 +375,7 @@ export class FlipCardsGame {
       this.showRewardScreen(data.reward, data.stats, data.newStats);
     } catch (err) {
       console.error('Failed to complete game:', err);
-      this.showGameOverScreen('Error', err.message, false);
+      this.showGameOverScreen(i18n.t('common.error'), err.message, false);
     }
   }
 
@@ -400,53 +402,54 @@ export class FlipCardsGame {
     modal.className = 'reward-modal';
     modal.innerHTML = `
       <div class="reward-content">
-        <h2>🎉 Game Complete!</h2>
+        <h2>🎉 ${i18n.t('flipcards.game_complete')}</h2>
         
         <div class="game-stats">
           <div class="stat">
-            <span class="stat-label">Moves Made:</span>
+            <span class="stat-label">${i18n.t('flipcards.moves_made')}</span>
             <span class="stat-value">${safeStats.moves}</span>
           </div>
           <div class="stat">
-            <span class="stat-label">Time Used:</span>
+            <span class="stat-label">${i18n.t('flipcards.time_used')}</span>
             <span class="stat-value">${this.formatTime(safeStats.time)}</span>
           </div>
         </div>
 
         <div class="rewards-earned">
-          <h3>Rewards Earned</h3>
+          <h3>${i18n.t('flipcards.rewards_earned')}</h3>
           <div class="reward-item">
-            <span>⭐ Points</span>
+            <span>⭐ ${i18n.t('flipcards.points_label')}</span>
             <span class="reward-amount">+${safeReward.points}</span>
           </div>
           <div class="reward-item">
-            <span>✨ XP</span>
+            <span>✨ ${i18n.t('flipcards.xp_label')}</span>
             <span class="reward-amount">+${safeReward.xp}</span>
           </div>
           ${safeReward.bronzeTickets > 0 ? `
             <div class="reward-item">
-              <span>🎫 Bronze Tickets</span>
+              <span>🎫 ${i18n.t('flipcards.bronze_tickets')}</span>
               <span class="reward-amount">+${safeReward.bronzeTickets}</span>
             </div>
           ` : ''}
           ${safeReward.silverTickets > 0 ? `
             <div class="reward-item">
-              <span>🥈 Silver Tickets</span>
+              <span>🥈 ${i18n.t('flipcards.silver_tickets')}</span>
               <span class="reward-amount">+${safeReward.silverTickets}</span>
             </div>
           ` : ''}
         </div>
 
         <div class="new-stats">
-          <p><strong>Total Points:</strong> ${safeNewStats.points}</p>
-          <p><strong>Level:</strong> ${safeNewStats.level}</p>
+          <p><strong>${i18n.t('flipcards.total_points')}</strong> ${safeNewStats.points}</p>
+          <p><strong>${i18n.t('flipcards.level_label')}</strong> ${safeNewStats.level}</p>
         </div>
 
-        <button class="btn-primary" onclick="window.location.href='flipcards.html'">Back to Games</button>
+        <button class="btn-primary" data-loading-href="flipcards.html" data-loading-reload>${i18n.t('flipcards.back_to_games')}</button>
       </div>
     `;
 
     document.body.appendChild(modal);
+    window.hopeApplyTranslations?.();
   }
 
   /**
@@ -459,11 +462,12 @@ export class FlipCardsGame {
       <div class="reward-content">
         <h2>${isVictory ? '🎉' : '😞'} ${title}</h2>
         <p>${message}</p>
-        <button class="btn-primary" onclick="window.location.href='flipcards.html'">Back to Games</button>
+        <button class="btn-primary" data-loading-href="flipcards.html" data-loading-reload>${i18n.t('flipcards.back_to_games')}</button>
       </div>
     `;
 
     document.body.appendChild(modal);
+    window.hopeApplyTranslations?.();
   }
 
   /**
@@ -506,10 +510,10 @@ export class FlipCardsGame {
         method: 'DELETE',
         credentials: 'include'
       });
-      window.location.href = 'flipcards.html';
+      navigateWithFeedback('flipcards.html', null, { reloadIfSame: true });
     } catch (err) {
       console.error('Failed to abandon game:', err);
-      this.showNotification(err.message || 'Failed to abandon game', 'error');
+      this.showNotification(err.message || i18n.t('flipcards.failed_abandon_game'), 'error');
       this.isAbandoningGame = false;
     }
   }
@@ -531,24 +535,25 @@ export function initFlipCardsGame() {
   const difficultySelector = document.createElement('div');
   difficultySelector.className = 'difficulty-selector';
   difficultySelector.innerHTML = `
-    <h3>Select Difficulty</h3>
+    <h3>${i18n.t('flipcards.select_difficulty')}</h3>
     <div class="difficulty-buttons">
       <button class="difficulty-btn" data-difficulty="easy">
         <span class="icon">🌱</span>
-        Easy (3 Triplets)
+        ${i18n.t('flipcards.easy_label')}
       </button>
       <button class="difficulty-btn" data-difficulty="normal">
         <span class="icon">⚡</span>
-        Normal (4 Triplets)
+        ${i18n.t('flipcards.normal_label')}
       </button>
       <button class="difficulty-btn" data-difficulty="hard">
         <span class="icon">🔥</span>
-        Hard (5 Triplets)
+        ${i18n.t('flipcards.hard_label')}
       </button>
     </div>
   `;
 
   gameContainer.appendChild(difficultySelector);
+  window.hopeApplyTranslations?.();
 
   // Difficulty button handlers
   document.querySelectorAll('.difficulty-btn').forEach((btn) => {
@@ -587,16 +592,17 @@ function renderGameUI(container) {
   gameUI.innerHTML = `
     <div class="flipcards-header">
       <div class="flipcards-timer" id="flipcards-timer">1:00</div>
-      <h2>Match the Triplets!</h2>
-      <button class="btn-abandon" onclick="window.flipCardsGame.abandonGame()">✕ Quit</button>
+      <h2>${i18n.t('flipcards.match_triplets')}</h2>
+      <button class="btn-abandon" onclick="window.flipCardsGame.abandonGame()">✕ ${i18n.t('common.quit')}</button>
     </div>
     <div class="flipcards-board" id="flipcards-board"></div>
     <div class="flipcards-instructions">
-      <p>Find groups of 3 matching cards</p>
+      <p>${i18n.t('flipcards.find_triplets')}</p>
     </div>
   `;
 
   container.appendChild(gameUI);
+  window.hopeApplyTranslations?.();
 }
 
 // Auto-initialize when DOM is ready

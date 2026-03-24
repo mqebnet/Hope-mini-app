@@ -1,5 +1,7 @@
 // public/connectWallet.js
 import { tonConnectUI } from './tonconnect.js';
+import { i18n } from './i18n.js';
+import { toUserFriendlyAddress } from 'https://esm.sh/@tonconnect/sdk@3.1.0';
 
 document.addEventListener('DOMContentLoaded', async () => {
   const button = document.getElementById('ton-connect-button');
@@ -9,44 +11,82 @@ document.addEventListener('DOMContentLoaded', async () => {
   let busy = false;
   const MAINNET_CHAIN = '-239';
   const TESTNET_CHAIN = '-3';
+  const PREFERRED_WALLETS = [
+    { appName: 'telegram-wallet', label: 'Telegram Wallet' },
+    { appName: 'tonkeeper', label: 'Tonkeeper' },
+    { appName: 'mytonwallet', label: 'MyTonWallet' },
+    { appName: 'okxTonWallet', label: 'OKX Wallet' }
+  ];
+
   const menu = document.createElement('div');
   menu.id = 'wallet-popover';
   menu.className = 'hidden';
   menu.innerHTML = `
-    <p class="wallet-popover-title">Connected Wallet</p>
+    <p class="wallet-popover-title">${i18n.t('wallet.connected_wallet')}</p>
     <p id="wallet-address" class="wallet-popover-address">-</p>
-    <button id="wallet-disconnect-btn" class="wallet-disconnect-btn">Disconnect</button>
+    <button id="wallet-disconnect-btn" class="wallet-disconnect-btn">${i18n.t('wallet.disconnect')}</button>
   `;
   topNav.appendChild(menu);
 
+  const walletPicker = document.createElement('div');
+  walletPicker.id = 'wallet-picker';
+  walletPicker.className = 'hidden';
+  walletPicker.innerHTML = `
+    <p class="wallet-popover-title">${i18n.t('wallet.choose_wallet')}</p>
+    <div class="wallet-picker-list">
+      ${PREFERRED_WALLETS.map((wallet) => `
+        <button type="button" class="wallet-picker-btn" data-wallet-app="${wallet.appName}">
+          ${wallet.label}
+        </button>
+      `).join('')}
+    </div>
+  `;
+  topNav.appendChild(walletPicker);
+
   const addressEl = menu.querySelector('#wallet-address');
   const disconnectBtn = menu.querySelector('#wallet-disconnect-btn');
+  const titleEl = menu.querySelector('.wallet-popover-title');
+  const pickerTitleEl = walletPicker.querySelector('.wallet-popover-title');
+  const pickerButtons = Array.from(walletPicker.querySelectorAll('.wallet-picker-btn'));
 
-  const getWalletChain = (wallet) => {
-    // TonConnect wallet format varies by version/wallet app.
-    return wallet?.account?.chain || wallet?.chain || null;
-  };
+  const getWalletChain = (wallet) => wallet?.account?.chain || wallet?.chain || null;
   const getWalletAddress = (wallet) => {
-  const raw = wallet?.account?.address || '';
-  if (!raw) return '';
-  try {
-    // TonConnect UI exposes Address from @ton/core internally
-    // Use the address directly — most wallets accept raw format fine
-    // For friendly format, convert using the Address class:
-    const { Address } = window.TON_CONNECT_UI || {};
-    if (Address) {
-      return Address.parse(raw).toString({ bounceable: false });
+    const raw = wallet?.account?.address || '';
+    if (!raw) return '';
+    try {
+      if (raw.includes(':')) {
+        return toUserFriendlyAddress(raw, getWalletChain(wallet) === TESTNET_CHAIN);
+      }
+    } catch (_) {
+      // Fallback to the raw format if conversion fails for any reason.
     }
-  } catch (_) {}
-  return raw; // fallback to raw if conversion fails
-};
+    return raw;
+  };
+
   const shortAddress = (address) => {
     if (!address || address.length < 13) return address || '-';
     return `${address.slice(0, 6)}...${address.slice(-6)}`;
   };
+
   const closeMenu = () => menu.classList.add('hidden');
-  const toggleMenu = () => menu.classList.toggle('hidden');
+  const closeWalletPicker = () => walletPicker.classList.add('hidden');
+  const toggleMenu = () => {
+    closeWalletPicker();
+    menu.classList.toggle('hidden');
+  };
+  const toggleWalletPicker = () => {
+    closeMenu();
+    walletPicker.classList.toggle('hidden');
+  };
+
+  const updateMenuText = () => {
+    if (titleEl) titleEl.textContent = i18n.t('wallet.connected_wallet');
+    if (disconnectBtn) disconnectBtn.textContent = i18n.t('wallet.disconnect');
+    if (pickerTitleEl) pickerTitleEl.textContent = i18n.t('wallet.choose_wallet');
+  };
+
   const updateMenu = (wallet) => {
+    updateMenuText();
     const fullAddress = getWalletAddress(wallet);
     if (!fullAddress) {
       addressEl.textContent = '-';
@@ -74,15 +114,38 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   const updateUI = (wallet) => {
     if (wallet) {
-      button.innerHTML = `<i data-lucide="wallet"></i> Connected`;
+      button.innerHTML = `<i data-lucide="wallet"></i> ${i18n.t('wallet.connected')}`;
       button.classList.add('connected');
-      button.disabled = false;
     } else {
-      button.innerHTML = `<i data-lucide="wallet"></i> Connect Wallet`;
+      button.innerHTML = `<i data-lucide="wallet"></i> ${i18n.t('wallet.connect_wallet')}`;
       button.classList.remove('connected');
-      button.disabled = false;
     }
+    button.disabled = false;
     if (window.lucide) lucide.createIcons();
+  };
+
+  const disconnectNonMainnetWallet = async (wallet) => {
+    if (!wallet) return false;
+    const chain = getWalletChain(wallet);
+    if (chain === MAINNET_CHAIN) return false;
+
+    alert(i18n.t('wallet.switch_mainnet'));
+    if (chain && chain !== TESTNET_CHAIN) {
+      console.warn(`Blocked non-mainnet wallet chain: ${chain}`);
+    } else if (!chain) {
+      console.warn('Blocked wallet with unknown chain:', wallet);
+    }
+
+    try {
+      await tonConnectUI.disconnect();
+    } catch (err) {
+      console.warn('Failed to disconnect non-mainnet wallet:', err);
+    }
+
+    updateUI(null);
+    updateMenu(null);
+    closeWalletPicker();
+    return true;
   };
 
   try {
@@ -95,52 +158,72 @@ document.addEventListener('DOMContentLoaded', async () => {
     console.warn('Wallet restore failed:', err);
   }
 
-  updateUI(tonConnectUI.wallet);
-  updateMenu(tonConnectUI.wallet);
-  if (tonConnectUI.wallet) {
+  const restoredWallet = tonConnectUI.wallet;
+  if (await disconnectNonMainnetWallet(restoredWallet)) {
+    updateUI(null);
+    updateMenu(null);
+  } else {
+    updateUI(restoredWallet);
+    updateMenu(restoredWallet);
+  }
+
+  if (tonConnectUI.wallet && getWalletChain(tonConnectUI.wallet) === MAINNET_CHAIN) {
     saveWalletToServer(getWalletAddress(tonConnectUI.wallet));
   }
 
+  window.addEventListener('hope:languageChanged', () => {
+    updateUI(tonConnectUI.wallet);
+    updateMenu(tonConnectUI.wallet);
+  });
+
   tonConnectUI.onStatusChange((wallet) => {
     const chain = getWalletChain(wallet);
-    if (wallet && chain === TESTNET_CHAIN) {
-      alert('Switch to TON Mainnet!');
-      tonConnectUI.disconnect();
+    if (wallet && chain !== MAINNET_CHAIN) {
+      disconnectNonMainnetWallet(wallet);
       return;
-    }
-
-    if (wallet && !chain) {
-      console.warn('Unable to determine wallet chain from TonConnect payload:', wallet);
-    } else if (wallet && chain !== MAINNET_CHAIN) {
-      console.warn(`Unexpected wallet chain value: ${chain}`);
     }
 
     updateUI(wallet);
     updateMenu(wallet);
+    closeWalletPicker();
 
-    // Persist wallet address to DB whenever wallet connects
     if (wallet) {
       saveWalletToServer(getWalletAddress(wallet));
     }
   });
 
-  button.addEventListener('click', async () => {
+  button.addEventListener('click', () => {
     if (busy) return;
     if (tonConnectUI.wallet) {
       toggleMenu();
       return;
     }
+    toggleWalletPicker();
+  });
 
-    try {
-      busy = true;
-      button.disabled = true;
-      await tonConnectUI.openModal();
-    } catch (err) {
-      console.error('Wallet connection failed:', err);
-      button.disabled = false;
-    } finally {
-      busy = false;
-    }
+  pickerButtons.forEach((pickerButton) => {
+    pickerButton.addEventListener('click', async () => {
+      const walletApp = pickerButton.dataset.walletApp;
+      if (!walletApp || busy) return;
+
+      try {
+        busy = true;
+        button.disabled = true;
+        closeWalletPicker();
+
+        if (typeof tonConnectUI.openSingleWalletModal === 'function') {
+          await tonConnectUI.openSingleWalletModal(walletApp);
+        } else {
+          await tonConnectUI.openModal();
+        }
+      } catch (err) {
+        console.error('Wallet connection failed:', err);
+        alert(i18n.t('wallet.open_wallet_failed'));
+      } finally {
+        busy = false;
+        button.disabled = false;
+      }
+    });
   });
 
   disconnectBtn?.addEventListener('click', async () => {
@@ -149,13 +232,21 @@ document.addEventListener('DOMContentLoaded', async () => {
       closeMenu();
     } catch (err) {
       console.error('Wallet disconnect failed:', err);
-      alert('Failed to disconnect wallet');
+      alert(i18n.t('wallet.disconnect_failed'));
     }
   });
 
   document.addEventListener('click', (event) => {
-    if (menu.classList.contains('hidden')) return;
-    if (menu.contains(event.target) || button.contains(event.target)) return;
-    closeMenu();
+    if (!menu.classList.contains('hidden')) {
+      if (!menu.contains(event.target) && !button.contains(event.target)) {
+        closeMenu();
+      }
+    }
+
+    if (!walletPicker.classList.contains('hidden')) {
+      if (!walletPicker.contains(event.target) && !button.contains(event.target)) {
+        closeWalletPicker();
+      }
+    }
   });
 });

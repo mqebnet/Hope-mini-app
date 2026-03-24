@@ -39,6 +39,12 @@
     .toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
     .toggle-status { font-weight: 700; color: #00ffaa; }
     .toggle-status.off { color: #ff8c66; }
+    .header-actions { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+    .realtime-row { display: grid; grid-template-columns: 120px 1fr; gap: 8px; font-size: 0.82rem; margin-top: 6px; }
+    .realtime-label { color: #8aa6b8; }
+    .realtime-value { color: #d8f6ea; font-family: Consolas, Monaco, monospace; }
+    .realtime-ok { color: #00ffaa; font-weight: 700; }
+    .realtime-bad { color: #ff8c66; font-weight: 700; }
   </style>
 </head>
 <body>
@@ -46,7 +52,19 @@
     <header class="admin-header">
       <h1>Admin Dashboard</h1>
       <p class="admin-sub">System controls, user management, and contest operations.</p>
+      <div class="header-actions">
+        <a href="/" class="admin-btn alt">Back to Home</a>
+      </div>
     </header>
+
+    <section class="admin-card">
+      <h2>Realtime Status</h2>
+      <div class="realtime-row"><span class="realtime-label">WebSocket</span><span id="realtime-status" class="realtime-value">Connecting...</span></div>
+      <div class="realtime-row"><span class="realtime-label">Transport</span><span id="realtime-transport" class="realtime-value">-</span></div>
+      <div class="realtime-row"><span class="realtime-label">Socket ID</span><span id="realtime-socket-id" class="realtime-value">-</span></div>
+      <div class="realtime-row"><span class="realtime-label">Polling Fallback</span><span id="realtime-polling" class="realtime-value">-</span></div>
+      <div class="realtime-row"><span class="realtime-label">Last Event</span><span id="realtime-trigger" class="realtime-value">-</span></div>
+    </section>
 
     <section class="admin-card">
       <h2>Overview</h2>
@@ -61,20 +79,6 @@
           <div id="contest-toggle-status" class="toggle-status">Loading...</div>
         </div>
         <button id="btn-toggle-contest" class="admin-btn warn">Disable</button>
-      </div>
-    </section>
-
-    <section class="admin-card">
-      <h2>Users</h2>
-      <div class="admin-row">
-        <input id="user-search" class="admin-input" placeholder="Search telegramId or username" />
-        <button id="btn-load-users" class="admin-btn alt">Search</button>
-      </div>
-      <div id="users-table-wrap"></div>
-      <div class="pagination">
-        <button id="btn-prev-page" class="admin-btn alt">Prev</button>
-        <div id="pagination-label" class="muted"></div>
-        <button id="btn-next-page" class="admin-btn alt">Next</button>
       </div>
     </section>
 
@@ -159,8 +163,26 @@
       <div id="notify-last-run" class="admin-mono"></div>
       <div id="notify-result" class="admin-mono"></div>
     </section>
+
+<section class="admin-card">
+      <h2>Users</h2>
+      <div class="admin-row">
+        <input id="user-search" class="admin-input" placeholder="Search telegramId or username" />
+        <button id="btn-load-users" class="admin-btn alt">Search</button>
+      </div>
+      <div id="users-table-wrap"></div>
+      <div class="pagination">
+        <button id="btn-prev-page" class="admin-btn alt">Prev</button>
+        <div id="pagination-label" class="muted"></div>
+        <button id="btn-next-page" class="admin-btn alt">Next</button>
+      </div>
+    </section>
+
   </main>
 
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <script src="/notify.js" defer></script>
+  <script type="module" src="/script.js"></script>
   <script src="/admin.js"></script>
 </body>
 </html>

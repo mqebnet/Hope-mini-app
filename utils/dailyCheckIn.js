@@ -6,7 +6,7 @@ const UserBadge = require('../models/UserBadge');
  * Daily check-in reward values
  * @type {Object}
  * @property {number} points - Points awarded (1000)
- * @property {number} bronzeTickets - Bronze tickets awarded (100)
+ * @property {number} bronzeTickets - Bronze tickets awarded (250)
  * @property {number} xp - XP awarded (5)
  */
 const DAILY_CHECKIN_REWARD = {

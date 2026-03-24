@@ -65,6 +65,38 @@ let currentSortKey = 'createdAt';
 let currentSortDir = 'desc';
 let lastUsers = [];
 let contestEnabled = true;
+let adminRealtimeRefreshTimer = null;
+
+function updateRealtimeStatus(detail = {}) {
+  const wsConnected = Boolean(detail.wsConnected);
+  const statusEl = document.getElementById('realtime-status');
+  const transportEl = document.getElementById('realtime-transport');
+  const socketIdEl = document.getElementById('realtime-socket-id');
+  const pollingEl = document.getElementById('realtime-polling');
+  const triggerEl = document.getElementById('realtime-trigger');
+  if (!statusEl || !transportEl || !socketIdEl || !pollingEl || !triggerEl) return;
+
+  statusEl.textContent = wsConnected ? 'Connected' : 'Disconnected';
+  statusEl.classList.toggle('realtime-ok', wsConnected);
+  statusEl.classList.toggle('realtime-bad', !wsConnected);
+  transportEl.textContent = detail.transportName || '-';
+  socketIdEl.textContent = detail.socketId || '-';
+  pollingEl.textContent = detail.pollingActive ? 'Active' : 'Inactive';
+  triggerEl.textContent = detail.trigger || '-';
+}
+
+function scheduleAdminRealtimeRefresh() {
+  if (adminRealtimeRefreshTimer) clearTimeout(adminRealtimeRefreshTimer);
+  adminRealtimeRefreshTimer = setTimeout(async () => {
+    adminRealtimeRefreshTimer = null;
+    await Promise.allSettled([
+      loadStats(),
+      loadUsers(currentUsersPage || 1),
+      loadContestOverview(),
+      loadLastMiningReminderRun()
+    ]);
+  }, 180);
+}
 
 function setContestToggleUI(enabled) {
   contestEnabled = Boolean(enabled);
@@ -554,6 +586,26 @@ loadTasks();
 loadUsers(1);
 loadContestOverview();
 loadLastMiningReminderRun();
+updateRealtimeStatus({ trigger: 'boot' });
+
+window.addEventListener('hope:globalEvent', (event) => {
+  const detail = event.detail || {};
+  const realtimeTypes = new Set([
+    'admin_user_updated',
+    'admin_broadcast',
+    'weekly_contest_toggled',
+    'contest_week_changed',
+    'contest_results_published',
+    'tasks_updated',
+    'mining_reminders_run'
+  ]);
+  if (!realtimeTypes.has(detail.type)) return;
+  scheduleAdminRealtimeRefresh();
+});
+
+window.addEventListener('hope:wsync-status', (event) => {
+  updateRealtimeStatus(event.detail || {});
+});
 
 window.prefillEdit = prefillEdit;
 window.quickReset = quickReset;

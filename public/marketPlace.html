@@ -20,9 +20,9 @@
   </button>
 
   <div id="user-stats">
-    <p class="tag">Level</p>
+    <p class="tag" data-i18n="topbar.level">Level</p>
     <span id="current-level">-</span>
-    <p class="tag">XP</p>
+    <p class="tag" data-i18n="topbar.xp">XP</p>
     <span id="user-exp">-</span>
   </div>
 
@@ -37,7 +37,7 @@
 </header>
 
 <div id="display-panel">
-  <p class="tag">Points</p>
+  <p class="tag" data-i18n="topbar.points">Points</p>
   <div id="points-bar">
     <div id="points-progress"></div>
     <span id="points-display">-</span>
@@ -45,40 +45,40 @@
 </div>
 
 <main id="main-content">
-  <h1 class="page-title">Marketplace</h1>
+  <h1 class="page-title" data-i18n="marketplace.title">Marketplace</h1>
 
   <div id="marketplace-tabs">
-    <button class="market-tab active" data-tab="games">Games</button>
-    <button class="market-tab" data-tab="exchange">Exchange</button>
+    <button class="market-tab active" data-tab="games" data-i18n="marketplace.games_tab">Games</button>
+    <button class="market-tab" data-tab="exchange" data-i18n="marketplace.exchange_tab">Exchange</button>
   </div>
 
   <section id="games-section" class="market-section active">
-    <h2>Games</h2>
+    <h2 data-i18n="marketplace.games_heading">Games</h2>
     <div id="games-container">
       <div id="games-grid"></div>
     </div>
 
     <div id="mystery-box-launcher" class="hidden">
-      <h2>Mystery Boxes</h2>
+      <h2 data-i18n="marketplace.mystery_boxes">Mystery Boxes</h2>
       <div class="mystery-box-panel">
         <div id="mystery-box-track" class="mystery-box-track"></div>
         <button id="open-market-mystery-box-button">
-          <i data-lucide="gift"></i> Get Mystery Box
+          <i data-lucide="gift"></i> <span data-i18n="marketplace.get_mystery_box">Get Mystery Box</span>
         </button>
         <div id="mystery-box-info"></div>
       </div>
-      <button id="mystery-box-back-button" class="mystery-box-back-button">Back to Games</button>
+      <button id="mystery-box-back-button" class="mystery-box-back-button" data-i18n="marketplace.back_to_games">Back to Games</button>
     </div>
   </section>
 
   <section id="exchange-section" class="market-section">
-    <h2>Exchange Tickets</h2>
+    <h2 data-i18n="marketplace.exchange_tickets">Exchange Tickets</h2>
 
     <div class="exchange-container">
       <div class="ticket-selector">
         <select id="exchange-type">
-          <option value="bronze">Bronze -> Silver</option>
-          <option value="silver">Silver -> Gold</option>
+          <option value="bronze" data-i18n="marketplace.bronze_to_silver">Bronze -> Silver</option>
+          <option value="silver" data-i18n="marketplace.silver_to_gold">Silver -> Gold</option>
         </select>
       </div>
 
@@ -99,7 +99,7 @@
         <div id="to-ticket"></div>
       </div>
 
-      <button id="trade-button" disabled>Trade</button>
+      <button id="trade-button" disabled data-i18n="marketplace.trade">Trade</button>
     </div>
   </section>
 </main>

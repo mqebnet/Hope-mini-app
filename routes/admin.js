@@ -2,6 +2,7 @@ const express = require('express');
 const User = require('../models/User');
 const Contestant = require('../models/Contestant');
 const KeyValue = require('../models/KeyValue');
+const { Address } = require('@ton/core');
 const { getTaskCatalog, setTaskCatalog } = require('../utils/taskCatalog');
 const { sendBulkTelegramMessage } = require('../utils/telegramNotifier');
 const {
@@ -16,6 +17,25 @@ const stateEmitter = require('../utils/stateEmitter');
 const router = express.Router();
 const MINING_REMINDER_LAST_RUN_KEY = 'mining_reminder_last_run';
 const WEEKLY_CONTEST_ENABLED_KEY = 'weekly_contest_enabled';
+const SYSTEM_USERNAME_RE = /^user_\d+$/i;
+
+function toFriendlyWallet(wallet) {
+  if (!wallet || typeof wallet !== 'string') return null;
+  const value = wallet.trim();
+  if (!value) return null;
+  try {
+    return Address.parse(value).toString({ bounceable: false });
+  } catch (_) {
+    return value;
+  }
+}
+
+function toDisplayUsername(value) {
+  if (value === null || value === undefined) return null;
+  const normalized = String(value).trim();
+  if (!normalized || SYSTEM_USERNAME_RE.test(normalized)) return null;
+  return normalized;
+}
 
 function sanitizePage(raw, fallback = 1) {
   const n = Number(raw);
@@ -131,6 +151,14 @@ router.patch('/users/:telegramId', async (req, res) => {
       goldTickets: user.goldTickets || 0,
       miningStartedAt: user.miningStartedAt
     });
+    stateEmitter.emit('global:event', {
+      type: 'admin_user_updated',
+      data: {
+        telegramId: user.telegramId,
+        by: Number(req.user.telegramId)
+      },
+      timestamp: Date.now()
+    });
 
     res.json({ success: true, user });
   } catch (err) {
@@ -173,6 +201,15 @@ router.post('/users/:telegramId/reset', async (req, res) => {
       silverTickets: user.silverTickets || 0,
       goldTickets: user.goldTickets || 0,
       miningStartedAt: user.miningStartedAt
+    });
+    stateEmitter.emit('global:event', {
+      type: 'admin_user_updated',
+      data: {
+        telegramId: user.telegramId,
+        by: Number(req.user.telegramId),
+        reset: resetFields
+      },
+      timestamp: Date.now()
     });
 
     res.json({ success: true, user, reset: resetFields });
@@ -248,13 +285,35 @@ router.get('/contests/overview', async (req, res) => {
     const currentWeek = await getCurrentContestWeek();
     const week = String(req.query.week || currentWeek);
 
-    const [totalEntries, latestEntries] = await Promise.all([
+    const [totalEntries, latestEntriesRaw] = await Promise.all([
       Contestant.countDocuments({ week }),
       Contestant.find({ week })
         .sort({ enteredAt: -1 })
         .limit(50)
         .select('telegramId username wallet week enteredAt')
+        .lean()
     ]);
+    const telegramIds = latestEntriesRaw
+      .map((entry) => Number(entry.telegramId))
+      .filter((id) => Number.isFinite(id));
+    const users = telegramIds.length
+      ? await User.find({ telegramId: { $in: telegramIds } }).select('telegramId username').lean()
+      : [];
+    const usernameByTelegramId = new Map(
+      users.map((u) => [String(u.telegramId), toDisplayUsername(u.username)])
+    );
+
+    const latestEntries = latestEntriesRaw.map((entry) => {
+      const username =
+        toDisplayUsername(entry.username)
+        || usernameByTelegramId.get(String(entry.telegramId))
+        || '-';
+      return {
+        ...entry,
+        username,
+        wallet: toFriendlyWallet(entry.wallet)
+      };
+    });
 
     const resultKey = `contest_result_${week}`;
     const resultDoc = await KeyValue.findOne({ key: resultKey }).lean();
@@ -395,6 +454,16 @@ router.post('/broadcast', async (req, res) => {
     const results = await sendBulkTelegramMessage(telegramIds, message);
 
     const sent = results.filter((r) => r.ok).length;
+    stateEmitter.emit('global:event', {
+      type: 'admin_broadcast',
+      data: {
+        message,
+        targeted: level || 'ALL',
+        total: telegramIds.length,
+        sent
+      },
+      timestamp: Date.now()
+    });
 
     res.json({
       success: true,
@@ -422,6 +491,14 @@ router.post('/notifications/mining-reminders/run', async (_req, res) => {
       { value: payload },
       { upsert: true, new: true, setDefaultsOnInsert: true }
     );
+    stateEmitter.emit('global:event', {
+      type: 'mining_reminders_run',
+      data: {
+        ...payload,
+        targetTelegramId: Number(_req.user.telegramId)
+      },
+      timestamp: Date.now()
+    });
 
     res.json({ success: true, result: payload });
   } catch (err) {

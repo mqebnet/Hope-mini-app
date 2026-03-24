@@ -10,6 +10,18 @@ let isConnected = false;
 let pollInterval = null;
 const POLL_INTERVAL_MS = 30000; // 30 seconds fallback polling
 
+function emitConnectionStatus(trigger = 'unknown') {
+  if (typeof window === 'undefined') return;
+  const detail = {
+    trigger,
+    wsConnected: isConnected,
+    socketId: socket?.id || null,
+    transportName: socket?.io?.engine?.transport?.name || 'unknown',
+    pollingActive: Boolean(pollInterval)
+  };
+  window.dispatchEvent(new CustomEvent('hope:wsync-status', { detail }));
+}
+
 /**
  * Initialize WebSocket connection
  * Called after successful authentication in script.js
@@ -19,6 +31,7 @@ export function initializeWebSocketSync() {
   if (!window.io) {
     console.warn('[WSync] socket.io library not loaded, skipping WebSocket init');
     startPollingFallback();
+    emitConnectionStatus('io-missing');
     return;
   }
 
@@ -59,18 +72,21 @@ function _connectWebSocket() {
         const levelIndex = window.currentLeaderboardLevel || 1;
         socket.emit('subscribe:leaderboard', levelIndex);
       }
+      emitConnectionStatus('connect');
     });
 
     socket.on('disconnect', () => {
       console.warn('[WSync] Disconnected from WebSocket server, falling back to polling');
       isConnected = false;
       startPollingFallback();
+      emitConnectionStatus('disconnect');
     });
 
     socket.on('connect_error', (error) => {
       console.warn('[WSync] Connection error:', error.message);
       isConnected = false;
       startPollingFallback();
+      emitConnectionStatus('connect_error');
     });
 
     // Listen for real-time user balance updates
@@ -114,9 +130,11 @@ function _connectWebSocket() {
     });
 
     console.log('[WSync] WebSocket sync initialized');
+    emitConnectionStatus('init');
   } catch (err) {
     console.error('[WSync] Failed to initialize WebSocket:', err);
     startPollingFallback();
+    emitConnectionStatus('init_failed');
   }
 }
 
@@ -134,6 +152,7 @@ export function disconnectWebSocketSync() {
     clearInterval(pollInterval);
     pollInterval = null;
   }
+  emitConnectionStatus('manual_disconnect');
 }
 
 /**
@@ -166,16 +185,18 @@ function startPollingFallback() {
   if (pollInterval) return;
 
   console.log('[WSync] Starting fallback polling every 30s...');
+  emitConnectionStatus('polling_started');
   pollInterval = setInterval(async () => {
     if (isConnected) {
       // WebSocket reconnected, stop polling
       clearInterval(pollInterval);
       pollInterval = null;
+      emitConnectionStatus('polling_stopped');
       return;
     }
 
     try {
-      const res = await fetch('/api/user/me', {
+      const res = await fetch('/api/user/me?force=1', {
         credentials: 'include',
         cache: 'no-store'
       });
@@ -200,8 +221,10 @@ function startPollingFallback() {
       }
 
       console.log('[WSync] Poll: Updated user data');
+      emitConnectionStatus('poll_tick');
     } catch (err) {
       console.warn('[WSync] Poll failed:', err.message);
+      emitConnectionStatus('poll_error');
     }
   }, POLL_INTERVAL_MS);
 }

@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hope Universe - Register (Fallback)</title>
+  <link rel="stylesheet" href="fallback-auth.css">
+</head>
+<body class="fallback-auth-body">
+  <main class="fallback-shell">
+    <nav class="fallback-nav">
+      <div class="fallback-brand">Hope Universe</div>
+      <div class="fallback-nav-links">
+        <a href="landing.html">Home</a>
+        <a class="active" href="register.html">Register</a>
+        <a href="login.html">Login</a>
+        <a href="terms.html">Terms</a>
+        <a href="privacy.html">Privacy</a>
+      </div>
+    </nav>
+
+    <section class="fallback-card">
+      <h2>Create Account</h2>
+      <p>
+        Register with a valid Gmail address and password.
+      </p>
+
+      <form id="fallback-register-form" class="fallback-form" novalidate>
+        <label>
+          Gmail Address
+          <input type="email" name="email" placeholder="you@gmail.com" required>
+        </label>
+
+        <label>
+          Password
+          <input type="password" name="password" placeholder="Minimum 8 characters" minlength="8" required>
+        </label>
+
+        <label>
+          Confirm Password
+          <input type="password" name="confirmPassword" placeholder="Re-enter password" minlength="8" required>
+        </label>
+
+        <button type="submit" class="fallback-submit">Register</button>
+        <div class="fallback-result" aria-live="polite"></div>
+      </form>
+
+      <p class="fallback-meta">
+        Gmail is required in this fallback flow.
+      </p>
+    </section>
+  </main>
+  <script src="fallbackAuth.js"></script>
+</body>
+</html>

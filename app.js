@@ -9,7 +9,6 @@ const cookieParser = require('cookie-parser');
 const helmet = require('helmet');
 const compression = require('compression');
 
-const referralRouter = require('./routes/referral');
 const leaderboardRouter = require('./routes/leaderboard');
 const tasksRouter = require('./routes/tasks');
 const dailyCheckInRouter = require('./routes/dailyCheckIn');
@@ -101,6 +100,7 @@ app.use('/api', (req, res, next) => {
   next();
 });
 app.use('/api/auth', require('./routes/auth'));
+app.use('/api/web-auth', require('./routes/webAuth'));
 
 app.get('/', require('./middleware/pageAuth'), (req, res) => {
   res.sendFile(path.join(__dirname, 'public/index.html'));
@@ -118,7 +118,6 @@ app.use('/api', require('./middleware/apiAuth'));
 app.use('/api/me', require('./routes/me'));
 app.use('/api/user', userRouter);
 app.use('/api/tasks', tasksRouter);
-app.use('/api/referral', referralRouter);
 app.use('/api/leaderboard', leaderboardRouter);
 app.use('/api/mining', miningRouter);
 app.use('/api/exchangeTickets', require('./routes/exchangeTickets'));
@@ -142,16 +141,23 @@ routes.forEach((route) => {
   }
 });
 
-app.use((_, res) => {
-  res.status(404).json({
-    success: false,
-    message: 'Endpoint not found'
-  });
+app.use((req, res) => {
+  const isApi = req.path?.startsWith('/api');
+  if (isApi) {
+    return res.status(404).json({
+      success: false,
+      message: 'Endpoint not found'
+    });
+  }
+  return res.status(404).sendFile(path.join(__dirname, 'public/404.html'));
 });
 
 app.use((err, req, res, next) => {
   console.error(`[ERROR] ${err.stack}`);
-  res.status(500).json({ error: 'Internal server error' });
+  if (req.path?.startsWith('/api')) {
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+  return res.status(503).sendFile(path.join(__dirname, 'public/404.html'));
 });
 
 const PORT = process.env.PORT || 3000;
@@ -251,6 +257,10 @@ connectDB().then(() => {
   });
 
   stateEmitter.on('global:event', (data) => {
+    if (data?.data?.targetTelegramId) {
+      io.to(`user:${data.data.targetTelegramId}`).emit('global:event', data);
+      return;
+    }
     io.emit('global:event', data);
   });
 

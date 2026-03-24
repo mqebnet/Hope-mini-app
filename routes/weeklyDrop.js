@@ -3,12 +3,25 @@ const router = express.Router();
 const User = require('../models/User');
 const Contestant = require('../models/Contestant');
 const KeyValue = require('../models/KeyValue');
+const { Address } = require('@ton/core');
 const { getUserLevel } = require('../utils/levelUtil');
 const { normalizeStreakIfMissed } = require('../utils/dailyCheckIn');
 const { getCurrentContestWeek } = require('../utils/contestWeek');
 const { verifyTransaction } = require('../utils/tonHandler');
 
 const WEEKLY_CONTEST_ENABLED_KEY = 'weekly_contest_enabled';
+const SYSTEM_USERNAME_RE = /^user_\d+$/i;
+
+function toFriendlyWallet(wallet) {
+  if (!wallet || typeof wallet !== 'string') return null;
+  const value = wallet.trim();
+  if (!value) return null;
+  try {
+    return Address.parse(value).toString({ bounceable: false });
+  } catch (_) {
+    return value;
+  }
+}
 
 async function isContestEnabled() {
   const doc = await KeyValue.findOne({ key: WEEKLY_CONTEST_ENABLED_KEY }).lean();
@@ -21,7 +34,7 @@ router.get('/eligibility', async (req, res) => {
       return res.json({
         eligible: false,
         disabled: true,
-        reason: 'Weekly Drop is currently disabled by admin.'
+        reason: 'Weekly Drop is currently disabled.'
       });
     }
 
@@ -147,10 +160,14 @@ router.post('/enter', async (req, res) => {
     await user.save();
 
     try {
+      const maybeUsername = user.username ? String(user.username).trim() : '';
+      const contestUsername = maybeUsername && !SYSTEM_USERNAME_RE.test(maybeUsername)
+        ? maybeUsername
+        : null;
       await Contestant.create({
         telegramId: String(user.telegramId),
-        username: user.username || null,
-        wallet: user.wallet,
+        username: contestUsername,
+        wallet: toFriendlyWallet(user.wallet),
         week: currentWeek
       });
     } catch (dbErr) {
@@ -168,7 +185,7 @@ router.post('/enter', async (req, res) => {
       success: true,
       message: `You are in ${currentWeek}! Good luck!`,
       week: currentWeek,
-      wallet: user.wallet,
+      wallet: toFriendlyWallet(user.wallet),
       goldTickets: user.goldTickets
     });
   } catch (error) {

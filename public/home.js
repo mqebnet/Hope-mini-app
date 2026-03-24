@@ -1,15 +1,16 @@
 // home.js
 import { updateTopBar, formatPoints, formatCompact, fetchUserDataOnce, getCachedUser, setCachedUser } from './userData.js';
 import { tonConnectUI } from './tonconnect.js';
-import { canBootstrap } from './utils.js';
+import { canBootstrap, debounceButton, navigateWithFeedback } from './utils.js';
 import { i18n } from './i18n.js';
 
 const MINING_DURATION_MS = 6 * 60 * 60 * 1000;
-let miningInterval = null;
-let miningCompletionTimeout = null;
 let miningAnimationFrame = null;
 let miningIsComplete = false;
 let weeklyContestEnabled = true;
+let weeklyEligibilitySyncAt = 0;
+let weeklyEligibilitySyncInFlight = null;
+const WEEKLY_ELIGIBILITY_SYNC_MS = 30000;
 
 let miningBar = null;
 let miningBtn = null;
@@ -21,6 +22,21 @@ let dailyCheckInCalendar = null;
 let dailyCheckInStreakText = null;
 let dailyCheckInResetTime = null;
 let dailyCheckInStatus = null;
+let checkInInProgress = false;
+const WELCOME_BONUS_STORAGE_KEY = 'hope_welcome_bonus';
+
+function setWeeklyDropButtonState(btn, label, enabled, onClick = null) {
+  const labelEl = btn.querySelector('span') || btn;
+  labelEl.textContent = label;
+  btn.disabled = !enabled;
+  btn.onclick = null;
+  btn.classList.toggle('weekly-drop-ready', enabled);
+  btn.classList.toggle('weekly-drop-faded', !enabled);
+
+  if (enabled && typeof onClick === 'function') {
+    btn.onclick = onClick;
+  }
+}
 
 function initDomRefs() {
   miningBar = document.getElementById('mining-progress');
@@ -39,8 +55,7 @@ function updateWeeklyDropEligibility(user) {
   if (!btn || !user) return;
 
   if (!weeklyContestEnabled) {
-    btn.disabled = true;
-    btn.textContent = i18n.t('home.weekly_drop_disabled');
+    setWeeklyDropButtonState(btn, i18n.t('home.weekly_drop_disabled'), false);
     return;
   }
 
@@ -53,12 +68,69 @@ function updateWeeklyDropEligibility(user) {
   const hasGold = (user.goldTickets || 0) >= 10;
 
   if (isBelieverOrAbove && hasPerfectStreak && hasGold) {
-    btn.disabled = false;
-    btn.textContent = i18n.t('home.enter_weekly_drop');
-    btn.onclick = () => { window.location.href = 'weeklyDrop.html'; };
+    setWeeklyDropButtonState(btn, i18n.t('home.enter_weekly_drop'), true, () => {
+      navigateWithFeedback('weeklyDrop.html', btn);
+    });
   } else {
-    btn.disabled = true;
-    btn.textContent = i18n.t('home.weekly_drop_locked');
+    setWeeklyDropButtonState(btn, i18n.t('home.weekly_drop_locked'), false);
+  }
+}
+
+async function syncWeeklyContestEnabled(options = {}) {
+  const force = Boolean(options.force);
+  const now = Date.now();
+  if (!force && now - weeklyEligibilitySyncAt < WEEKLY_ELIGIBILITY_SYNC_MS) {
+    return weeklyContestEnabled;
+  }
+  if (weeklyEligibilitySyncInFlight) {
+    return weeklyEligibilitySyncInFlight;
+  }
+
+  weeklyEligibilitySyncInFlight = (async () => {
+    try {
+      const res = await fetch('/api/weeklyDrop/eligibility', {
+        credentials: 'include',
+        cache: 'no-store'
+      });
+      if (!res.ok) return weeklyContestEnabled;
+      const data = await res.json();
+      if (typeof data.disabled === 'boolean') {
+        weeklyContestEnabled = !data.disabled;
+      }
+      weeklyEligibilitySyncAt = Date.now();
+      return weeklyContestEnabled;
+    } catch (err) {
+      console.warn('Weekly contest eligibility sync failed:', err);
+      return weeklyContestEnabled;
+    } finally {
+      weeklyEligibilitySyncInFlight = null;
+    }
+  })();
+
+  return weeklyEligibilitySyncInFlight;
+}
+
+function showWelcomeBonusIfPresent() {
+  let payload = null;
+
+  try {
+    payload = JSON.parse(sessionStorage.getItem(WELCOME_BONUS_STORAGE_KEY) || 'null');
+  } catch (_) {
+    payload = null;
+  } finally {
+    sessionStorage.removeItem(WELCOME_BONUS_STORAGE_KEY);
+  }
+
+  if (!payload) return;
+
+  const amount = Number(payload.amount || 100);
+  if (typeof window.fireConfetti === 'function') {
+    window.fireConfetti({ particleCount: 110, spread: 82, origin: { y: 0.6 } });
+  }
+  if (typeof window.showSuccessToast === 'function') {
+    window.showSuccessToast(`Welcome! You received ${amount} points from your friend's invite!`);
+  } else {
+    alert(`Welcome! You received ${amount} points from your friend's invite!`);
   }
 }
 
@@ -76,10 +148,12 @@ async function bootstrap() {
     }
 
     if (user) {
+      await syncWeeklyContestEnabled({ force: true });
       updateUI(user);
       updateTopBar(user);
       updateWeeklyDropEligibility(user);
       syncMiningUI(user.miningStartedAt);
+      showWelcomeBonusIfPresent();
     }
   } catch (err) {
     console.error('Bootstrap failed:', err);
@@ -93,6 +167,10 @@ function handleUserUpdate(user) {
   updateUI(user);
   updateTopBar(user);
   updateWeeklyDropEligibility(user);
+  syncWeeklyContestEnabled().then(() => {
+    const latestUser = getCachedUser() || user;
+    updateWeeklyDropEligibility(latestUser);
+  });
 
   if (user.miningStartedAt) {
     syncMiningUI(user.miningStartedAt);
@@ -113,6 +191,27 @@ window.addEventListener('hope:globalEvent', (event) => {
     weeklyContestEnabled = Boolean(detail.data?.enabled);
     const user = getCachedUser();
     if (user) updateWeeklyDropEligibility(user);
+  }
+});
+
+window.addEventListener('hope:languageChanged', () => {
+  const user = getCachedUser();
+  if (user) {
+    updateWeeklyDropEligibility(user);
+    syncMiningUI(user.miningStartedAt);
+  }
+
+  if (dailyCheckInStatus) {
+    if (dailyCheckInStreakText) {
+      dailyCheckInStreakText.textContent =
+        `${i18n.t('checkin.current_streak')}: ${dailyCheckInStatus.streak || 0} ${i18n.t('home.days')}`;
+    }
+    if (dailyCheckInResetTime && dailyCheckInStatus.resetAtUtc) {
+      dailyCheckInResetTime.textContent = i18n.format('checkin.resets_at', {
+        time: formatUtcTime(dailyCheckInStatus.resetAtUtc)
+      });
+    }
+    setDailyCheckInButtonState(dailyCheckInStatus);
   }
 });
 
@@ -138,6 +237,7 @@ async function fetchUser(options = {}) {
 
     updateTopBar(user);
     updateUI(user);
+    await syncWeeklyContestEnabled();
     updateWeeklyDropEligibility(user);
     syncMiningUI(user.miningStartedAt);
   } catch (err) {
@@ -282,7 +382,7 @@ async function refreshDailyCheckInStatus({ autoOpen } = { autoOpen: false }) {
     }
     if (dailyCheckInResetTime) {
       const resetAt = formatUtcTime(data.resetAtUtc);
-      dailyCheckInResetTime.textContent = `Resets daily at ${resetAt} UTC`;
+      dailyCheckInResetTime.textContent = i18n.format('checkin.resets_at', { time: resetAt });
     }
 
     renderDailyCheckInCalendar(data);
@@ -306,8 +406,6 @@ function syncMiningUI(miningStartedAt) {
   }
   if (!miningBar || !miningBtn) return;
 
-  if (miningInterval) clearInterval(miningInterval);
-  if (miningCompletionTimeout) clearTimeout(miningCompletionTimeout);
   if (miningAnimationFrame) cancelAnimationFrame(miningAnimationFrame);
 
   if (!miningStartedAt) {
@@ -330,7 +428,7 @@ function syncMiningUI(miningStartedAt) {
     return;
   }
 
-  miningBtn.textContent = 'Mining...';
+  miningBtn.textContent = i18n.t('home.mining_in_progress');
   miningIsComplete = false;
   miningBtn.classList.remove('mining-ready');
   const miningTrack = document.getElementById('mining-bar');
@@ -358,8 +456,6 @@ function resetMiningUI() {
   }
   if (!miningBar || !miningBtn) return;
 
-  if (miningInterval) clearInterval(miningInterval);
-  if (miningCompletionTimeout) clearTimeout(miningCompletionTimeout);
   if (miningAnimationFrame) cancelAnimationFrame(miningAnimationFrame);
   const miningTrack = document.getElementById('mining-bar');
   if (miningTrack) miningTrack.classList.remove('mining-active');
@@ -376,8 +472,6 @@ function setMiningCompleteUI() {
   }
   if (!miningBar || !miningBtn) return;
 
-  if (miningInterval) clearInterval(miningInterval);
-  if (miningCompletionTimeout) clearTimeout(miningCompletionTimeout);
   if (miningAnimationFrame) cancelAnimationFrame(miningAnimationFrame);
   const miningTrack = document.getElementById('mining-bar');
   if (miningTrack) miningTrack.classList.remove('mining-active');
@@ -404,15 +498,20 @@ async function claimMining() {
   // Optimistic update — show reward immediately, confirm with server in background.
   // The mining bar is only claimable when full, so rejection is extremely rare.
   const miningReward = { points: 250 };
+  if (miningBtn) {
+    miningBtn.disabled = true;
+    miningBtn.textContent = i18n.t('home.claiming');
+  }
 
   // Update UI instantly — don't wait for server
   if (typeof window.showRewardPopup === 'function') {
-    window.showRewardPopup(miningReward, { title: 'Mining Reward Claimed', durationMs: 2600 });
+    window.showRewardPopup(miningReward, { title: i18n.t('home.reward_title'), durationMs: 2600 });
   } else if (typeof window.showSuccessToast === 'function') {
     window.showSuccessToast('+250 points!');
   }
-  launchMiningClaimConfetti();
-  resetMiningUI();
+  if (typeof window.fireConfetti === 'function') {
+    window.fireConfetti({ particleCount: 90, spread: 75, origin: { y: 0.62 } });
+  }
 
   // Confirm with server in background
   try {
@@ -425,63 +524,32 @@ async function claimMining() {
     }
 
     // Refresh user data silently after server confirms
+    resetMiningUI();
+    if (miningBtn) {
+      miningBtn.disabled = false;
+    }
     await fetchUser({ force: true });
   } catch (err) {
     console.error('Mining claim failed:', err);
     // Rollback: restore the mining complete state so user can try again
     setMiningCompleteUI();
+    if (miningBtn) {
+      miningBtn.disabled = false;
+    }
     if (typeof window.showErrorToast === 'function') {
       window.showErrorToast(err.message || 'Mining claim failed — please try again');
     }
   }
 }
 
-function launchMiningClaimConfetti() {
-  if (typeof confetti !== 'function') return;
-  const canvas = document.createElement('canvas');
-  canvas.style.position = 'fixed';
-  canvas.style.inset = '0';
-  canvas.style.width = '100%';
-  canvas.style.height = '100%';
-  canvas.style.pointerEvents = 'none';
-  canvas.style.zIndex = '4300';
-  canvas.style.background = 'transparent';
-  document.body.appendChild(canvas);
-
-  const fire = confetti.create(canvas, { resize: true, useWorker: true });
-  const palette = ['#00ffaa', '#00eaff', '#74ffd9', '#b3fff0', '#ffd166'];
-  fire({
-    particleCount: 90,
-    spread: 75,
-    startVelocity: 45,
-    scalar: 0.95,
-    ticks: 140,
-    origin: { y: 0.62 },
-    colors: palette,
-    shapes: ['circle']
-  });
-  setTimeout(() => {
-    fire({
-      particleCount: 55,
-      spread: 95,
-      startVelocity: 38,
-      scalar: 0.8,
-      ticks: 120,
-      origin: { y: 0.56 },
-      colors: palette,
-      shapes: ['circle']
-    });
-  }, 140);
-
-  setTimeout(() => {
-    canvas.remove();
-  }, 2200);
-}
-
 async function handleCheckIn(button) {
+  if (!debounceButton(button, 1000)) return;
+  if (checkInInProgress) return;
+
+  checkInInProgress = true;
   const originalText = button.textContent;
   button.disabled = true;
-  button.textContent = 'Preparing wallet...';
+  button.textContent = i18n.t('home.preparing_wallet');
 
   try {
     if (typeof tonConnectUI.restoreConnection === 'function') {
@@ -504,7 +572,7 @@ async function handleCheckIn(button) {
       throw new Error('Already checked in today');
     }
 
-    button.textContent = 'Waiting for payment...';
+    button.textContent = i18n.t('home.waiting_payment');
     const priceRes = await fetch('/api/tonAmount/ton-amount', { credentials: 'include' });
     if (!priceRes.ok) throw new Error('Failed to get TON amount');
     const { tonAmount, recipientAddress } = await priceRes.json();
@@ -545,7 +613,7 @@ async function handleCheckIn(button) {
       window.fireConfetti({ particleCount: 120, spread: 85, origin: { y: 0.55 } });
     }
     if (typeof window.showRewardPopup === 'function') {
-      window.showRewardPopup(reward, { title: 'Check-in Complete' });
+      window.showRewardPopup(reward, { title: i18n.t('checkin.complete_title') });
     } else {
       showCheckInSuccessAnimation(reward);
     }
@@ -555,6 +623,7 @@ async function handleCheckIn(button) {
     console.error('Daily check-in failed:', err);
     alert(err.message || 'Check-in failed');
   } finally {
+    checkInInProgress = false;
     if (button === dailyCheckInModalBtn) {
       setDailyCheckInButtonState(dailyCheckInStatus);
     } else {

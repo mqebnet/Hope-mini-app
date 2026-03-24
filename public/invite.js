@@ -1,6 +1,7 @@
 // invite.js (Frontend)
 import { fetchUserData, updateTopBar, getCachedUser } from './userData.js';
 import { canBootstrap, debounceButton } from './utils.js';
+import { i18n } from './i18n.js';
 
 window.addEventListener('hope:userUpdated', (event) => {
   const user = event.detail;
@@ -36,10 +37,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     inviteLinkInput.value = inviteLink;
 
     // Copy link
-    document.getElementById("copy-invite-btn").addEventListener("click", () => {
-      inviteLinkInput.select();
-      navigator.clipboard.writeText(inviteLink);
-      showNotification('Link copied to clipboard!', 'success');
+    document.getElementById("copy-invite-btn").addEventListener("click", async (event) => {
+      const btn = event.currentTarget;
+      if (!debounceButton(btn, 600)) return;
+      const copied = await copyTextToClipboard(inviteLinkInput.value || inviteLink);
+      if (copied) {
+        showNotification(i18n.t('invite.copied'), 'success');
+      } else {
+        showNotification(i18n.t('invite.verification_failed'), 'error');
+      }
     });
 
     // Load progress + leaderboard in parallel
@@ -51,7 +57,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     lucide.createIcons();
   } catch (err) {
     console.error(err);
-    showNotification("Failed to load invite data", "error");
+    showNotification(i18n.t('invite.load_failed'), "error");
   }
 });
 
@@ -75,7 +81,7 @@ async function loadProgress() {
     label.textContent = `${progress}/${target}`;
 
     if (completedTasks.includes(target)) {
-      btn.textContent = "Claimed";
+      btn.textContent = i18n.t('invite.claimed');
       btn.disabled = true;
       btn.classList.add('claimed');
       return;
@@ -85,10 +91,10 @@ async function loadProgress() {
       try {
         const verifyRes = await fetch(`/api/invite/verify?target=${target}`, { credentials: 'include', cache: 'no-store' });
         const verifyData = await verifyRes.json();
-        if (!verifyRes.ok) throw new Error(verifyData.error || 'Verification failed');
+        if (!verifyRes.ok) throw new Error(verifyData.error || i18n.t('invite.verification_failed'));
         const { completed, claimed } = verifyData;
         if (claimed) {
-          btn.textContent = "Claimed";
+          btn.textContent = i18n.t('invite.claimed');
           btn.disabled = true;
           btn.classList.add('claimed');
           return;
@@ -96,13 +102,13 @@ async function loadProgress() {
 
         if (!completed) {
           showNotification(
-            `Invite ${target - invitedCount} more friend(s) to unlock this reward.`,
+            i18n.format('invite.unlock_more', { count: target - invitedCount }),
             'info'
           );
           return;
         }
 
-        btn.textContent = "Claim";
+        btn.textContent = i18n.t('invite.claim');
         btn.classList.add('claimable');
 
         btn.onclick = async () => {
@@ -112,15 +118,15 @@ async function loadProgress() {
           });
 
           const claimData = await claimRes.json();
-          if (!claimRes.ok) throw new Error(claimData.error || "Claim failed");
+          if (!claimRes.ok) throw new Error(claimData.error || i18n.t('invite.verification_failed'));
 
           const refreshedUser = await fetchUserData();
           updateTopBar(refreshedUser);
-          showNotification(`Reward claimed! +${claimData.reward?.points || 0} points`, "success");
+          showNotification(i18n.format('invite.reward_claimed', { points: claimData.reward?.points || 0 }), "success");
           await loadProgress();
         };
       } catch (e) {
-        showNotification(e.message || "Verification failed", "error");
+        showNotification(e.message || i18n.t('invite.verification_failed'), "error");
       }
     };
   });
@@ -148,11 +154,57 @@ async function loadReferralLeaderboard() {
 }
 
 
+async function copyTextToClipboard(text) {
+  const value = String(text || '').trim();
+  if (!value) return false;
+
+  try {
+    if (navigator?.clipboard?.writeText) {
+      await navigator.clipboard.writeText(value);
+      return true;
+    }
+  } catch (_) {}
+
+  // Fallback for older WebViews
+  try {
+    const helper = document.createElement('textarea');
+    helper.value = value;
+    helper.setAttribute('readonly', '');
+    helper.style.position = 'absolute';
+    helper.style.left = '-9999px';
+    document.body.appendChild(helper);
+    helper.select();
+    const ok = document.execCommand('copy');
+    helper.remove();
+    return Boolean(ok);
+  } catch (_) {
+    return false;
+  }
+}
+
 // Tiny toast helper
 function showNotification(message, type = "info") {
+  if (typeof window.showNotification === 'function') {
+    window.showNotification(message, type);
+    return;
+  }
+
+  let host = document.getElementById('notification-host');
+  if (!host) {
+    host = document.createElement('div');
+    host.id = 'notification-host';
+    host.setAttribute('aria-live', 'polite');
+    host.setAttribute('aria-atomic', 'true');
+    document.body.appendChild(host);
+  }
+
   const el = document.createElement("div");
   el.className = `notification ${type}`;
   el.textContent = message;
-  document.body.appendChild(el);
-  setTimeout(() => el.remove(), 3000);
+  host.appendChild(el);
+  requestAnimationFrame(() => el.classList.add('show'));
+  setTimeout(() => {
+    el.classList.remove('show');
+    setTimeout(() => el.remove(), 220);
+  }, 3000);
 }

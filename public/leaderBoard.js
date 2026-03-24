@@ -1,7 +1,8 @@
 // public/leaderBoard.js
 import { updateTopBar, fetchUserDataOnce, getCachedUser } from './userData.js';
 import { canBootstrap } from './utils.js';
-import { subscribeToLeaderboard, unsubscribeFromLeaderboard } from './wsync.js';
+import { subscribeToLeaderboard } from './wsync.js';
+import { i18n } from './i18n.js';
 
 let currentLevelIndex = 1;
 let currentUserId = null;
@@ -20,7 +21,6 @@ const LEVEL_INDEX = {
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
-  // Bootstrap lock: prevent running twice
   if (!canBootstrap('leaderboard')) return;
 
   if (window.Telegram?.WebApp) {
@@ -30,7 +30,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   try {
-    // Use cached user data (populated by script.js)
     let user = getCachedUser();
     if (!user) {
       user = await fetchUserDataOnce();
@@ -66,9 +65,7 @@ function initArrowNavigation() {
   nextBtn.addEventListener('click', () => navigateLeaderboard(1));
 }
 
-// Global handler for WebSocket leaderboard updates
-// Called when other users' points change
-window.refreshLeaderboard = async function() {
+window.refreshLeaderboard = async function refreshLeaderboard() {
   console.log('[Leaderboard] Refreshing from WebSocket update');
   await loadLeaderboard(currentLevelIndex);
 };
@@ -81,11 +78,13 @@ async function loadLeaderboard(levelIndex) {
     const data = await res.json();
 
     const { levelName, users } = data;
-
     const list = document.getElementById('leaderboard-list');
     list.innerHTML = '';
 
-    document.getElementById('leaderboard-level').textContent = `Level ${levelIndex} � ${levelName}`;
+    document.getElementById('leaderboard-level').textContent = i18n.format('leaderboard.level_title', {
+      level: levelIndex,
+      name: levelName
+    });
 
     users.forEach((u, i) => {
       const displayName = u.username || u.telegramId;
@@ -107,15 +106,11 @@ async function loadLeaderboard(levelIndex) {
     });
 
     currentLevelIndex = levelIndex;
-    
-    // Store current level globally for WebSocket subscription
     window.currentLeaderboardLevel = levelIndex;
-
-    // Subscribe to real-time updates for this leaderboard level
     subscribeToLeaderboard(levelIndex);
   } catch (err) {
     console.error(err);
-    showNotification('Failed to load leaderboard', 'error');
+    showNotification(i18n.t('leaderboard.load_failed'), 'error');
   } finally {
     showLoading(false);
   }

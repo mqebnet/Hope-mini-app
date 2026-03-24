@@ -1,14 +1,12 @@
-import { fetchUserData, updateTopBar, fetchUserDataOnce, getCachedUser } from './userData.js';
+import { updateTopBar, getCachedUser, setCachedUser } from './userData.js';
 import { tonConnectUI } from './tonconnect.js';
 import { canBootstrap, debounceButton } from './utils.js';
-
-const VERIFY_DELAY_MS = 24 * 60 * 60 * 1000;
+import { i18n } from './i18n.js';
 
 let currentUser = null;
 let taskDefinitions = null;
 let dailyCheckInCheckedToday = false;
 let pendingVerifications = {};
-let countdownTimers = {};
 
 window.addEventListener('hope:userUpdated', (event) => {
   const user = event.detail;
@@ -24,7 +22,6 @@ window.addEventListener('hope:globalEvent', (event) => {
   if (!currentUser) return;
   taskDefinitions = data;
   renderAllTasks();
-  startCountdowns();
 });
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -34,8 +31,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const cached = getCachedUser();
     if (cached) updateTopBar(cached);
 
-    let user = getCachedUser();
-    if (!user) user = await fetchUserDataOnce();
+    const user = await fetchFreshUserData();
 
     updateTopBar(user);
 
@@ -55,11 +51,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     setupTabs();
     renderAllTasks();
-    startCountdowns();
     setupGlobalHandlers();
   } catch (err) {
     console.error('Tasks init failed:', err);
-    showErrorToast('Failed to load tasks');
+    showErrorToast(i18n.t('tasks.failed_load'));
   }
 });
 
@@ -68,8 +63,20 @@ async function fetchTaskDefinitions() {
     credentials: 'include',
     cache: 'no-store'
   });
-  if (!res.ok) throw new Error('Failed to fetch task definitions');
+  if (!res.ok) throw new Error(i18n.t('tasks.failed_load'));
   return res.json();
+}
+
+async function fetchFreshUserData() {
+  const res = await fetch('/api/user/me', {
+    credentials: 'include',
+    cache: 'no-store'
+  });
+  if (!res.ok) throw new Error(i18n.t('tasks.failed_load'));
+  const data = await res.json();
+  const user = data?.user || data;
+  setCachedUser(user);
+  return user;
 }
 
 async function fetchDailyCheckInStatus() {
@@ -77,7 +84,7 @@ async function fetchDailyCheckInStatus() {
     credentials: 'include',
     cache: 'no-store'
   });
-  if (!res.ok) throw new Error('Failed to fetch daily check-in status');
+  if (!res.ok) throw new Error(i18n.t('tasks.checkin_failed'));
   return res.json();
 }
 
@@ -118,9 +125,15 @@ function renderOneTimeTasks() {
 function createTaskElement(task, type) {
   const completed = task.action === 'check-in'
     ? dailyCheckInCheckedToday
-    : currentUser.completedTasks?.includes(task.id);
+    : type === 'daily'
+      ? currentUser.completedDailyTasksToday?.includes(task.id)
+      : currentUser.completedTasks?.includes(task.id);
+  const isComingSoonVerify = type === 'one-time'
+    && task.action === 'verify'
+    && (Boolean(task.comingSoon) || !task.url);
 
   const isPending = !completed
+    && !isComingSoonVerify
     && type === 'one-time'
     && task.action === 'verify'
     && pendingVerifications[task.id] !== undefined;
@@ -135,7 +148,9 @@ function createTaskElement(task, type) {
   let statusHtml = '';
 
   if (completed) {
-    buttonHtml = '<button class="task-button disabled" disabled>Done</button>';
+    buttonHtml = `<button class="task-button disabled" disabled>${i18n.t('tasks.done')}</button>`;
+  } else if (isComingSoonVerify) {
+    buttonHtml = `<button class="task-button disabled" disabled>${i18n.t('tasks.coming_soon')}</button>`;
   } else if (type === 'one-time' && task.action === 'verify') {
     if (!isPending) {
       buttonHtml = `
@@ -143,23 +158,21 @@ function createTaskElement(task, type) {
           data-task-id="${task.id}"
           data-action="verify"
           ${task.url ? `data-url="${task.url}"` : ''}>
-          Go
+          ${i18n.t('tasks.go')}
         </button>`;
     } else if (isReadyNow) {
       buttonHtml = `
         <button class="task-button claim-btn"
           data-task-id="${task.id}"
           data-action="claim-verify">
-          Claim
+          ${i18n.t('invite.claim')}
         </button>`;
     } else {
-      buttonHtml = '<button class="task-button disabled" disabled>Verifying...</button>';
+      buttonHtml = `<button class="task-button disabled" disabled>${i18n.t('tasks.verifying')}</button>`;
       statusHtml = `
         <div class="verify-status" data-task-id="${task.id}">
           <span class="verify-spinner">...</span>
-          <span class="verify-countdown" data-ready-at="${pendingVerifications[task.id]}">
-            Calculating...
-          </span>
+          <span>${i18n.t('tasks.under_review_static')}</span>
         </div>`;
     }
   } else {
@@ -185,54 +198,13 @@ function createTaskElement(task, type) {
 }
 
 function getButtonLabel(task, completed) {
-  if (completed) return 'Done';
+  if (completed) return i18n.t('tasks.done');
   switch (task.action) {
-    case 'check-in': return 'Check In';
-    case 'visit': return 'Check';
-    case 'verify': return 'Go';
-    default: return 'Start';
+    case 'check-in': return i18n.t('home.check_in');
+    case 'visit': return i18n.t('tasks.check');
+    case 'verify': return i18n.t('tasks.go');
+    default: return i18n.t('tasks.start');
   }
-}
-
-function startCountdowns() {
-  Object.values(countdownTimers).forEach(clearInterval);
-  countdownTimers = {};
-
-  document.querySelectorAll('.verify-countdown[data-ready-at]').forEach((el) => {
-    const readyAt = Number(el.dataset.readyAt);
-    const taskItem = el.closest('.task-item');
-    const taskId = taskItem?.dataset.taskId;
-    if (!taskId || !readyAt) return;
-
-    function updateCountdown() {
-      const remaining = Math.min(Math.max(readyAt - Date.now(), 0), VERIFY_DELAY_MS);
-      if (remaining <= 0) {
-        clearInterval(countdownTimers[taskId]);
-        delete countdownTimers[taskId];
-        pendingVerifications[taskId] = readyAt;
-        const task = findLocalTask(taskId);
-        if (task && taskItem.parentNode) {
-          const newEl = createTaskElement(task, 'one-time');
-          taskItem.parentNode.replaceChild(newEl, taskItem);
-        }
-        return;
-      }
-
-      const hrs = Math.floor(remaining / (1000 * 60 * 60));
-      const mins = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60));
-      const secs = Math.floor((remaining % (1000 * 60)) / 1000);
-      el.textContent = `Under review - ${hrs}h ${mins}m ${secs}s remaining`;
-    }
-
-    updateCountdown();
-    countdownTimers[taskId] = setInterval(updateCountdown, 1000);
-  });
-}
-
-function findLocalTask(taskId) {
-  if (!taskDefinitions) return null;
-  return [...(taskDefinitions.daily || []), ...(taskDefinitions.oneTime || [])]
-    .find((t) => t.id === taskId) || null;
 }
 
 function setupTabs() {
@@ -264,7 +236,6 @@ async function handleButtonClick(e) {
     if (action === 'check-in') {
       await handleDailyCheckIn();
       renderAllTasks();
-      startCountdowns();
       return;
     }
 
@@ -272,7 +243,7 @@ async function handleButtonClick(e) {
       if (url) window.open(url, '_blank');
 
       btn.disabled = true;
-      btn.textContent = 'Submitting...';
+      btn.textContent = i18n.t('tasks.submitting');
 
       const res = await fetch('/api/tasks/start-verify', {
         method: 'POST',
@@ -283,22 +254,21 @@ async function handleButtonClick(e) {
       const data = await res.json();
 
       if (!res.ok) {
-        showErrorToast(data.error || 'Failed to start verification');
+        showErrorToast(data.error || i18n.t('tasks.start_verify_failed'));
         btn.disabled = false;
-        btn.textContent = 'Go';
+        btn.textContent = i18n.t('tasks.go');
         return;
       }
 
       pendingVerifications[taskId] = data.readyAt;
       renderAllTasks();
-      startCountdowns();
-      showSuccessToast('Task submitted for review. Come back in 24 hours to claim your reward.');
+      showSuccessToast(i18n.t('tasks.task_submitted_review'));
       return;
     }
 
     if (action === 'claim-verify') {
       btn.disabled = true;
-      btn.textContent = 'Claiming...';
+      btn.textContent = i18n.t('home.claiming');
 
       const res = await fetch('/api/tasks/claim-verify', {
         method: 'POST',
@@ -309,41 +279,40 @@ async function handleButtonClick(e) {
       const data = await res.json();
 
       if (!res.ok) {
-        showErrorToast(data.error || 'Claim failed');
+        showErrorToast(data.error || i18n.t('tasks.claim_failed'));
         btn.disabled = false;
-        btn.textContent = 'Claim';
+        btn.textContent = i18n.t('invite.claim');
         return;
       }
 
       delete pendingVerifications[taskId];
       await refreshUser();
       renderAllTasks();
-      startCountdowns();
-      showSuccessToast(`+${data.reward?.points || 0} points claimed!`);
+      showTaskRewardPopup(data.reward);
       return;
     }
 
     if (action === 'visit') {
       if (url) window.open(url, '_blank');
-      await completeTask(taskId);
+      const data = await completeTask(taskId);
       markButtonDone(btn);
+      showTaskRewardPopup(data.reward);
       return;
     }
   } catch (err) {
     console.error('Task action error:', err);
     if (err?.message?.toLowerCase().includes('already checked in')) {
-      showSuccessToast('You already checked in today');
+      showSuccessToast(i18n.t('tasks.you_already_checked_in_today'));
       await refreshUser();
       renderAllTasks();
-      startCountdowns();
       return;
     }
-    showErrorToast(err?.message || 'Task failed');
+    showErrorToast(err?.message || i18n.t('tasks.task_failed'));
   }
 }
 
 function markButtonDone(btn) {
-  btn.textContent = 'Done';
+  btn.textContent = i18n.t('tasks.done');
   btn.classList.add('disabled');
   btn.disabled = true;
 }
@@ -352,7 +321,7 @@ async function handleDailyCheckIn() {
   const preStatus = await fetchDailyCheckInStatus();
   if (preStatus?.checkedInToday) {
     dailyCheckInCheckedToday = true;
-    throw new Error('Already checked in today');
+    throw new Error(i18n.t('tasks.already_checked_in_today'));
   }
 
   if (typeof tonConnectUI.restoreConnection === 'function') {
@@ -362,12 +331,12 @@ async function handleDailyCheckIn() {
   }
 
   if (!tonConnectUI.wallet) await tonConnectUI.openModal();
-  if (!tonConnectUI.wallet) throw new Error('Please connect your TON wallet first');
+  if (!tonConnectUI.wallet) throw new Error(i18n.t('tasks.wallet_required'));
 
   const priceRes = await fetch('/api/tonAmount/ton-amount', { credentials: 'include' });
-  if (!priceRes.ok) throw new Error('Failed to get TON amount');
+  if (!priceRes.ok) throw new Error(i18n.t('tasks.ton_amount_failed'));
   const { tonAmount, recipientAddress } = await priceRes.json();
-  if (!recipientAddress) throw new Error('Payment recipient not configured');
+  if (!recipientAddress) throw new Error(i18n.t('tasks.recipient_not_configured'));
 
   const tx = await tonConnectUI.sendTransaction({
     validUntil: Math.floor(Date.now() / 1000) + 300,
@@ -376,7 +345,7 @@ async function handleDailyCheckIn() {
 
   const txHash = tx?.transaction?.hash || tx?.txid?.hash || tx?.hash || '';
   const txBoc = tx?.boc || '';
-  if (!txHash && !txBoc) throw new Error('Transaction proof missing');
+  if (!txHash && !txBoc) throw new Error(i18n.t('tasks.tx_proof_missing'));
 
   const res = await fetch('/api/dailyCheckIn/verify', {
     method: 'POST',
@@ -389,14 +358,16 @@ async function handleDailyCheckIn() {
   if (!res.ok) {
     if ((data?.error || '').toLowerCase().includes('already checked in')) {
       dailyCheckInCheckedToday = true;
-      throw new Error('Already checked in today');
+      throw new Error(i18n.t('tasks.already_checked_in_today'));
     }
-    throw new Error(data.error || 'Check-in failed');
+    throw new Error(data.error || i18n.t('tasks.checkin_failed'));
   }
 
   dailyCheckInCheckedToday = true;
   await refreshUser();
-  showSuccessToast('Check-in successful +1000 points');
+  showTaskRewardPopup(data.reward || { points: 1000, bronzeTickets: 250, xp: 5 }, {
+    title: i18n.t('checkin.complete_title')
+  });
 }
 
 async function completeTask(taskId) {
@@ -407,13 +378,14 @@ async function completeTask(taskId) {
     body: JSON.stringify({ taskId })
   });
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Failed to complete task');
+  if (!res.ok) throw new Error(data.error || i18n.t('tasks.complete_task_failed'));
   await refreshUser();
+  return data;
 }
 
 async function refreshUser() {
   const [user, checkInStatus] = await Promise.all([
-    fetchUserData(),
+    fetchFreshUserData(),
     fetchDailyCheckInStatus().catch(() => ({ checkedInToday: dailyCheckInCheckedToday }))
   ]);
   currentUser = user;
@@ -435,4 +407,21 @@ function showErrorToast(msg) {
     return;
   }
   alert(msg);
+}
+
+function showTaskRewardPopup(reward = {}, options = {}) {
+  const normalizedReward = {
+    points: Number(reward?.points || 0),
+    xp: Number(reward?.xp || 0),
+    bronzeTickets: Number(reward?.bronzeTickets || 0),
+    silverTickets: Number(reward?.silverTickets || 0),
+    goldTickets: Number(reward?.goldTickets || 0)
+  };
+
+  if (typeof window.showRewardPopup === 'function') {
+    window.showRewardPopup(normalizedReward, options);
+    return;
+  }
+
+  showSuccessToast(i18n.format('tasks.points_claimed', { points: normalizedReward.points || 0 }));
 }

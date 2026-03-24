@@ -16,105 +16,45 @@ const rewards = {
 };
 
 async function reconcileInviteState(user) {
-  const counted = Number(user?.invitedCount || 0);
-  const [referralsCount, legacyInvitedByCount] = await Promise.all([
-    Referral.countDocuments({ inviterId: user.telegramId }),
-    User.countDocuments({ invitedBy: user.telegramId })
-  ]);
-  const effectiveInvitedCount = Math.max(counted, referralsCount, legacyInvitedByCount);
-  let touched = false;
-  if (effectiveInvitedCount !== counted) {
-    user.invitedCount = effectiveInvitedCount;
-    touched = true;
-  }
+  const referralsCount = await Referral.countDocuments({ inviterId: user.telegramId });
+  const cachedCount = Number(user?.invitedCount || 0);
 
-  if (touched) {
+  if (referralsCount !== cachedCount) {
+    user.invitedCount = referralsCount;
     await user.save();
   }
 
   return {
-    invitedCount: effectiveInvitedCount,
-    referralsCount,
-    directInviteCount: legacyInvitedByCount
+    invitedCount: referralsCount
   };
 }
-
-router.post('/register', async (req, res) => {
-  try {
-    const { inviteCode, newUserId } = req.body;
-    const newUserTelegramId = Number(newUserId);
-
-    if (!inviteCode || !newUserTelegramId) {
-      return res.status(400).json({ error: 'Invalid payload' });
-    }
-
-    const newUser = await User.findOne({ telegramId: newUserTelegramId });
-    if (!newUser) return res.status(404).json({ error: 'New user not found' });
-
-    if (newUser.invitedBy) {
-      return res.json({ message: 'Invite already processed' });
-    }
-
-    const inviter = await User.findOne({ inviteCode });
-    if (!inviter || inviter.telegramId === newUserTelegramId) {
-      return res.status(400).json({ error: 'Invalid invite code' });
-    }
-
-    newUser.invitedBy = inviter.telegramId;
-    newUser.points = (newUser.points || 0) + 100;
-    newUser.level = getUserLevel(newUser.points);
-    await newUser.save();
-
-    const referralResult = await Referral.updateOne(
-      { invitedId: newUserTelegramId },
-      {
-        $setOnInsert: {
-          inviterId: inviter.telegramId,
-          invitedId: newUserTelegramId,
-          joinedAt: new Date()
-        }
-      },
-      { upsert: true }
-    );
-    if (Number(referralResult?.upsertedCount || 0) > 0) {
-      inviter.invitedCount = (inviter.invitedCount || 0) + 1;
-    }
-    await inviter.save();
-    stateEmitter.emit('user:updated', {
-      telegramId: inviter.telegramId,
-      points: inviter.points || 0,
-      xp: inviter.xp || 0,
-      level: inviter.level,
-      nextLevelAt: inviter.nextLevelAt,
-      bronzeTickets: inviter.bronzeTickets || 0,
-      silverTickets: inviter.silverTickets || 0,
-      goldTickets: inviter.goldTickets || 0,
-      streak: inviter.streak || 0,
-      miningStartedAt: inviter.miningStartedAt,
-      invitedCount: inviter.invitedCount || 0
-    });
-
-    res.json({ success: true });
-  } catch (err) {
-    console.error('Invite register error:', err);
-    res.status(500).json({ error: 'Invite registration failed' });
-  }
-});
 
 // Called when an authenticated returning user opens the app via an invite link.
 router.post('/register-session', async (req, res) => {
   try {
     const telegramId = req.user.telegramId;
     const startParam = typeof req.body?.startParam === 'string' ? req.body.startParam.trim() : '';
-    if (!startParam) return res.json({ skipped: true });
+    if (!startParam) return res.json({ success: true, applied: false, reason: 'missing-start-param' });
 
     const user = await User.findOne({ telegramId });
-    if (!user || user.invitedBy) return res.json({ skipped: true });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    if (user.invitedBy) {
+      return res.json({ success: true, applied: false, reason: 'already-attributed' });
+    }
 
-    await applyReferralAttribution(user, startParam);
-    res.json({ success: true });
+    const result = await applyReferralAttribution(user, startParam);
+    res.json({
+      success: true,
+      applied: Boolean(result?.applied),
+      reason: result?.reason || null,
+      inviterTelegramId: result?.inviterTelegramId || null,
+      inviterUpdated: Number(result?.inviterUpdated || 0)
+    });
   } catch (err) {
-    res.json({ skipped: true });
+    console.error('Invite register-session error:', err);
+    res.status(500).json({ error: 'Invite session registration failed' });
   }
 });
 
@@ -245,73 +185,45 @@ router.post('/claim', async (req, res) => {
 
 router.get('/top-referrers', async (req, res) => {
   try {
-    const top = await User.aggregate([
+    const top = await Referral.aggregate([
       {
-        $project: {
-          telegramId: 1,
-          username: 1,
-          invitedCount: { $ifNull: ['$invitedCount', 0] }
-        }
-      },
-      {
-        $lookup: {
-          from: 'referrals',
-          let: { ownerTelegramId: '$telegramId' },
-          pipeline: [
-            {
-              $match: {
-                $expr: { $eq: ['$inviterId', '$$ownerTelegramId'] }
-              }
-            },
-            { $count: 'count' }
-          ],
-          as: 'referralRows'
-        }
-      },
-      {
-        $addFields: {
-          referralsCount: {
-            $ifNull: [{ $arrayElemAt: ['$referralRows.count', 0] }, 0]
-          }
+        $group: {
+          _id: '$inviterId',
+          referrals: { $sum: 1 }
         }
       },
       {
         $lookup: {
           from: 'users',
-          let: { ownerTelegramId: '$telegramId' },
+          let: { inviterTelegramId: '$_id' },
           pipeline: [
             {
               $match: {
-                $expr: {
-                  $eq: ['$invitedBy', '$$ownerTelegramId']
-                }
+                $expr: { $eq: ['$telegramId', '$$inviterTelegramId'] }
               }
             },
-            { $count: 'count' }
+            {
+              $project: {
+                _id: 0,
+                telegramId: 1,
+                username: 1
+              }
+            }
           ],
-          as: 'directInvites'
+          as: 'user'
         }
       },
       {
-        $addFields: {
-          directInviteCount: {
-            $ifNull: [{ $arrayElemAt: ['$directInvites.count', 0] }, 0]
-          }
-        }
+        $unwind: '$user'
       },
-      {
-        $addFields: {
-          effectiveReferrals: { $max: ['$invitedCount', '$referralsCount', '$directInviteCount'] }
-        }
-      },
-      { $sort: { effectiveReferrals: -1, telegramId: 1 } },
+      { $sort: { referrals: -1, _id: 1 } },
       { $limit: 50 }
     ]);
 
     res.json(top.map((u) => ({
-      userId: u.telegramId,
-      username: u.username,
-      referrals: u.effectiveReferrals || 0
+      userId: u.user.telegramId,
+      username: u.user.username,
+      referrals: Number(u.referrals || 0)
     })));
   } catch (err) {
     res.status(500).json({ error: 'Failed to load referral leaderboard' });

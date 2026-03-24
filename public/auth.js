@@ -39,6 +39,12 @@ async function authenticateWithTelegram() {
       throw new Error(data.message || 'Authentication failed');
     }
 
+    if (data.welcomeBonus) {
+      sessionStorage.setItem('hope_welcome_bonus', JSON.stringify({
+        amount: Number(data.bonusAmount || 100)
+      }));
+    }
+
     window.location.replace('/');
   } catch (err) {
     console.error('Auth failed:', err);
