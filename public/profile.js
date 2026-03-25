@@ -40,6 +40,24 @@ function setProfileLoading() {
   setText('profile-perfect-streak-badge', '...');
 }
 
+function applyUserToProfile(user) {
+  if (!user) return;
+  setText('profile-userid', user.username);
+  setText('profile-level', user.level);
+  setText('profile-points', user.points);
+  setText('profile-xp', user.xp);
+  setText('profile-bronze-tickets', user.bronzeTickets);
+  setText('profile-silver-tickets', user.silverTickets);
+  setText('profile-gold-tickets', user.goldTickets);
+  setText('profile-streak', user.streak);
+  const hasPerfectBadge = (user.badges || []).includes('perfect-streak-10');
+  setText('profile-perfect-streak-badge', hasPerfectBadge ? 'Earned' : 'Not yet');
+  const adminRow = document.getElementById('profile-admin-row');
+  if (adminRow) {
+    adminRow.style.display = user.isAdmin ? 'block' : 'none';
+  }
+}
+
 async function ensureProfilePanel(profileContainer) {
   let profilePanel = document.getElementById('profile-panel');
   if (profilePanel) return profilePanel;
@@ -70,23 +88,19 @@ async function loadUserProfile() {
     throw new Error('Failed to load user data');
   }
 
-  setText('profile-userid', user.username);
-  setText('profile-level', user.level);
-  setText('profile-points', user.points);
-  setText('profile-xp', user.xp);
-  setText('profile-bronze-tickets', user.bronzeTickets);
-  setText('profile-silver-tickets', user.silverTickets);
-  setText('profile-gold-tickets', user.goldTickets);
-  setText('profile-streak', user.streak);
-  const hasPerfectBadge = (user.badges || []).includes('perfect-streak-10');
-  setText('profile-perfect-streak-badge', hasPerfectBadge ? 'Earned' : 'Not yet');
-  const adminRow = document.getElementById('profile-admin-row');
-  if (adminRow) {
-    adminRow.style.display = user.isAdmin ? 'block' : 'none';
-  }
-
+  applyUserToProfile(user);
   updateTopBar(user);
 }
+
+window.addEventListener('hope:userUpdated', (event) => {
+  const user = event.detail;
+  if (!user) return;
+  updateTopBar(user);
+  const panel = document.getElementById('profile-panel');
+  if (panel && panel.style.display !== 'none') {
+    applyUserToProfile(user);
+  }
+});
 
 document.addEventListener('DOMContentLoaded', () => {
   const profileButton = document.getElementById('profile-button');

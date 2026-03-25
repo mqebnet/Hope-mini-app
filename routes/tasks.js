@@ -5,7 +5,7 @@ const CompletedTask = require('../models/CompletedTask');
 const DailyTaskCompletion = require('../models/DailyTaskCompletion');
 const PendingTaskVerification = require('../models/PendingTaskVerification');
 const { verifyTransaction } = require('../utils/tonHandler');
-const { getUserLevel } = require('../utils/levelUtil');
+const { getUserLevel, getNextLevelThreshold } = require('../utils/levelUtil');
 const stateEmitter = require('../utils/stateEmitter');
 const {
   DAILY_CHECKIN_REWARD,
@@ -18,6 +18,21 @@ const {
 const { getTaskCatalog } = require('../utils/taskCatalog');
 
 const VERIFY_DELAY_MS = 24 * 60 * 60 * 1000;
+
+function buildUserSnapshot(user) {
+  return {
+    telegramId: user.telegramId,
+    username: user.username,
+    points: user.points || 0,
+    xp: user.xp || 0,
+    level: user.level || 'Seeker',
+    nextLevelAt: getNextLevelThreshold(user.points || 0),
+    bronzeTickets: user.bronzeTickets || 0,
+    silverTickets: user.silverTickets || 0,
+    goldTickets: user.goldTickets || 0,
+    streak: user.streak || 0
+  };
+}
 
 async function findTaskById(taskId) {
   const catalog = await getTaskCatalog();
@@ -102,9 +117,12 @@ router.post('/daily-checkin', async (req, res) => {
       streak: user.streak,
       xp: user.xp,
       bronzeTickets: user.bronzeTickets,
+      silverTickets: user.silverTickets || 0,
+      goldTickets: user.goldTickets || 0,
       level: user.level,
       badges,
-      reward: DAILY_CHECKIN_REWARD
+      reward: DAILY_CHECKIN_REWARD,
+      user: buildUserSnapshot(user)
     });
   } catch (err) {
     console.error('Daily Check-in Error:', err);
@@ -178,11 +196,7 @@ router.post('/complete', async (req, res) => {
     res.json({
       success: true,
       reward: { points: rewardPoints },
-      user: {
-        points: user.points,
-        xp: user.xp || 0,
-        level: user.level
-      }
+      user: buildUserSnapshot(user)
     });
   } catch (err) {
     if (err?.code === 11000) {
@@ -359,11 +373,7 @@ router.post('/claim-verify', async (req, res) => {
     res.json({
       success: true,
       reward: { points: rewardPoints },
-      user: {
-        points: user.points,
-        xp: user.xp || 0,
-        level: user.level
-      }
+      user: buildUserSnapshot(user)
     });
   } catch (err) {
     console.error('Claim verify error:', err);

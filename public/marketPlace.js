@@ -24,7 +24,7 @@ const gamesGrid = document.getElementById('games-grid');
 const boxRewards = {
   bronze: { points: 200, bronzeTickets: 50, xp: 1 },
   silver: { points: 300, bronzeTickets: 50, xp: 2 },
-  gold: { points: 500, bronzeTickets: 50, silverTickets: 1, xp: 5 }
+  gold: { points: 500, bronzeTickets: 100, silverTickets: 1, xp: 5 }
 };
 
 document.addEventListener('DOMContentLoaded', async () => {

@@ -198,17 +198,33 @@ GameSessionSchema.methods.calculateReward = function() {
   const perfect = this.matchAttempts === this.totalTriplets ? 1.5 : 1; // bonus for perfect play
   const speed = Math.max(1, 2 - this.timeUsedSeconds / 30); // faster = more points
   const isHard = this.totalTriplets >= 5;
+  const isNormal = this.totalTriplets === 4;
   const basePoints = isHard ? 100 : 50;
 
   const points = Math.floor(basePoints * perfect * speed);
   const xp = 1; // Fixed XP reward: 1 per game
-  const bonusHit = Math.random() > 0.7; // 30% chance
+  let bronzeTickets = 0;
+  let silverTickets = 0;
+
+  // Ticket rewards by difficulty:
+  // easy(3): bronze 30% +5, silver 0
+  // normal(4): bronze 50% +5, silver 30% +1
+  // hard(5): bronze 100% +20, silver 100% +1
+  if (isHard) {
+    bronzeTickets = 20;
+    silverTickets = 1;
+  } else if (isNormal) {
+    if (Math.random() < 0.5) bronzeTickets = 5;
+    if (Math.random() < 0.3) silverTickets = 1;
+  } else {
+    if (Math.random() < 0.3) bronzeTickets = 5;
+  }
 
   return {
     points: Math.max(isHard ? 100 : 20, points),
     xp: Math.max(1, xp),
-    bronzeTickets: isHard ? (bonusHit ? 20 : 0) : (bonusHit ? 5 : 0),
-    silverTickets: isHard ? (bonusHit ? 1 : 0) : 0
+    bronzeTickets,
+    silverTickets
   };
 };
 

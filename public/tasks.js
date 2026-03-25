@@ -7,11 +7,13 @@ let currentUser = null;
 let taskDefinitions = null;
 let dailyCheckInCheckedToday = false;
 let pendingVerifications = {};
+let readyToClaimTasks = {};
 
 window.addEventListener('hope:userUpdated', (event) => {
   const user = event.detail;
   if (!user) return;
-  updateTopBar(user);
+  currentUser = { ...(currentUser || {}), ...user };
+  updateTopBar(currentUser);
 });
 
 window.addEventListener('hope:globalEvent', (event) => {
@@ -139,6 +141,7 @@ function createTaskElement(task, type) {
     && pendingVerifications[task.id] !== undefined;
 
   const isReadyNow = isPending && Date.now() >= pendingVerifications[task.id];
+  const isReadyToClaim = !completed && Boolean(readyToClaimTasks[task.id]);
 
   const wrapper = document.createElement('div');
   wrapper.className = 'task-item';
@@ -151,6 +154,23 @@ function createTaskElement(task, type) {
     buttonHtml = `<button class="task-button disabled" disabled>${i18n.t('tasks.done')}</button>`;
   } else if (isComingSoonVerify) {
     buttonHtml = `<button class="task-button disabled" disabled>${i18n.t('tasks.coming_soon')}</button>`;
+  } else if (task.action === 'visit') {
+    if (isReadyToClaim) {
+      buttonHtml = `
+        <button class="task-button claim-btn"
+          data-task-id="${task.id}"
+          data-action="claim-task">
+          ${i18n.t('home.claim')}
+        </button>`;
+    } else {
+      buttonHtml = `
+        <button class="task-button"
+          data-task-id="${task.id}"
+          data-action="visit"
+          ${task.url ? `data-url="${task.url}"` : ''}>
+          ${getButtonLabel(task, false)}
+        </button>`;
+    }
   } else if (type === 'one-time' && task.action === 'verify') {
     if (!isPending) {
       buttonHtml = `
@@ -165,7 +185,7 @@ function createTaskElement(task, type) {
         <button class="task-button claim-btn"
           data-task-id="${task.id}"
           data-action="claim-verify">
-          ${i18n.t('invite.claim')}
+          ${i18n.t('home.claim')}
         </button>`;
     } else {
       buttonHtml = `<button class="task-button disabled" disabled>${i18n.t('tasks.verifying')}</button>`;
@@ -281,12 +301,13 @@ async function handleButtonClick(e) {
       if (!res.ok) {
         showErrorToast(data.error || i18n.t('tasks.claim_failed'));
         btn.disabled = false;
-        btn.textContent = i18n.t('invite.claim');
+        btn.textContent = i18n.t('home.claim');
         return;
       }
 
       delete pendingVerifications[taskId];
-      await refreshUser();
+      markTaskCompletedLocally(taskId);
+      applyUserUpdateFromTaskResponse(data);
       renderAllTasks();
       showTaskRewardPopup(data.reward);
       return;
@@ -294,13 +315,27 @@ async function handleButtonClick(e) {
 
     if (action === 'visit') {
       if (url) window.open(url, '_blank');
+      readyToClaimTasks[taskId] = true;
+      renderAllTasks();
+      showSuccessToast(i18n.t('tasks.ready_to_claim'));
+      return;
+    }
+
+    if (action === 'claim-task') {
+      btn.disabled = true;
+      btn.textContent = i18n.t('home.claiming');
       const data = await completeTask(taskId);
-      markButtonDone(btn);
+      delete readyToClaimTasks[taskId];
+      markTaskCompletedLocally(taskId);
+      renderAllTasks();
       showTaskRewardPopup(data.reward);
       return;
     }
   } catch (err) {
     console.error('Task action error:', err);
+    if (action === 'claim-task' || action === 'claim-verify' || action === 'visit' || action === 'verify') {
+      renderAllTasks();
+    }
     if (err?.message?.toLowerCase().includes('already checked in')) {
       showSuccessToast(i18n.t('tasks.you_already_checked_in_today'));
       await refreshUser();
@@ -364,7 +399,8 @@ async function handleDailyCheckIn() {
   }
 
   dailyCheckInCheckedToday = true;
-  await refreshUser();
+  markTaskCompletedLocally('daily-checkin');
+  applyUserUpdateFromTaskResponse(data);
   showTaskRewardPopup(data.reward || { points: 1000, bronzeTickets: 250, xp: 5 }, {
     title: i18n.t('checkin.complete_title')
   });
@@ -379,7 +415,7 @@ async function completeTask(taskId) {
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || i18n.t('tasks.complete_task_failed'));
-  await refreshUser();
+  applyUserUpdateFromTaskResponse(data);
   return data;
 }
 
@@ -391,6 +427,42 @@ async function refreshUser() {
   currentUser = user;
   dailyCheckInCheckedToday = Boolean(checkInStatus?.checkedInToday);
   updateTopBar(currentUser);
+}
+
+function markTaskCompletedLocally(taskId) {
+  if (!taskId || !currentUser) return;
+  if (taskId === 'daily-checkin') {
+    dailyCheckInCheckedToday = true;
+    return;
+  }
+
+  const dailyList = Array.isArray(taskDefinitions?.daily) ? taskDefinitions.daily : [];
+  const oneTimeList = Array.isArray(taskDefinitions?.oneTime) ? taskDefinitions.oneTime : [];
+  const isDailyTask = dailyList.some((t) => t.id === taskId);
+  const isOneTimeTask = oneTimeList.some((t) => t.id === taskId);
+
+  if (isDailyTask) {
+    const done = new Set(currentUser.completedDailyTasksToday || []);
+    done.add(taskId);
+    currentUser.completedDailyTasksToday = Array.from(done);
+  } else if (isOneTimeTask) {
+    const done = new Set(currentUser.completedTasks || []);
+    done.add(taskId);
+    currentUser.completedTasks = Array.from(done);
+  }
+
+  setCachedUser(currentUser);
+}
+
+function applyUserUpdateFromTaskResponse(data = {}) {
+  const nextUser = {
+    ...(currentUser || getCachedUser() || {}),
+    ...(data.user || {})
+  };
+  currentUser = nextUser;
+  setCachedUser(nextUser);
+  updateTopBar(nextUser);
+  window.dispatchEvent(new CustomEvent('hope:userUpdated', { detail: nextUser }));
 }
 
 function showSuccessToast(msg) {
@@ -419,8 +491,12 @@ function showTaskRewardPopup(reward = {}, options = {}) {
   };
 
   if (typeof window.showRewardPopup === 'function') {
-    window.showRewardPopup(normalizedReward, options);
-    return;
+    try {
+      window.showRewardPopup(normalizedReward, options);
+      return;
+    } catch (err) {
+      console.warn('showRewardPopup failed, using toast fallback:', err);
+    }
   }
 
   showSuccessToast(i18n.format('tasks.points_claimed', { points: normalizedReward.points || 0 }));

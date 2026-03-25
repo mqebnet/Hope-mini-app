@@ -140,6 +140,7 @@ class I18n {
           submitting: 'Submitting...',
           start_verify_failed: 'Failed to start verification',
           task_submitted_review: 'Task submitted for review. Come back in 24 hours to claim your reward.',
+          ready_to_claim: 'Task ready to claim.',
           claim_failed: 'Claim failed',
           points_claimed: '+{points} points claimed!',
           already_checked_in_today: 'Already checked in today',
