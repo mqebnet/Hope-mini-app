@@ -8,6 +8,24 @@ const priceHandler = require('./priceHandler');
 
 /** @type {string} TON API base URL for blockchain queries */
 const TON_API_BASE_URL = process.env.TON_API_URL || 'https://tonapi.io/v2';
+const TESTNET_URL_RE = /(^|[./_-])testnet([./_-]|$)/i;
+
+function isTestnetTonApiUrl(url) {
+  if (!url || typeof url !== 'string') return false;
+  const trimmed = url.trim();
+  if (!trimmed) return false;
+  try {
+    const parsed = new URL(trimmed);
+    const hostAndPath = `${parsed.hostname}${parsed.pathname}`;
+    return TESTNET_URL_RE.test(hostAndPath);
+  } catch {
+    return TESTNET_URL_RE.test(trimmed);
+  }
+}
+
+if (isTestnetTonApiUrl(TON_API_BASE_URL)) {
+  throw new Error(`TON_API_URL must point to TON mainnet, got: ${TON_API_BASE_URL}`);
+}
 
 /** @type {string} Developer's wallet address for receiving payments */
 const APP_WALLET_ADDRESS = process.env.DEV_WALLET_ADDRESS || process.env.TON_WALLET_ADDRESS || '';

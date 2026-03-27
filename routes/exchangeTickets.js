@@ -9,9 +9,10 @@ const stateEmitter = require('../utils/stateEmitter');
  * Body:
  * {
  *   fromType: "bronze" | "silver",
- *   quantity: Number,   // how many NEW tickets to receive
- *   txHash: String      // TON transaction hash paying 0.1 USDT
+ *   quantity: Number    // how many NEW tickets to receive
  * }
+ *
+ * Free in-app conversion (no on-chain transaction required).
  */
 router.post('/', async (req, res) => {
   try {

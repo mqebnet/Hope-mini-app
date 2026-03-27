@@ -19,7 +19,13 @@ const UserSchema = new mongoose.Schema({
   streak: { type: Number, default: 0 },
   lastCheckInDate: { type: Date, default: null },
 
-  wallet: { type: String, default: null },
+  wallet: {
+    type: String,
+    default: null,
+    trim: true,
+    unique: true,
+    sparse: true
+  },
 
   inviteCode: { type: String, index: true, unique: true, sparse: true },
   invitedBy: { type: Number, default: null },

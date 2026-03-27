@@ -1,671 +1,232 @@
-# Hope API Reference
+﻿# Hope API Reference
 
-Quick reference guide for all backend endpoints. See [README.md](./README.md) for full documentation.
+This is the current backend endpoint reference.
 
----
+Base URL (local): `http://localhost:3000`
 
-## Authentication Routes (`/api/auth`)
+## Authentication
 
 ### POST `/api/auth/telegram`
-Authenticate user via Telegram initData, issue JWT.
+Verify Telegram `initData`, create/login user, set `jwt` cookie.
 
-**Request:**
+Request body:
+
 ```json
-{"initData": "query_id=...&user={...}&hash=...&..."}
+{ "initData": "query_id=...&user=...&hash=..." }
 ```
 
-**Response (Success 200):**
-```json
-{
-  "success": true,
-  "user": {
-    "id": 123456789,
-    "username": "user",
-    "level": "Seeker",
-    "points": 0,
-    "xp": 0,
-    "streak": 0,
-    "badges": [],
-    "bronzeTickets": 0,
-    "silverTickets": 0,
-    "goldTickets": 0,
-    "isAdmin": false
-  }
-}
-```
+### POST `/api/web-auth/register`
+Web/email registration flow (non-Telegram).
 
-**Auth:** None (public)
+### POST `/api/web-auth/login`
+Web/email login flow.
 
 ---
 
-## User Profile Routes (`/api/user`, `/api/me`)
+## User
 
-### GET `/api/user/me` (alias: `/api/me`)
-Get authenticated user's full profile.
+### GET `/api/me`
+Alias user summary for authenticated session.
 
-**Request:** No body
+### GET `/api/user/me`
+Get full user profile, balances, streak, check-in calendar summary, task completion.
 
-**Response (200):**
+### POST `/api/user/wallet`
+Link wallet to account.
+
+Request body:
+
 ```json
-{
-  "success": true,
-  "user": {
-    "telegramId": 123456789,
-    "username": "user",
-    "points": 1500,
-    "level": "Dreamer",
-    "xp": 25,
-    "streak": 3,
-    "badges": ["perfect-streak-10"],
-    "bronzeTickets": 250,
-    "silverTickets": 5,
-    "goldTickets": 0,
-    "checkIns": [{dayKey, txHash, verified, createdAt}],
-    "checkedInToday": false,
-    "miningStartedAt": "2026-03-04T10:00:00Z",
-    "nextLevelAt": 100000,
-    "dailyCheckInResetAtUtc": "2026-03-05T00:02:00Z"
-  }
-}
+{ "wallet": "UQ..." }
 ```
 
-**Auth:** ✅ Required
+Notes:
+
+- Testnet wallets are rejected.
+- Wallet must be unique across users.
 
 ---
 
-## Mining Routes (`/api/mining`)
+## Mining
 
 ### POST `/api/mining/start`
-Start a 6-hour mining session.
-
-**Request:** No body
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "miningStartedAt": "2026-03-04T12:00:00Z",
-  "durationMs": 21600000
-}
-```
-
-**Errors:**
-- 400: `"Mining already active"`
-- 404: `"User not found"`
-
-**Auth:** ✅ Required
-
----
+Start 6-hour mining cycle.
 
 ### POST `/api/mining/claim`
-Claim mining reward (250 points) after 6 hours.
-
-**Request:** No body
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "points": 1750,
-  "level": "Dreamer"
-}
-```
-
-**Errors:**
-- 400: `"No active mining"` or `"Mining not complete"`
-- 403: `"Mining not complete"`
-
-**Auth:** ✅ Required
+Claim mining reward when complete.
 
 ---
 
-## Daily Check-In Routes (`/api/dailyCheckIn`, `/api/tasks/daily-checkin`)
+## Daily Check-In
 
 ### GET `/api/dailyCheckIn/status`
-Get check-in status, streak, and calendar.
-
-**Request:** No body
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "streak": 3,
-  "checkedInToday": false,
-  "dayKey": "2026-03-04",
-  "resetAtUtc": "2026-03-05T00:02:00Z",
-  "reward": {"points": 1000, "bronzeTickets": 100, "xp": 5},
-  "calendar": [
-    {"dayKey": "2026-02-18", "status": "upcoming", "checked": false},
-    {"dayKey": "2026-03-02", "status": "checked", "checked": true},
-    {"dayKey": "2026-03-03", "status": "checked", "checked": true},
-    {"dayKey": "2026-03-04", "status": "available", "checked": false}
-  ]
-}
-```
-
-**Auth:** ✅ Required
-
----
+Get day key, reward preview, streak, and calendar state.
 
 ### POST `/api/dailyCheckIn/verify`
-Verify check-in payment and apply rewards.
+Verify on-chain check-in payment and apply reward.
 
-**Request:**
+Request body:
+
 ```json
-{"txHash": "hash..." } or {"txBoc": "boc..."}
+{ "txHash": "..." }
 ```
 
-**Response (200):**
+or
+
 ```json
-{
-  "success": true,
-  "points": 10000,
-  "xp": 30,
-  "bronzeTickets": 1500,
-  "streak": 4,
-  "level": "Dreamer",
-  "badges": [],
-  "perfectStreakBadgeAwarded": false,
-  "dayKey": "2026-03-04",
-  "calendar": [...]
-}
+{ "txBoc": "..." }
 ```
-
-**Errors:**
-- 400: `"Already checked in today"`, `"Transaction not verified"`, etc.
-- 404: `"User not found"`
-
-**Auth:** ✅ Required
 
 ---
 
-## Tasks Routes (`/api/tasks`)
+## Tasks
 
 ### GET `/api/tasks/definitions`
-Get daily and one-time task catalog.
-
-**Request:** No body
-
-**Response (200):**
-```json
-{
-  "daily": [
-    {"id": "daily-checkin", "title": "Daily Check-in", "reward": 1000, ...},
-    {"id": "play-puzzle", "title": "Play Puzzles", "reward": 100, ...}
-  ],
-  "oneTime": [
-    {"id": "join-telegram", "title": "Subscribe to Telegram", "reward": 200, ...}
-  ]
-}
-```
-
-**Auth:** ✅ Required
-
----
+Task catalog (daily + one-time).
 
 ### POST `/api/tasks/complete`
-Mark a task as complete (no proof required).
+Complete a non-proof task.
 
-**Request:**
-```json
-{"taskId": "visit-telegram"}
-```
+### POST `/api/tasks/start-verify`
+Start proof-based task verification flow.
 
-**Response (200):**
-```json
-{"success": true, "points": 100}
-```
+### POST `/api/tasks/claim-verify`
+Finalize proof-based task claim.
 
-**Auth:** ✅ Required
+### POST `/api/tasks/daily-checkin`
+Tasks-scoped check-in verification flow.
 
----
-
-### POST `/api/tasks/verify-proof`
-Upload screenshot proof for one-time task.
-
-**Request:** Multipart form
-```
-taskId: "join-telegram"
-proof: <image file>
-```
-
-**Response (200):**
-```json
-{"success": true, "points": 200}
-```
-
-**Auth:** ✅ Required
+### GET `/api/tasks/pending-verifications`
+Fetch pending proof tasks for review flow.
 
 ---
 
-## Referral Routes (`/api/invite`)
+## Invite
 
 ### GET `/api/invite/link`
-Get user's personal invite link.
-
-**Request:** No body
-
-**Response (200):**
-```json
-{"inviteLink": "https://t.me/hope_official_bot/app?startapp=abc123def"}
-```
-
-**Auth:** ✅ Required
-
----
+Get personal invite link.
 
 ### GET `/api/invite/progress`
-Get referral milestones progress.
+Get referral milestones and claim status.
 
-**Request:** No body
+### POST `/api/invite/claim`
+Claim eligible referral milestone.
 
-**Response (200):**
-```json
-{
-  "invitedCount": 3,
-  "completedTasks": [1]
-}
-```
+Additional support endpoints:
 
-**Auth:** ✅ Required
+- `POST /api/invite/register-session`
+- `POST /api/invite/ensure-codes`
+- `GET /api/invite/verify`
+- `GET /api/invite/top-referrers`
 
 ---
 
-### GET `/api/invite/verify?target=3`
-Check if milestone is reached.
+## Exchange Tickets
 
-**Request:** Query: `target` (1, 3, 5, or 10)
+### POST `/api/exchangeTickets`
+Free in-app ticket conversion.
 
-**Response (200):**
-```json
-{"completed": true, "claimed": false}
-```
+Request body:
 
-**Auth:** ✅ Required
-
----
-
-### POST `/api/invite/claim?target=3`
-Claim milestone reward.
-
-**Request:** Query: `target` (1, 3, 5, or 10)
-
-**Response (200):**
-```json
-{"success": true}
-```
-
-**Errors:**
-- 400: `"Target not reached"`, `"Already claimed"`
-
-**Auth:** ✅ Required
-
----
-
-### POST `/api/invite/register`
-Register new user via invite code (auto-called on signup).
-
-**Request:**
-```json
-{"inviteCode": "abc123def", "newUserId": 987654321}
-```
-
-**Response (200):**
-```json
-{"success": true}
-```
-
-**Auth:** ❌ Public
-
----
-
-## Marketplace Routes
-
-### Exchange Tickets (`/api/exchangeTickets`)
-
-#### POST `/api/exchangeTickets`
-Trade Bronze↔Silver or Silver↔Gold tickets.
-
-**Request:**
 ```json
 {
   "fromType": "bronze",
-  "quantity": 1,
-  "txHash": "hash..."
+  "quantity": 3
 }
 ```
 
-**Response (200):**
-```json
-{
-  "message": "Ticket exchange successful",
-  "bronzeTickets": 900,
-  "silverTickets": 10,
-  "goldTickets": 0
-}
-```
+Rules:
 
-**Auth:** ✅ Required
+- `fromType`: `bronze` or `silver`
+- Conversion rate: `100:1`
+- No on-chain transaction required
 
 ---
 
-### Mystery Box (`/api/mysteryBox`)
+## Games and Mystery Box
 
-#### GET `/api/mysteryBox/status`
-Get today's box purchase status and active puzzle.
+### GET `/api/games/catalog`
+Dynamic game catalog from plugin registry.
 
-**Response (200):**
-```json
-{
-  "success": true,
-  "purchasedToday": 1,
-  "limit": 3,
-  "nextBoxType": "silver",
-  "todayBoxes": [{"boxType": "bronze", "status": "claimed"}],
-  "activeBox": {
-    "boxType": "silver",
-    "status": "opened",
-    "puzzle": {
-      "meme": "Pepe",
-      "imageUrl": "...",
-      "sessionId": "uuid",
-      "pieces": [{pieceId, sourceIndex}, ...],
-      "solved": false
-    }
-  }
-}
-```
+### Generic game endpoints
 
-**Auth:** ✅ Required
+- `POST /api/games/:gameId/start`
+- `POST /api/games/:gameId/move`
+- `POST /api/games/:gameId/complete`
+- `POST /api/games/:gameId/claim`
+- `POST /api/games/:gameId/purchase`
+- `GET /api/games/:gameId/status`
+- `GET /api/games/:gameId/session/:gameSessionId`
+- `DELETE /api/games/:gameId/session/:gameSessionId`
 
----
+### Legacy flipcards compatibility endpoints
 
-#### POST `/api/mysteryBox/purchase`
-Purchase a mystery box (pay $0.1 USDT).
+- `POST /api/games/flipcards/start`
+- `POST /api/games/flipcards/move`
+- `POST /api/games/flipcards/complete`
+- `GET /api/games/flipcards/status/:gameSessionId`
+- `DELETE /api/games/flipcards/:gameSessionId`
 
-**Request:**
-```json
-{"txHash": "hash..." } or {"txBoc": "boc..."}
-```
+### Mystery Box wrapper routes
 
-**Response (200):**
-```json
-{
-  "success": true,
-  "message": "Purchased bronze mystery box",
-  "boxType": "bronze",
-  "purchasedToday": 1,
-  "limit": 3,
-  ...
-}
-```
-
-**Auth:** ✅ Required
+- `GET /api/mysteryBox/status`
+- `POST /api/mysteryBox/purchase` (requires `txHash` or `txBoc`)
+- `POST /api/mysteryBox/open`
+- `POST /api/boxes/open` (alternate open route)
 
 ---
 
-#### POST `/api/mysteryBox/open`
-Open purchased box and get puzzle.
-
-**Request:** No body
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "boxType": "bronze",
-  "puzzle": {...},
-  "timerSeconds": 60,
-  "pieces": 10
-}
-```
-
-**Auth:** ✅ Required
-
----
-
-#### POST `/api/mysteryBox/solve`
-Submit puzzle piece arrangement.
-
-**Request:**
-```json
-{
-  "arrangement": ["pId1", "pId2", ...],
-  "sessionId": "uuid"
-}
-```
-
-**Response (200):**
-```json
-{"success": true, "message": "Puzzle solved"}
-```
-
-**Errors:**
-- 400: `"Invalid arrangement"`, `"Puzzle time expired"`, etc.
-
-**Auth:** ✅ Required
-
----
-
-#### POST `/api/mysteryBox/claim`
-Claim rewards after solving.
-
-**Request:** No body
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "message": "Rewards claimed",
-  "rewards": {"points": 200, "bronzeTickets": 10, "xp": 1},
-  "user": {
-    "points": 10200,
-    "bronzeTickets": 1510,
-    "xp": 31,
-    "level": "Dreamer"
-  },
-  ...
-}
-```
-
-**Auth:** ✅ Required
-
----
-
-## Leaderboard Routes (`/api/leaderboard`)
+## Leaderboard
 
 ### GET `/api/leaderboard/by-level/:levelIndex`
-Get top 100 users for a level.
-
-**Request:** Path: `levelIndex` (1-10)
-
-**Response (200):**
-```json
-{
-  "levelIndex": 1,
-  "levelName": "Seeker",
-  "users": [
-    {"telegramId": 111, "username": "user1", "xp": 100, "points": 25000},
-    {"telegramId": 222, "username": "user2", "xp": 90, "points": 20000}
-  ]
-}
-```
-
-**Auth:** ✅ Required
+Get leaderboard for a specific level.
 
 ---
 
-## Weekly Drop Contest (`/api/weeklyDrop`)
+## Weekly Drop
 
 ### GET `/api/weeklyDrop/eligibility`
-Check if user meets all entry requirements.
-
-**Request:** No body
-
-**Response (200):**
-```json
-{
-  "eligible": true,
-  "level": "Believer",
-  "streak": 10,
-  "goldTickets": 12
-}
-```
-
-**Auth:** ✅ Required
-
----
+Check entry eligibility.
 
 ### POST `/api/weeklyDrop/enter`
-Enter the weekly contest (deduct 10 Gold + $0.5 fee).
+Enter weekly drop (requires transaction proof).
 
-**Request:**
+Request body:
+
 ```json
-{"boc": "boc..."}
+{ "txHash": "..." }
 ```
 
-**Response (200):**
+or
+
 ```json
-{"success": true, "message": "You are in the Weekly Drop!"}
-```
-
-**Errors:**
-- 400: `"You must be Believer level"`, `"Perfect streak required"`, etc.
-
-**Auth:** ✅ Required
-
----
-
-## TON Integration (`/api/tonAmount`)
-
-### GET `/api/tonAmount/ton-amount?usd=0.3`
-Get TON equivalent for USD amount.
-
-**Request:** Query: `usd` (default: 0.3)
-
-**Response (200):**
-```json
-{
-  "tonAmount": 0.046731,
-  "recipientAddress": "UQB...",
-  "usd": 0.3
-}
-```
-
-**Auth:** ✅ Required
-
----
-
-## Admin Routes (`/api/admin`)
-
-All admin routes require `isAdmin: true` flag.
-
-### GET `/api/admin/stats`
-Overall app statistics.
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "stats": {
-    "users": 1523,
-    "admins": 2,
-    "activeMiners": 45,
-    "contestants": 12
-  }
-}
+{ "txBoc": "..." }
 ```
 
 ---
 
-### GET `/api/admin/users?page=1&limit=20&search=john`
-Paginated user list.
+## Transactions
 
-**Response (200):**
-```json
-{
-  "success": true,
-  "pagination": {"page": 1, "limit": 20, "total": 500, "pages": 25},
-  "users": [{telegramId, username, points, level, ...}]
-}
-```
+### POST `/api/transactions`
+Record transaction intent.
+
+### GET `/api/transactions`
+List current user transaction history.
 
 ---
 
-### PATCH `/api/admin/users/:telegramId`
-Edit user properties.
+## Admin
 
-**Request:**
-```json
-{"points": 5000, "level": "Believer", "isAdmin": false}
-```
+### `/api/admin/*`
+Admin operations (users, tasks, contest controls, broadcast, scheduler operations).
 
-**Response (200):**
-```json
-{"success": true, "user": {...}}
-```
+### `/api/rewards/*`
+Manual reward grant endpoints.
 
 ---
 
-### GET `/api/admin/tasks`, `PUT /api/admin/tasks`
-Get/update task catalog.
+## TON Helper
 
----
+### GET `/api/tonAmount/ton-amount`
+Compute TON amount equivalents using backend pricing utility.
 
-### GET `/api/admin/contests/overview?week=Week%201`
-Contest entries overview.
-
----
-
-### POST `/api/admin/contests/results`
-Publish contest winners.
-
-**Request:**
-```json
-{
-  "week": "Week 1",
-  "winnerTelegramIds": [123, 456],
-  "message": "Congrats winners!"
-}
-```
-
----
-
-## Error Responses
-
-All errors follow this format:
-
-```json
-{
-  "success": false,
-  "error": "Human-readable error message"
-}
-```
-
-**Common Status Codes:**
-- `200` – Success
-- `400` – Bad request (invalid params, insufficient balance, etc.)
-- `403` – Forbidden (not eligible, not admin, etc.)
-- `404` – Not found  
-- `500` – Server error
-- `503` – Service unavailable (price API down)
-
----
-
-## Rate Limiting
-
-**Global:** 100 requests per 15 minutes per IP
-
-All `/api/*` endpoints are rate-limited.
-
----
-
-## Authentication Header
-
-JWT is automatically sent via httpOnly cookie after `/api/auth/telegram` call.  
-No manual Authorization header needed for subsequent requests in same session.
-
----
-
-**For full documentation, see [README.md](./README.md)**

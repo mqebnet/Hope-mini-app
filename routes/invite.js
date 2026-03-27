@@ -7,6 +7,10 @@ const { generateUniqueInviteCode } = require('../utils/inviteCode');
 const { getUserLevel } = require('../utils/levelUtil');
 const stateEmitter = require('../utils/stateEmitter');
 const { applyReferralAttribution } = require('../utils/referral');
+const TELEGRAM_BOT_USERNAME = (process.env.TELEGRAM_BOT_USERNAME || 'hope_official_bot').replace(/^@/, '');
+const TELEGRAM_MINI_APP_SHORT_NAME = (process.env.TELEGRAM_MINI_APP_SHORT_NAME || 'Hope')
+  .trim()
+  .replace(/^\/+|\/+$/g, '');
 
 const rewards = {
   1: { points: 100, xp: 1 },
@@ -85,7 +89,7 @@ router.get('/link', async (req, res) => {
     }
 
     const startParam = `${user.telegramId}_${user.inviteCode}`;
-    const inviteLink = `https://t.me/hope_official_bot/app?startapp=${startParam}`;
+    const inviteLink = `https://t.me/${TELEGRAM_BOT_USERNAME}/${TELEGRAM_MINI_APP_SHORT_NAME}?startapp=${encodeURIComponent(startParam)}`;
     res.json({ inviteLink });
   } catch (err) {
     console.error('Invite link error:', err);

@@ -79,7 +79,7 @@ class I18n {
           level_title: 'Level {level} • {name}',
           rank: 'Rank',
           user_id: 'User ID',
-          transactions: 'Transactions',
+          transactions: 'Streaks',
           load_failed: 'Failed to load leaderboard'
         },
         marketplace: {

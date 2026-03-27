@@ -22,7 +22,7 @@ router.get('/status', async (req, res) => {
     if (!user) return res.status(404).json({ error: 'User not found' });
 
     const now = new Date();
-    const streakChanged = normalizeStreakIfMissed(user, now);
+    const streakChanged = await normalizeStreakIfMissed(user, now);
     if (streakChanged) await user.save();
 
     const todayKey = getCheckInDayKey(now);

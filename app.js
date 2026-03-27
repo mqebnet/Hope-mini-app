@@ -3,7 +3,6 @@ require('dotenv').config();
 const express = require('express');
 const path = require('path');
 const cors = require('cors');
-const rateLimit = require('express-rate-limit');
 const mongoose = require('mongoose');
 const cookieParser = require('cookie-parser');
 const helmet = require('helmet');
@@ -15,6 +14,7 @@ const dailyCheckInRouter = require('./routes/dailyCheckIn');
 const userRouter = require('./routes/user');
 const miningRouter = require('./routes/mining');
 const adminAuth = require('./middleware/adminAuth');
+const { authLimiter, gameLimiter, generalLimiter } = require('./middleware/rateLimiters');
 const { startNotificationScheduler } = require('./utils/notificationScheduler');
 const socketIo = require('socket.io');
 const stateEmitter = require('./utils/stateEmitter');
@@ -70,17 +70,6 @@ app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: process.env.NODE_ENV === 'production' ? 100 : 1000,
-  message: 'Too many requests from this IP, please try again later',
-  skip: (req) => {
-    // Skip rate limiting for rate limit exemption in dev
-    return process.env.RATE_LIMIT_EXEMPT_IPS?.includes(req.ip);
-  }
-});
-app.use('/api/', limiter);
-
 app.use(express.static(path.join(__dirname, 'public'), {
   etag: false,
   setHeaders: (res, filePath) => {
@@ -99,6 +88,10 @@ app.use('/api', (req, res, next) => {
   res.setHeader('Expires', '0');
   next();
 });
+app.use('/api/', generalLimiter); // fallback for all /api/ routes
+app.use('/api/auth', authLimiter); // strict: override for auth routes
+app.use('/api/web-auth', authLimiter); // strict: override for web auth routes
+// gameLimiter is applied directly on the games router in routes/games.js
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/web-auth', require('./routes/webAuth'));
 

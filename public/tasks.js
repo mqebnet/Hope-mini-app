@@ -8,6 +8,100 @@ let taskDefinitions = null;
 let dailyCheckInCheckedToday = false;
 let pendingVerifications = {};
 let readyToClaimTasks = {};
+const PENDING_CHECKIN_TX_KEY = 'pendingCheckInTx';
+const PENDING_CHECKIN_TX_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+function savePendingCheckInTx(txHash, txBoc) {
+  try {
+    localStorage.setItem(PENDING_CHECKIN_TX_KEY, JSON.stringify({
+      txHash: txHash || '',
+      txBoc: txBoc || '',
+      timestamp: Date.now()
+    }));
+  } catch (err) {
+    console.warn('Failed to persist pending check-in transaction:', err);
+  }
+}
+
+function clearPendingCheckInTx() {
+  try {
+    localStorage.removeItem(PENDING_CHECKIN_TX_KEY);
+  } catch (err) {
+    console.warn('Failed to clear pending check-in transaction:', err);
+  }
+}
+
+function loadPendingCheckInTx() {
+  try {
+    const raw = localStorage.getItem(PENDING_CHECKIN_TX_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const timestamp = Number(parsed?.timestamp || 0);
+    const txHash = typeof parsed?.txHash === 'string' ? parsed.txHash.trim() : '';
+    const txBoc = typeof parsed?.txBoc === 'string' ? parsed.txBoc.trim() : '';
+    if (!txHash && !txBoc) {
+      clearPendingCheckInTx();
+      return null;
+    }
+    if (!Number.isFinite(timestamp) || Date.now() - timestamp > PENDING_CHECKIN_TX_MAX_AGE_MS) {
+      clearPendingCheckInTx();
+      return null;
+    }
+    return { txHash, txBoc };
+  } catch (err) {
+    console.warn('Failed to parse pending check-in transaction:', err);
+    clearPendingCheckInTx();
+    return null;
+  }
+}
+
+async function verifyDailyCheckInTx(txHash, txBoc) {
+  const res = await fetch('/api/dailyCheckIn/verify', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ txHash, txBoc })
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const err = new Error(data.error || i18n.t('tasks.checkin_failed'));
+    err.serverError = String(data.error || '');
+    throw err;
+  }
+  return data;
+}
+
+async function retryPendingDailyCheckInVerification() {
+  const pending = loadPendingCheckInTx();
+  if (!pending) return;
+
+  try {
+    const status = await fetchDailyCheckInStatus();
+    if (status?.checkedInToday) {
+      dailyCheckInCheckedToday = true;
+      clearPendingCheckInTx();
+      return;
+    }
+  } catch (_) {
+    // Continue retry attempt even if status refresh fails.
+  }
+
+  try {
+    const data = await verifyDailyCheckInTx(pending.txHash, pending.txBoc);
+    clearPendingCheckInTx();
+    dailyCheckInCheckedToday = true;
+    markTaskCompletedLocally('daily-checkin');
+    applyUserUpdateFromTaskResponse(data);
+  } catch (err) {
+    const message = (err?.serverError || err?.message || '').toLowerCase();
+    if (message.includes('already checked in')) {
+      dailyCheckInCheckedToday = true;
+      clearPendingCheckInTx();
+      return;
+    }
+    console.warn('Pending tasks check-in verification retry failed:', err);
+  }
+}
 
 window.addEventListener('hope:userUpdated', (event) => {
   const user = event.detail;
@@ -46,6 +140,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     taskDefinitions = definitions;
     currentUser = user;
     dailyCheckInCheckedToday = Boolean(checkInStatus?.checkedInToday);
+    await retryPendingDailyCheckInVerification();
 
     (pendingRes.pending || []).forEach((p) => {
       pendingVerifications[p.taskId] = p.readyAt;
@@ -382,20 +477,19 @@ async function handleDailyCheckIn() {
   const txBoc = tx?.boc || '';
   if (!txHash && !txBoc) throw new Error(i18n.t('tasks.tx_proof_missing'));
 
-  const res = await fetch('/api/dailyCheckIn/verify', {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ txHash, txBoc })
-  });
-  const data = await res.json();
-
-  if (!res.ok) {
-    if ((data?.error || '').toLowerCase().includes('already checked in')) {
+  savePendingCheckInTx(txHash, txBoc);
+  let data;
+  try {
+    data = await verifyDailyCheckInTx(txHash, txBoc);
+    clearPendingCheckInTx();
+  } catch (err) {
+    const message = (err?.serverError || err?.message || '').toLowerCase();
+    if (message.includes('already checked in')) {
       dailyCheckInCheckedToday = true;
+      clearPendingCheckInTx();
       throw new Error(i18n.t('tasks.already_checked_in_today'));
     }
-    throw new Error(data.error || i18n.t('tasks.checkin_failed'));
+    throw err;
   }
 
   dailyCheckInCheckedToday = true;

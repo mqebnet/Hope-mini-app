@@ -192,6 +192,7 @@ function renderUsersTable(users) {
         <td>${fmt(u.points?.toLocaleString?.() ?? u.points)}</td>
         <td>${fmt(u.xp)}</td>
         <td>${fmt(u.streak)}</td>
+        <td>${fmt(u.transactionsCount)}</td>
         <td title="${escapeHtml(ticketsTitle)}">${ticketsText}</td>
         <td>${u.isAdmin ? '<span class="badge-admin">ADMIN</span>' : ''}</td>
         <td>${fmtDate(u.createdAt)}</td>
@@ -213,6 +214,7 @@ function renderUsersTable(users) {
           <th data-sort="points">Points</th>
           <th data-sort="xp">XP</th>
           <th data-sort="streak">Streak</th>
+          <th data-sort="transactionsCount">Transactions</th>
           <th>Tickets</th>
           <th data-sort="isAdmin">Admin</th>
           <th data-sort="createdAt">Joined</th>

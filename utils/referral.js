@@ -3,7 +3,8 @@ const Referral = require('../models/Referral');
 const { getUserLevel, getNextLevelThreshold } = require('./levelUtil');
 const stateEmitter = require('./stateEmitter');
 
-const INVITE_JOIN_BONUS_POINTS = 100;
+const INVITE_JOIN_BONUS_POINTS = 250;
+const INVITE_JOIN_BONUS_BRONZE_TICKETS = 10;
 const INVITER_AUTO_REWARD_POINTS = 50;
 const MIN_TELEGRAM_ID_DIGITS = 9;
 
@@ -49,6 +50,10 @@ async function resolveInviterFromStartParam(startParam, currentTelegramId) {
 }
 
 async function applyReferralAttribution(user, startParam) {
+  console.log('[referral] attempt', {
+    telegramId: user?.telegramId || null,
+    startParam: startParam || '(empty)'
+  });
   if (!user || user.invitedBy || !startParam) return { applied: false, reason: 'skip' };
 
   const inviter = await resolveInviterFromStartParam(startParam, user.telegramId);
@@ -56,6 +61,7 @@ async function applyReferralAttribution(user, startParam) {
 
   user.invitedBy = inviter.telegramId;
   user.points = (user.points || 0) + INVITE_JOIN_BONUS_POINTS;
+  user.bronzeTickets = (user.bronzeTickets || 0) + INVITE_JOIN_BONUS_BRONZE_TICKETS;
   user.level = getUserLevel(user.points);
   await user.save();
 
@@ -99,12 +105,18 @@ async function applyReferralAttribution(user, startParam) {
     });
   }
 
-  return {
+  const result = {
     applied: true,
     inviterTelegramId: inviter.telegramId,
     inviterUpdated: inserted ? 1 : 0,
     inviterRewardPoints: inserted ? INVITER_AUTO_REWARD_POINTS : 0
   };
+  console.log('[referral] result', {
+    applied: result.applied,
+    inviterTelegramId: result.inviterTelegramId,
+    inviterUpdated: result.inviterUpdated
+  });
+  return result;
 }
 
 module.exports = {

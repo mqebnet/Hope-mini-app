@@ -77,22 +77,37 @@ function getNextResetAtUtc(now = new Date()) {
 }
 
 /**
- * Check if user missed a day and reset streak accordingly
- * User's streak resets to 0 if more than 1 day has passed since last check-in
+ * Check if user missed a day and reset streak accordingly.
+ * If streak breaks, revoke the perfect streak badge so it can be earned again at 10 days.
  * @param {Object} user - User document
  * @param {Date} [now=new Date()] - Current time
- * @returns {boolean} True if streak was modified, false otherwise
+ * @returns {Promise<boolean>} True if streak/badge state was modified, false otherwise
  */
-function normalizeStreakIfMissed(user, now = new Date()) {
+async function normalizeStreakIfMissed(user, now = new Date()) {
   if (!user?.lastCheckInDate) return false;
   const lastDayKey = getCheckInDayKey(new Date(user.lastCheckInDate));
   const currentDayKey = getCheckInDayKey(now);
   const diff = dayKeyDiff(lastDayKey, currentDayKey);
-  if (diff > 1 && user.streak !== 0) {
+  if (diff <= 1) return false;
+
+  let changed = false;
+  if (user.streak !== 0) {
     user.streak = 0;
-    return true;
+    changed = true;
   }
-  return false;
+
+  const telegramId = Number(user.telegramId);
+  if (Number.isFinite(telegramId)) {
+    const revokeResult = await UserBadge.deleteOne({
+      telegramId,
+      badge: PERFECT_STREAK_BADGE
+    });
+    if (Number(revokeResult?.deletedCount || 0) > 0) {
+      changed = true;
+    }
+  }
+
+  return changed;
 }
 
 /**

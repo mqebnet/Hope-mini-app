@@ -1009,7 +1009,7 @@ body.page-transitioning::after {
 }
 .leaderboard-header, .leaderboard-row {
   display: grid;
-  /* Rank, UserID, XP, Points, Transactions */
+  /* Rank, UserID, XP, Points, Streak */
   grid-template-columns: 44px minmax(0, 1.9fr) 64px 78px 68px;
   align-items: center;
   column-gap: 8px;
@@ -1033,7 +1033,7 @@ body.page-transitioning::after {
 .leaderboard-row .rank,
 .leaderboard-row .xp,
 .leaderboard-row .points,
-.leaderboard-row .tx {
+.leaderboard-row .streak {
   text-align: center;
 }
 .leaderboard-row .username {

@@ -10,6 +10,8 @@ let miningIsComplete = false;
 let weeklyContestEnabled = true;
 let weeklyEligibilitySyncAt = 0;
 let weeklyEligibilitySyncInFlight = null;
+let latestWeeklyEligibility = null;
+let weeklyLockNoticeInFlight = false;
 const WEEKLY_ELIGIBILITY_SYNC_MS = 30000;
 
 let miningBar = null;
@@ -24,17 +26,183 @@ let dailyCheckInResetTime = null;
 let dailyCheckInStatus = null;
 let checkInInProgress = false;
 const WELCOME_BONUS_STORAGE_KEY = 'hope_welcome_bonus';
+const PENDING_CHECKIN_TX_KEY = 'pendingCheckInTx';
+const PENDING_CHECKIN_TX_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
-function setWeeklyDropButtonState(btn, label, enabled, onClick = null) {
+function savePendingCheckInTx(txHash, txBoc) {
+  try {
+    localStorage.setItem(PENDING_CHECKIN_TX_KEY, JSON.stringify({
+      txHash: txHash || '',
+      txBoc: txBoc || '',
+      timestamp: Date.now()
+    }));
+  } catch (err) {
+    console.warn('Failed to persist pending check-in transaction:', err);
+  }
+}
+
+function clearPendingCheckInTx() {
+  try {
+    localStorage.removeItem(PENDING_CHECKIN_TX_KEY);
+  } catch (err) {
+    console.warn('Failed to clear pending check-in transaction:', err);
+  }
+}
+
+function loadPendingCheckInTx() {
+  try {
+    const raw = localStorage.getItem(PENDING_CHECKIN_TX_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const timestamp = Number(parsed?.timestamp || 0);
+    const txHash = typeof parsed?.txHash === 'string' ? parsed.txHash.trim() : '';
+    const txBoc = typeof parsed?.txBoc === 'string' ? parsed.txBoc.trim() : '';
+    if (!txHash && !txBoc) {
+      clearPendingCheckInTx();
+      return null;
+    }
+    if (!Number.isFinite(timestamp) || Date.now() - timestamp > PENDING_CHECKIN_TX_MAX_AGE_MS) {
+      clearPendingCheckInTx();
+      return null;
+    }
+    return { txHash, txBoc, timestamp };
+  } catch (err) {
+    console.warn('Failed to parse pending check-in transaction:', err);
+    clearPendingCheckInTx();
+    return null;
+  }
+}
+
+async function verifyDailyCheckInTx(txHash, txBoc) {
+  const verifyRes = await fetch('/api/dailyCheckIn/verify', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ txHash, txBoc })
+  });
+
+  let data = {};
+  try {
+    data = await verifyRes.json();
+  } catch (_) {
+    data = {};
+  }
+
+  if (!verifyRes.ok) {
+    const err = new Error(data.error || 'Failed to record transaction');
+    err.serverError = String(data.error || '');
+    throw err;
+  }
+
+  return data;
+}
+
+async function retryPendingCheckInVerification() {
+  const pending = loadPendingCheckInTx();
+  if (!pending) return;
+
+  try {
+    const status = await fetchDailyCheckInStatus();
+    if (status?.checkedInToday) {
+      clearPendingCheckInTx();
+      return;
+    }
+  } catch (_) {
+    // Continue retry attempt even if status refresh fails.
+  }
+
+  try {
+    await verifyDailyCheckInTx(pending.txHash, pending.txBoc);
+    clearPendingCheckInTx();
+    await fetchUser();
+    await refreshDailyCheckInStatus();
+  } catch (err) {
+    const message = (err?.serverError || err?.message || '').toLowerCase();
+    if (message.includes('already checked in')) {
+      clearPendingCheckInTx();
+      await refreshDailyCheckInStatus();
+      return;
+    }
+    console.warn('Pending daily check-in verification retry failed:', err);
+  }
+}
+
+function setWeeklyDropButtonState(btn, label, enabled, onClick = null, options = {}) {
+  const { allowInteraction = false, lockReason = '' } = options;
   const labelEl = btn.querySelector('span') || btn;
   labelEl.textContent = label;
-  btn.disabled = !enabled;
+  btn.disabled = !(enabled || allowInteraction);
   btn.onclick = null;
   btn.classList.toggle('weekly-drop-ready', enabled);
   btn.classList.toggle('weekly-drop-faded', !enabled);
+  btn.setAttribute('aria-disabled', enabled ? 'false' : 'true');
 
-  if (enabled && typeof onClick === 'function') {
+  if (!enabled && lockReason) {
+    btn.title = lockReason;
+  } else {
+    btn.removeAttribute('title');
+  }
+
+  if ((enabled || allowInteraction) && typeof onClick === 'function') {
     btn.onclick = onClick;
+  }
+}
+
+function showWeeklyDropNotice(message, type = 'info') {
+  const text = String(message || '').trim();
+  if (!text) return;
+  if (typeof window.showNotification === 'function') {
+    window.showNotification(text, type);
+    return;
+  }
+  alert(text);
+}
+
+function getWeeklyDropLockReason(user) {
+  const serverReason = String(latestWeeklyEligibility?.reason || '').trim();
+  if (serverReason) return serverReason;
+
+  if (!weeklyContestEnabled || latestWeeklyEligibility?.disabled) {
+    return i18n.t('weekly.disabled_status');
+  }
+
+  const isBelieverOrAbove = [
+    'Believer', 'Challenger', 'Navigator', 'Ascender',
+    'Master', 'Grandmaster', 'Legend', 'Eldrin'
+  ].includes(user?.level);
+  const hasPerfectStreak = Number(user?.streak || 0) >= 10;
+  const hasGold = Number(user?.goldTickets || 0) >= 10;
+  const hasWallet = String(user?.wallet || '').trim().length > 0;
+
+  const missing = [];
+  if (!isBelieverOrAbove) missing.push('Reach Believer level or higher.');
+  if (!hasPerfectStreak) missing.push(`Maintain a 10-day streak (current: ${Number(user?.streak || 0)}/10).`);
+  if (!hasGold) missing.push(`Need at least 10 Gold tickets (current: ${Number(user?.goldTickets || 0)}/10).`);
+  if (!hasWallet) missing.push('Connect a TON wallet to receive prizes.');
+
+  if (!missing.length) return i18n.t('weekly.not_eligible');
+  return `Weekly Drop locked: ${missing.join(' ')}`;
+}
+
+async function onWeeklyDropLockedClick(btn, fallbackUser) {
+  if (weeklyLockNoticeInFlight) return;
+  weeklyLockNoticeInFlight = true;
+  try {
+    await syncWeeklyContestEnabled({ force: true });
+    const user = getCachedUser() || fallbackUser;
+    const state = updateWeeklyDropEligibility(user);
+    if (state === 'ready') {
+      navigateWithFeedback('weeklyDrop.html', btn);
+      return;
+    }
+    const reason = getWeeklyDropLockReason(user);
+    const isDisabled = Boolean(latestWeeklyEligibility?.disabled) || !weeklyContestEnabled;
+    showWeeklyDropNotice(reason, isDisabled ? 'warn' : 'info');
+  } catch (err) {
+    console.warn('Weekly drop lock check failed:', err);
+    showWeeklyDropNotice(i18n.t('weekly.load_failed'), 'error');
+  } finally {
+    weeklyLockNoticeInFlight = false;
   }
 }
 
@@ -52,12 +220,7 @@ function initDomRefs() {
 
 function updateWeeklyDropEligibility(user) {
   const btn = document.getElementById('go-to-weekly-contest');
-  if (!btn || !user) return;
-
-  if (!weeklyContestEnabled) {
-    setWeeklyDropButtonState(btn, i18n.t('home.weekly_drop_disabled'), false);
-    return;
-  }
+  if (!btn || !user) return 'unknown';
 
   const isBelieverOrAbove = [
     'Believer', 'Challenger', 'Navigator', 'Ascender',
@@ -66,13 +229,29 @@ function updateWeeklyDropEligibility(user) {
 
   const hasPerfectStreak = (user.streak || 0) >= 10;
   const hasGold = (user.goldTickets || 0) >= 10;
+  const localEligible = isBelieverOrAbove && hasPerfectStreak && hasGold;
+  const serverDisabled = Boolean(latestWeeklyEligibility?.disabled) || !weeklyContestEnabled;
+  const hasServerEligibility = typeof latestWeeklyEligibility?.eligible === 'boolean';
+  const eligible = !serverDisabled && (hasServerEligibility ? Boolean(latestWeeklyEligibility.eligible) : localEligible);
 
-  if (isBelieverOrAbove && hasPerfectStreak && hasGold) {
+  if (eligible) {
     setWeeklyDropButtonState(btn, i18n.t('home.enter_weekly_drop'), true, () => {
       navigateWithFeedback('weeklyDrop.html', btn);
     });
+    btn.dataset.weeklyState = 'ready';
+    return 'ready';
   } else {
-    setWeeklyDropButtonState(btn, i18n.t('home.weekly_drop_locked'), false);
+    const label = serverDisabled ? i18n.t('home.weekly_drop_disabled') : i18n.t('home.weekly_drop_locked');
+    const lockReason = getWeeklyDropLockReason(user);
+    setWeeklyDropButtonState(
+      btn,
+      label,
+      false,
+      () => onWeeklyDropLockedClick(btn, user),
+      { allowInteraction: true, lockReason }
+    );
+    btn.dataset.weeklyState = 'locked';
+    return 'locked';
   }
 }
 
@@ -94,6 +273,7 @@ async function syncWeeklyContestEnabled(options = {}) {
       });
       if (!res.ok) return weeklyContestEnabled;
       const data = await res.json();
+      latestWeeklyEligibility = data && typeof data === 'object' ? data : null;
       if (typeof data.disabled === 'boolean') {
         weeklyContestEnabled = !data.disabled;
       }
@@ -189,6 +369,12 @@ window.addEventListener('hope:globalEvent', (event) => {
   const detail = event.detail || {};
   if (detail.type === 'weekly_contest_toggled') {
     weeklyContestEnabled = Boolean(detail.data?.enabled);
+    latestWeeklyEligibility = {
+      ...(latestWeeklyEligibility || {}),
+      disabled: !weeklyContestEnabled,
+      eligible: false,
+      reason: weeklyContestEnabled ? '' : i18n.t('weekly.disabled_status')
+    };
     const user = getCachedUser();
     if (user) updateWeeklyDropEligibility(user);
   }
@@ -593,19 +779,9 @@ async function handleCheckIn(button) {
     const txBoc = tx?.boc || '';
     if (!txHash && !txBoc) throw new Error('Transaction proof missing');
 
-    const verifyRes = await fetch('/api/dailyCheckIn/verify', {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ txHash, txBoc })
-    });
-
-    if (!verifyRes.ok) {
-      const err = await verifyRes.json();
-      throw new Error(err.error || 'Failed to record transaction');
-    }
-
-    const verifyData = await verifyRes.json();
+    savePendingCheckInTx(txHash, txBoc);
+    const verifyData = await verifyDailyCheckInTx(txHash, txBoc);
+    clearPendingCheckInTx();
     const reward = verifyData.reward || { points: 1000, bronzeTickets: 250, xp: 5 };
     closeDailyCheckInModal();
     await new Promise((resolve) => requestAnimationFrame(resolve));
@@ -641,8 +817,14 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   initDomRefs();
-  bootstrap();
-  refreshDailyCheckInStatus({ autoOpen: true });
+  (async () => {
+    await bootstrap();
+    await retryPendingCheckInVerification();
+    await refreshDailyCheckInStatus({ autoOpen: true });
+  })().catch((err) => {
+    console.warn('Startup check-in recovery flow failed:', err);
+    refreshDailyCheckInStatus({ autoOpen: true });
+  });
 
   if (checkInBtn) checkInBtn.addEventListener('click', () => openDailyCheckInModal());
   if (dailyCheckInModalBtn) dailyCheckInModalBtn.addEventListener('click', () => handleCheckIn(dailyCheckInModalBtn));

@@ -16,6 +16,35 @@ const {
 const userDataCache = new Map();
 const USER_CACHE_TTL_MS = 30 * 1000; // 30 seconds
 
+function normalizeMainnetWallet(rawWallet) {
+  const value = String(rawWallet || '').trim();
+  if (!value) {
+    return { ok: false, status: 400, error: 'Invalid wallet address' };
+  }
+
+  try {
+    const parsedFriendly = Address.parseFriendly(value);
+    if (parsedFriendly?.isTestOnly) {
+      return { ok: false, status: 400, error: 'Testnet wallets are not supported. Switch to TON mainnet.' };
+    }
+    return {
+      ok: true,
+      wallet: parsedFriendly.address.toString({ bounceable: false, testOnly: false })
+    };
+  } catch (_) {
+    // Friendly parsing can fail for raw-format addresses.
+  }
+
+  try {
+    return {
+      ok: true,
+      wallet: Address.parse(value).toString({ bounceable: false, testOnly: false })
+    };
+  } catch (_) {
+    return { ok: false, status: 400, error: 'Invalid wallet address' };
+  }
+}
+
 // Call this after any write that changes user data (points, tickets, level etc.)
 // so the next read gets fresh data instead of a stale cached response.
 function invalidateUserCache(telegramId) {
@@ -47,7 +76,7 @@ router.get('/me', async (req, res) => {
     }
 
     const now = new Date();
-    const streakChanged = normalizeStreakIfMissed(user, now);
+    const streakChanged = await normalizeStreakIfMissed(user, now);
     const calculatedLevel = getUserLevel(user.points || 0);
     const levelChanged = user.level !== calculatedLevel;
     if (levelChanged) {
@@ -111,17 +140,11 @@ router.get('/me', async (req, res) => {
 router.post('/wallet', async (req, res) => {
   try {
     const telegramId = req.user.telegramId;
-    let { wallet } = req.body;
-
-    if (!wallet || typeof wallet !== 'string' || wallet.trim().length === 0) {
-      return res.status(400).json({ error: 'Invalid wallet address' });
+    const normalizedWallet = normalizeMainnetWallet(req.body?.wallet);
+    if (!normalizedWallet.ok) {
+      return res.status(normalizedWallet.status).json({ error: normalizedWallet.error });
     }
-
-    try {
-      wallet = Address.parse(wallet.trim()).toString({ bounceable: false });
-    } catch (_) {
-      wallet = wallet.trim();
-    }
+    const wallet = normalizedWallet.wallet;
 
     const user = await User.findOneAndUpdate(
       { telegramId },
@@ -134,6 +157,9 @@ router.post('/wallet', async (req, res) => {
 
     res.json({ success: true, wallet: user.wallet });
   } catch (err) {
+    if (err?.code === 11000 && err?.keyPattern?.wallet) {
+      return res.status(409).json({ error: 'Wallet already linked to another account' });
+    }
     console.error('Save wallet error:', err);
     res.status(500).json({ error: 'Failed to save wallet address' });
   }

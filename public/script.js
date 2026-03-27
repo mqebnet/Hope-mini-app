@@ -91,7 +91,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const referralApplied = await registerInviteSession(startParam);
         if (referralApplied) {
           invalidateCache();
-          const inviteMessage = i18n.format('script.invited_bonus', { points: 100 });
+          const inviteMessage = i18n.format('script.invited_bonus', { points: 250 });
           if (typeof window.showSuccessToast === 'function') {
             window.showSuccessToast(inviteMessage);
           } else {

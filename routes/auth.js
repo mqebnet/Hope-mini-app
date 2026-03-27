@@ -186,6 +186,12 @@ router.post('/telegram', async (req, res) => {
     const fallbackStartParamRaw = typeof req.body?.startParam === 'string' ? req.body.startParam : '';
     const fallbackStartParam = fallbackStartParamRaw.trim();
     const startParam = parsed.startParam || fallbackStartParam;
+    console.log('[auth] startParam debug', {
+      telegramId: parsed.telegramId,
+      fromInitData: parsed.startParam,
+      fromBody: req.body?.startParam,
+      final: startParam
+    });
     const { telegramId, username } = parsed;
     const isAdmin = getAdminIds().has(telegramId);
 

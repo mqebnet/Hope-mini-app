@@ -50,7 +50,7 @@ function applyUserToProfile(user) {
   setText('profile-silver-tickets', user.silverTickets);
   setText('profile-gold-tickets', user.goldTickets);
   setText('profile-streak', user.streak);
-  const hasPerfectBadge = (user.badges || []).includes('perfect-streak-10');
+  const hasPerfectBadge = Number(user.streak || 0) >= 10;
   setText('profile-perfect-streak-badge', hasPerfectBadge ? 'Earned' : 'Not yet');
   const adminRow = document.getElementById('profile-admin-row');
   if (adminRow) {

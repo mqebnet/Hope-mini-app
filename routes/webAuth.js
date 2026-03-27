@@ -25,12 +25,26 @@ function normalizeGmail(email) {
 
 function normalizeWallet(wallet) {
   const raw = String(wallet || '').trim();
-  if (!raw) return null;
+  if (!raw) return { ok: false, error: 'Wallet is required' };
   try {
     const { Address } = require('@ton/core');
-    return Address.parse(raw).toString({ bounceable: false });
+    try {
+      const parsedFriendly = Address.parseFriendly(raw);
+      if (parsedFriendly?.isTestOnly) {
+        return { ok: false, error: 'Testnet wallets are not supported. Switch to TON mainnet.' };
+      }
+      return {
+        ok: true,
+        wallet: parsedFriendly.address.toString({ bounceable: false, testOnly: false })
+      };
+    } catch (_) {
+      return {
+        ok: true,
+        wallet: Address.parse(raw).toString({ bounceable: false, testOnly: false })
+      };
+    }
   } catch (_) {
-    return raw;
+    return { ok: false, error: 'Invalid wallet address' };
   }
 }
 
@@ -141,11 +155,15 @@ router.post('/link-wallet', async (req, res) => {
   try {
     const email = normalizeGmail(req.body?.email);
     const password = String(req.body?.password || '');
-    const wallet = normalizeWallet(req.body?.wallet);
+    const normalizedWallet = normalizeWallet(req.body?.wallet);
 
-    if (!email || !password || !wallet) {
+    if (!email || !password) {
       return res.status(400).json({ success: false, error: 'Email, password, and wallet are required' });
     }
+    if (!normalizedWallet.ok) {
+      return res.status(400).json({ success: false, error: normalizedWallet.error });
+    }
+    const wallet = normalizedWallet.wallet;
 
     const account = await WebAccount.findOne({ email });
     if (!account || !verifyPassword(password, account)) {

@@ -95,7 +95,7 @@ async function loadLeaderboard(levelIndex) {
         <span class="username" title="${displayName}">${displayName}</span>
         <span class="xp">${formatNumber(u.xp)}</span>
         <span class="points">${formatNumber(u.points)}</span>
-        <span class="tx">${u.transactionsCount ?? 0}</span>
+        <span class="streak">${u.streak ?? 0}</span>
       `;
 
       if (u.telegramId === currentUserId) {

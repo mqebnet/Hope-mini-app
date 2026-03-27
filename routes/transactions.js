@@ -9,7 +9,7 @@ const Transaction = require('../models/Transaction');
  * Body:
  * {
  *   txHash: String,
- *   purpose: "daily-checkin" | "mystery-box" | "ticket-exchange",
+ *   purpose: String,
  *   expectedUsd: Number
  * }
  *

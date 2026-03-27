@@ -1,5 +1,6 @@
 const express = require('express');
 const User = require('../models/User');
+const Transaction = require('../models/Transaction');
 const Contestant = require('../models/Contestant');
 const KeyValue = require('../models/KeyValue');
 const { Address } = require('@ton/core');
@@ -95,14 +96,32 @@ router.get('/users', async (req, res) => {
         .sort({ createdAt: -1 })
         .skip((page - 1) * limit)
         .limit(limit)
-        .select('telegramId username points xp streak level isAdmin bronzeTickets silverTickets goldTickets miningStartedAt createdAt'),
+        .select('telegramId username points xp streak level isAdmin bronzeTickets silverTickets goldTickets miningStartedAt createdAt')
+        .lean(),
       User.countDocuments(query)
     ]);
+
+    const telegramIds = items
+      .map((item) => Number(item.telegramId))
+      .filter((id) => Number.isFinite(id));
+    const txCountsAgg = telegramIds.length
+      ? await Transaction.aggregate([
+        { $match: { telegramId: { $in: telegramIds }, status: 'verified' } },
+        { $group: { _id: '$telegramId', count: { $sum: 1 } } }
+      ])
+      : [];
+    const txCountMap = new Map(
+      txCountsAgg.map((row) => [Number(row._id), Number(row.count || 0)])
+    );
+    const users = items.map((item) => ({
+      ...item,
+      transactionsCount: txCountMap.get(Number(item.telegramId)) || 0
+    }));
 
     res.json({
       success: true,
       pagination: { page, limit, total, pages: Math.ceil(total / limit) || 1 },
-      users: items
+      users
     });
   } catch (err) {
     console.error('Admin users error:', err);

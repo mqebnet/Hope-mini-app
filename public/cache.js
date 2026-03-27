@@ -26,19 +26,24 @@ function initializeCache() {
   }
 }
 
-// Fetch user data only once, with deduplication
+// Fetch user data with stale-while-revalidate behavior and deduplication.
 export async function fetchUserDataOnce() {
-  // If already fetching, return the same promise
-  if (isFetching) {
-    return fetchPromise;
-  }
+  if (isFetching) return fetchPromise;
 
-  // If cached in memory, return immediately
   if (cachedUser) {
+    _refreshInBackground();
     return cachedUser;
   }
 
-  // Start fetch
+  return _doFetch();
+}
+
+function _refreshInBackground() {
+  if (isFetching) return;
+  _doFetch({ suppressErrors: true });
+}
+
+function _doFetch({ suppressErrors = false } = {}) {
   isFetching = true;
   fetchPromise = (async () => {
     try {
@@ -48,21 +53,16 @@ export async function fetchUserDataOnce() {
       });
 
       if (res.status === 429) {
-        window.showWarningToast?.('Server busy — retrying shortly...');
+        window.showWarningToast?.('Server busy - retrying shortly...');
         throw new Error('RATE_LIMITED');
       }
 
-      if (!res.ok) {
-        throw new Error('Failed to fetch user data');
-      }
+      if (!res.ok) throw new Error('Failed to fetch user data');
 
       const data = await res.json();
       const user = data.user || data;
-
-      // Cache in memory
       cachedUser = user;
 
-      // Cache in localStorage for persistence
       try {
         localStorage.setItem(CACHE_KEY, JSON.stringify({
           version: CACHE_VERSION,
@@ -72,7 +72,14 @@ export async function fetchUserDataOnce() {
         console.warn('localStorage full:', e);
       }
 
+      if (window.onUserDataUpdate) window.onUserDataUpdate(user);
       return user;
+    } catch (err) {
+      if (suppressErrors) {
+        console.warn('Background user refresh failed:', err);
+        return cachedUser;
+      }
+      throw err;
     } finally {
       isFetching = false;
       fetchPromise = null;
@@ -114,3 +121,4 @@ export async function fetchUserData() {
 
 // Initialize on module load
 initializeCache();
+

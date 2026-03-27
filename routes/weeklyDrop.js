@@ -41,7 +41,7 @@ router.get('/eligibility', async (req, res) => {
     const user = await User.findOne({ telegramId: req.user.telegramId });
     if (!user) return res.status(404).json({ error: 'User not found' });
 
-    const streakChanged = normalizeStreakIfMissed(user, new Date());
+    const streakChanged = await normalizeStreakIfMissed(user, new Date());
     if (streakChanged) await user.save();
 
     const level = getUserLevel(user.points || 0);
@@ -104,7 +104,7 @@ router.post('/enter', async (req, res) => {
     const user = await User.findOne({ telegramId: req.user.telegramId });
     if (!user) return res.status(404).json({ error: 'User not found' });
 
-    const streakChanged = normalizeStreakIfMissed(user, new Date());
+    const streakChanged = await normalizeStreakIfMissed(user, new Date());
     if (streakChanged) await user.save();
 
     const level = getUserLevel(user.points || 0);
