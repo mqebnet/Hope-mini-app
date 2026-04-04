@@ -5,6 +5,8 @@ import { i18n } from './i18n.js';
 
 const BOX_PRICE_USD = 0.15;
 const BOX_ORDER = ['bronze', 'silver', 'gold'];
+const PENDING_MYSTERY_TX_KEY = 'pendingMysteryPurchaseTx';
+const PENDING_MYSTERY_TX_MAX_AGE_MS = 30 * 60 * 1000;
 
 let user = null;
 let selectedTradeAmount = null;
@@ -13,6 +15,8 @@ let cachedBoxStatus = null;
 let activeMarketTab = 'games';
 let exchangeUIInitialized = false;
 let refreshExchangeAvailability = null;
+let mysteryActionInFlight = false;
+let pendingMysteryRecoveryTimer = null;
 
 const mysteryBtn = document.getElementById('open-market-mystery-box-button');
 const mysteryInfo = document.getElementById('mystery-box-info');
@@ -26,6 +30,169 @@ const boxRewards = {
   silver: { points: 300, bronzeTickets: 50, xp: 2 },
   gold: { points: 500, bronzeTickets: 100, silverTickets: 1, xp: 5 }
 };
+
+function ticketLabel(type) {
+  if (type === 'bronze') return i18n.t('marketplace.ticket_bronze');
+  if (type === 'silver') return i18n.t('marketplace.ticket_silver');
+  if (type === 'gold') return i18n.t('marketplace.ticket_gold');
+  return i18n.t('marketplace.ticket_generic');
+}
+
+function boxStateLabel(state) {
+  if (state === 'claimed') return i18n.t('marketplace.box_state_claimed');
+  if (state === 'ready') return i18n.t('marketplace.box_state_ready');
+  if (state === 'next') return i18n.t('marketplace.box_state_next');
+  return i18n.t('marketplace.box_state_locked');
+}
+
+function savePendingMysteryTx(txHash, txBoc) {
+  try {
+    localStorage.setItem(PENDING_MYSTERY_TX_KEY, JSON.stringify({
+      txHash: txHash || '',
+      txBoc: txBoc || '',
+      timestamp: Date.now()
+    }));
+  } catch (err) {
+    console.warn('Failed to persist pending mystery purchase tx:', err);
+  }
+}
+
+function clearPendingMysteryTx() {
+  try {
+    localStorage.removeItem(PENDING_MYSTERY_TX_KEY);
+  } catch (err) {
+    console.warn('Failed to clear pending mystery purchase tx:', err);
+  }
+}
+
+function loadPendingMysteryTx() {
+  try {
+    const raw = localStorage.getItem(PENDING_MYSTERY_TX_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const txHash = typeof parsed?.txHash === 'string' ? parsed.txHash.trim() : '';
+    const txBoc = typeof parsed?.txBoc === 'string' ? parsed.txBoc.trim() : '';
+    const timestamp = Number(parsed?.timestamp || 0);
+    if (!txHash && !txBoc) {
+      clearPendingMysteryTx();
+      return null;
+    }
+    if (!Number.isFinite(timestamp) || Date.now() - timestamp > PENDING_MYSTERY_TX_MAX_AGE_MS) {
+      clearPendingMysteryTx();
+      return null;
+    }
+    return { txHash, txBoc, timestamp };
+  } catch (err) {
+    console.warn('Failed to parse pending mystery purchase tx:', err);
+    clearPendingMysteryTx();
+    return null;
+  }
+}
+
+function setMysteryPendingState() {
+  mysteryBtn?.classList.add('is-loading');
+  mysteryBtn?.setAttribute('aria-busy', 'true');
+  if (mysteryBtn) {
+    mysteryBtn.disabled = true;
+    mysteryBtn.textContent = i18n.t('marketplace.awaiting_payment_verification');
+  }
+  if (mysteryInfo) {
+    mysteryInfo.innerHTML = `
+      <p>${i18n.t('marketplace.verifying_purchase_wait')}</p>
+      <p>${i18n.t('marketplace.verifying_purchase_wait_hint')}</p>
+    `;
+  }
+}
+
+async function retryPendingMysteryPurchase(options = {}) {
+  const { notifyOnRetry = false } = options;
+  const pending = loadPendingMysteryTx();
+  if (!pending) return false;
+
+  setMysteryPendingState();
+  try {
+    const purchaseRes = await fetch('/api/mysteryBox/purchase', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ txHash: pending.txHash, txBoc: pending.txBoc })
+    });
+    let data = {};
+    try {
+      data = await purchaseRes.json();
+    } catch (_) {
+      data = {};
+    }
+
+    if (purchaseRes.ok) {
+      clearPendingMysteryTx();
+      await refreshMysteryStatus();
+      return true;
+    }
+
+    const errorMsg = String(data?.error || '').trim();
+    const normalized = errorMsg.toLowerCase();
+    const alreadyApplied =
+      normalized.includes('transaction already used') ||
+      normalized.includes('open your current box') ||
+      normalized.includes('daily limit reached');
+    if (alreadyApplied) {
+      clearPendingMysteryTx();
+      await refreshMysteryStatus();
+      return true;
+    }
+
+    const hardFailure =
+      normalized.includes('below required') ||
+      normalized.includes('wrong recipient') ||
+      normalized.includes('no outgoing payment') ||
+      normalized.includes('invalid wallet') ||
+      normalized.includes('user not found');
+    if (hardFailure) {
+      clearPendingMysteryTx();
+      await refreshMysteryStatus();
+      if (notifyOnRetry && errorMsg) {
+        showNotification(errorMsg, 'error');
+      }
+      return false;
+    }
+
+    if (notifyOnRetry) {
+      showNotification(i18n.t('marketplace.verifying_purchase_wait'), 'info');
+    }
+    return true;
+  } catch (err) {
+    console.warn('Pending mystery purchase retry failed:', err);
+    if (notifyOnRetry) {
+      showNotification(i18n.t('marketplace.verifying_purchase_wait'), 'info');
+    }
+    return true;
+  }
+}
+
+function schedulePendingMysteryRecovery() {
+  if (pendingMysteryRecoveryTimer) {
+    clearTimeout(pendingMysteryRecoveryTimer);
+    pendingMysteryRecoveryTimer = null;
+  }
+
+  let attempts = 0;
+  const tick = async () => {
+    if (!loadPendingMysteryTx()) return;
+    if (mysteryActionInFlight) {
+      pendingMysteryRecoveryTimer = setTimeout(tick, 3000);
+      return;
+    }
+
+    attempts += 1;
+    await retryPendingMysteryPurchase();
+    if (!loadPendingMysteryTx()) return;
+    if (attempts >= 8) return;
+    pendingMysteryRecoveryTimer = setTimeout(tick, 6000);
+  };
+
+  pendingMysteryRecoveryTimer = setTimeout(tick, 1200);
+}
 
 document.addEventListener('DOMContentLoaded', async () => {
   // Bootstrap lock: prevent running twice
@@ -46,14 +213,28 @@ document.addEventListener('DOMContentLoaded', async () => {
     applyUserData(freshUser);
   } catch (err) {
     console.error('Failed to initialize marketplace:', err);
-    showNotification(err.message || i18n.t('marketplace.load_failed'), 'error');
+    showNotification(i18n.t('marketplace.load_failed'), 'error');
   }
 
   refreshMysteryStatus();
+  await retryPendingMysteryPurchase();
+  schedulePendingMysteryRecovery();
 });
 
 window.addEventListener('hope:userUpdated', (event) => {
   applyUserData(event.detail);
+});
+
+window.addEventListener('hope:languageChanged', () => {
+  if (typeof refreshExchangeAvailability === 'function') {
+    refreshExchangeAvailability();
+  }
+  if (selectedTradeType && selectedTradeAmount) {
+    updateExchangePreview(selectedTradeType, selectedTradeAmount);
+  }
+  if (cachedBoxStatus) {
+    renderMysteryStatus(cachedBoxStatus);
+  }
 });
 
 function applyUserData(nextUser) {
@@ -154,8 +335,8 @@ function updateExchangePreview(tradeType, amount) {
   const exchangeRates = { bronze: 0.01, silver: 0.01 };
   const rate = exchangeRates[tradeType] || 1;
   const toAmount = Math.floor(amount * rate);
-  const fromLabel = tradeType === 'bronze' ? 'Bronze' : 'Silver';
-  const toLabel = tradeType === 'bronze' ? 'Silver' : 'Gold';
+  const fromLabel = ticketLabel(tradeType);
+  const toLabel = tradeType === 'bronze' ? ticketLabel('silver') : ticketLabel('gold');
 
   const fromDiv = document.getElementById('from-ticket');
   const toDiv = document.getElementById('to-ticket');
@@ -174,17 +355,13 @@ function initExchangeUI() {
   tradeBtn.disabled = true;
 
   const prettyAmount = (amount) => (amount >= 1000 ? `${amount / 1000}k` : `${amount}`);
-  const labelsByType = {
-    bronze: 'Bronze',
-    silver: 'Silver'
-  };
 
   function clearAmountSelection() {
     amountButtons.forEach((btn) => btn.classList.remove('selected'));
   }
 
   function renderAmountLabels() {
-    const label = labelsByType[typeSelect.value] || 'Ticket';
+    const label = ticketLabel(typeSelect.value);
     amountButtons.forEach((btn) => {
       const amount = Number.parseInt(btn.dataset.amount, 10);
       btn.textContent = `${prettyAmount(amount)} ${label}`;
@@ -280,7 +457,8 @@ function initExchangeUI() {
       if (toDiv) toDiv.textContent = '';
       showNotification(i18n.t('marketplace.trade_success'), 'success');
     } catch (err) {
-      showNotification(err.message || i18n.t('marketplace.trade_failed'), 'error');
+      console.error('Ticket trade failed:', err);
+      showNotification(i18n.t('marketplace.trade_failed'), 'error');
     }
   });
 }
@@ -289,7 +467,14 @@ function initMysteryBoxUI() {
   if (!mysteryBtn) return;
 
   mysteryBtn.addEventListener('click', async () => {
+    if (mysteryActionInFlight) return;
+    mysteryActionInFlight = true;
+    mysteryBtn.disabled = true;
     try {
+      if (await retryPendingMysteryPurchase({ notifyOnRetry: true })) {
+        return;
+      }
+
       if (cachedBoxStatus?.activeBox) {
         await openMysteryBox();
         return;
@@ -302,7 +487,16 @@ function initMysteryBoxUI() {
 
       showNotification(i18n.t('marketplace.come_back_tomorrow'), 'info');
     } catch (err) {
-      showNotification(err.message || i18n.t('marketplace.mystery_action_failed'), 'error');
+      console.error('Mystery action failed:', err);
+      showNotification(i18n.t('marketplace.mystery_action_failed'), 'error');
+    } finally {
+      mysteryActionInFlight = false;
+      await refreshMysteryStatus();
+      if (!cachedBoxStatus && mysteryBtn) {
+        mysteryBtn.disabled = false;
+        mysteryBtn.classList.remove('is-loading');
+        mysteryBtn.removeAttribute('aria-busy');
+      }
     }
   });
 }
@@ -317,6 +511,8 @@ async function fetchMysteryStatus() {
 function renderMysteryStatus(status) {
   cachedBoxStatus = status;
   if (!mysteryBtn || !mysteryInfo) return;
+  mysteryBtn.classList.remove('is-loading');
+  mysteryBtn.removeAttribute('aria-busy');
 
   const purchasedToday = status.purchasedToday || 0;
   const limit = status.limit || 9;
@@ -380,7 +576,7 @@ function renderMysteryStatus(status) {
       card.className = `box-card ${boxType} ${state}`;
       card.innerHTML = `
         <span class="box-title">${boxType.toUpperCase()}</span>
-        <span class="box-state">${state.toUpperCase()}</span>
+        <span class="box-state">${boxStateLabel(state)}</span>
       `;
       mysteryTrack.appendChild(card);
     });
@@ -392,7 +588,8 @@ async function refreshMysteryStatus() {
     const status = await fetchMysteryStatus();
     renderMysteryStatus(status);
   } catch (err) {
-    showNotification(err.message || i18n.t('marketplace.status_failed'), 'error');
+    console.error('Failed to refresh mystery status:', err);
+    showNotification(i18n.t('marketplace.status_failed'), 'error');
   }
 }
 
@@ -420,6 +617,10 @@ async function purchaseMysteryBox() {
   const txHash = tx?.transaction?.hash || tx?.txid?.hash || tx?.hash || '';
   const txBoc = tx?.boc || '';
   if (!txHash && !txBoc) throw new Error(i18n.t('marketplace.tx_proof_missing'));
+  savePendingMysteryTx(txHash, txBoc);
+  schedulePendingMysteryRecovery();
+
+  setMysteryPendingState();
 
   const purchaseRes = await fetch('/api/mysteryBox/purchase', {
     method: 'POST',
@@ -431,6 +632,7 @@ async function purchaseMysteryBox() {
   const data = await purchaseRes.json();
   if (!purchaseRes.ok) throw new Error(data.error || i18n.t('marketplace.purchase_failed'));
 
+  clearPendingMysteryTx();
   showNotification(i18n.format('marketplace.box_purchased', { box: data.boxType.toUpperCase() }), 'success');
   await refreshMysteryStatus();
 }

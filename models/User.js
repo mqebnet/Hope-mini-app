@@ -4,9 +4,7 @@ const mongoose = require('mongoose');
 const UserSchema = new mongoose.Schema({
   telegramId: {
     type: Number,
-    required: true,
-    unique: true,
-    index: true
+    required: true
   },
 
   username: { type: String, trim: true },
@@ -38,6 +36,12 @@ const UserSchema = new mongoose.Schema({
     ten: Boolean
   },
   completedInviteTasks: { type: [Number], default: [] },
+  gamePass: {
+    validUntil: { type: Date, default: null },
+    purchasedAt: { type: Date, default: null },
+    txRef: { type: String, default: null }
+  },
+  // Legacy field kept for backward compatibility during migration.
   flipcardsPass: {
     validUntil: { type: Date, default: null },
     purchasedAt: { type: Date, default: null },
@@ -73,6 +77,7 @@ UserSchema.pre('save', async function(next) {
 });
 
 // Indexes
+UserSchema.index({ telegramId: 1 }, { unique: true });
 UserSchema.index({ points: -1 });
 UserSchema.index({ level: 1, points: -1 });
 UserSchema.index({ invitedCount: -1 });

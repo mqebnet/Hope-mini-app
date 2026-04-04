@@ -6,6 +6,23 @@ const cooldown = require('../services/cooldownService');
 
 router.use(gameLimiter);
 
+function getMoveCooldownMs(gameId) {
+  switch (String(gameId || '').toLowerCase()) {
+    case 'flipcards':
+      return 120;
+    case 'slidingtiles':
+      return 90;
+    case 'blocktower':
+      return 90;
+    default:
+      return 300;
+  }
+}
+
+function getMoveCooldownKey(gameId) {
+  return `game:move:${String(gameId || 'unknown').toLowerCase()}`;
+}
+
 function handleError(res, err) {
   if (err instanceof GameEngineError) {
     return res.status(err.status || 400).json({ success: false, error: err.message });
@@ -40,8 +57,9 @@ router.post('/:gameId/start', async (req, res) => {
 router.post('/:gameId/move', async (req, res) => {
   try {
     const telegramId = req.user?.telegramId;
-    // 300ms minimum between move calls - prevents spam while allowing fast human play
-    const { allowed, retryAfterMs } = cooldown.consume(telegramId, 'game:move', 300);
+    const cooldownKey = getMoveCooldownKey(req.params.gameId);
+    const cooldownMs = getMoveCooldownMs(req.params.gameId);
+    const { allowed, retryAfterMs } = cooldown.consume(telegramId, cooldownKey, cooldownMs);
     if (!allowed) {
       return res.status(429).json({
         success: false,
@@ -58,7 +76,7 @@ router.post('/:gameId/move', async (req, res) => {
 router.post('/:gameId/complete', async (req, res) => {
   try {
     const result = await invoke(res, req.params.gameId, 'complete', req, req.body || {});
-    cooldown.clear(req.user?.telegramId, 'game:move'); // clean up on game end
+    cooldown.clear(req.user?.telegramId, getMoveCooldownKey(req.params.gameId));
     return result;
   } catch (err) {
     return handleError(res, err);
@@ -100,7 +118,7 @@ router.get('/:gameId/session/:gameSessionId', async (req, res) => {
 router.delete('/:gameId/session/:gameSessionId', async (req, res) => {
   try {
     const result = await invoke(res, req.params.gameId, 'abandon', req, { gameSessionId: req.params.gameSessionId });
-    cooldown.clear(req.user?.telegramId, 'game:move'); // clean up on game end
+    cooldown.clear(req.user?.telegramId, getMoveCooldownKey(req.params.gameId));
     return result;
   } catch (err) {
     return handleError(res, err);
@@ -119,7 +137,8 @@ router.post('/flipcards/start', async (req, res) => {
 router.post('/flipcards/move', async (req, res) => {
   try {
     const telegramId = req.user?.telegramId;
-    const { allowed, retryAfterMs } = cooldown.consume(telegramId, 'game:move', 300);
+    const cooldownKey = getMoveCooldownKey('flipcards');
+    const { allowed, retryAfterMs } = cooldown.consume(telegramId, cooldownKey, getMoveCooldownMs('flipcards'));
     if (!allowed) {
       return res.status(429).json({
         success: false,
@@ -136,7 +155,7 @@ router.post('/flipcards/move', async (req, res) => {
 router.post('/flipcards/complete', async (req, res) => {
   try {
     const result = await invoke(res, 'flipcards', 'complete', req, req.body || {});
-    cooldown.clear(req.user?.telegramId, 'game:move'); // clean up on game end
+    cooldown.clear(req.user?.telegramId, getMoveCooldownKey('flipcards'));
     return result;
   } catch (err) {
     return handleError(res, err);
@@ -154,7 +173,7 @@ router.get('/flipcards/status/:gameSessionId', async (req, res) => {
 router.delete('/flipcards/:gameSessionId', async (req, res) => {
   try {
     const result = await invoke(res, 'flipcards', 'abandon', req, { gameSessionId: req.params.gameSessionId });
-    cooldown.clear(req.user?.telegramId, 'game:move'); // clean up on game end
+    cooldown.clear(req.user?.telegramId, getMoveCooldownKey('flipcards'));
     return result;
   } catch (err) {
     return handleError(res, err);

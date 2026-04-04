@@ -78,7 +78,7 @@ const DEFAULT_TASK_CATALOG = {
     },
     {
       id: 'follow-twitter',
-      title: 'Follow Twitter Handle',
+      title: 'Follow X Handle',
       action: 'verify',
       reward: 1000,
       description: 'Stay updated (+1000 points)',

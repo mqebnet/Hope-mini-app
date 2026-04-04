@@ -54,6 +54,9 @@ router.post('/register-session', async (req, res) => {
       applied: Boolean(result?.applied),
       reason: result?.reason || null,
       inviterTelegramId: result?.inviterTelegramId || null,
+      inviterUsername: result?.inviterUsername || null,
+      bonusAmount: Number(result?.inviteeRewardPoints || 0),
+      bonusBronzeTickets: Number(result?.inviteeRewardBronzeTickets || 0),
       inviterUpdated: Number(result?.inviterUpdated || 0)
     });
   } catch (err) {

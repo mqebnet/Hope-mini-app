@@ -13,7 +13,14 @@ router.post('/start', async (req, res) => {
     if (!user) return res.status(404).json({ error: 'User not found' });
 
     if (user.miningStartedAt) {
-      return res.status(400).json({ error: 'Mining already active' });
+      // Treat an ongoing mining session as a valid idempotent start response
+      // so the client can sync UI without surfacing a false failure.
+      return res.json({
+        success: true,
+        alreadyActive: true,
+        miningStartedAt: user.miningStartedAt,
+        durationMs: MINING_DURATION_MS
+      });
     }
 
     user.miningStartedAt = new Date();

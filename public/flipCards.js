@@ -30,6 +30,26 @@ export class FlipCardsGame {
     this.difficulty = 'normal'; // easy, normal, hard
     this.gameContainer = null;
     this.isGameActive = false;
+    this.unflipDelayMs = 800;
+  }
+
+  setBoardLocked(locked) {
+    if (!this.gameContainer) return;
+    this.gameContainer.style.pointerEvents = locked ? 'none' : '';
+  }
+
+  async unflipCards(cardIds = []) {
+    await new Promise((resolve) => {
+      setTimeout(() => {
+        cardIds.forEach((cardId) => {
+          const cardEl = document.querySelector(`[data-card-id="${cardId}"]`);
+          if (cardEl) {
+            cardEl.classList.remove('flipped');
+          }
+        });
+        resolve();
+      }, this.unflipDelayMs);
+    });
   }
 
   /**
@@ -50,7 +70,7 @@ export class FlipCardsGame {
       
       // Check if daily pass is required (402 status from backend)
       if (response.status === 402) {
-        navigateWithFeedback('flipcardsPass.html');
+        navigateWithFeedback('gamepass.html?game=flipcards');
         return { success: false };
       }
 
@@ -76,7 +96,7 @@ export class FlipCardsGame {
       return { success: true, gameSessionId: this.gameSessionId };
     } catch (err) {
       console.error('Failed to start game:', err);
-      this.showNotification(err.message || i18n.t('flipcards.move_failed'), 'error');
+      this.showNotification(i18n.t('flipcards.move_failed'), 'error');
       return { success: false };
     }
   }
@@ -137,7 +157,7 @@ export class FlipCardsGame {
    * Purchase daily pass
    */
   async purchasePass() {
-    navigateWithFeedback('flipcardsPass.html');
+    navigateWithFeedback('gamepass.html?game=flipcards');
   }
 
   /**
@@ -229,7 +249,8 @@ export class FlipCardsGame {
    */
   async checkMove() {
     this.isProcessing = true;
-
+    this.setBoardLocked(true);
+    const selectedCardIds = [...this.flippedCards];
     const clientDuration = Date.now() - this.startTime;
 
     try {
@@ -239,66 +260,56 @@ export class FlipCardsGame {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           gameSessionId: this.gameSessionId,
-          cardIds: this.flippedCards,
+          cardIds: selectedCardIds,
           clientDuration
         })
       });
 
       const data = await response.json();
-      if (!data.success) {
+      
+      if (!response.ok || !data.success) {
         throw new Error(data.error || i18n.t('flipcards.move_failed'));
       }
 
-      // Check if matched
       if (data.matched) {
-        // Mark as matched
-        this.matchedTriplets.push(data.matchedTripletId);
-        this.flippedCards.forEach((cardId) => {
-          const card = this.cards.find((c) => c.id === cardId);
-          const cardEl = document.querySelector(`[data-card-id="${cardId}"]`);
+        // Mark matched cards
+        selectedCardIds.forEach(cardId => {
+          const card = this.cards.find(c => c.id === cardId);
           if (card) card.revealed = true;
+          
+          const cardEl = document.querySelector(`[data-card-id="${cardId}"]`);
           if (cardEl) {
             cardEl.classList.add('matched');
-            cardEl.classList.remove('flipped');
-            const handler = cardEl.__flipClickHandler;
-            if (handler) {
-              cardEl.removeEventListener('click', handler);
-              delete cardEl.__flipClickHandler;
-            }
+            // Remove click listener
+            cardEl.removeEventListener('click', cardEl.__flipClickHandler);
           }
         });
 
-        // Success animation
+        this.matchedTriplets.push(data.matchedTripletId);
         this.showNotification(i18n.t('flipcards.match_success'), 'success');
+        this.flippedCards = [];
+
+        if (data.gameComplete) {
+          // Game won
+          this.isGameActive = false;
+          setTimeout(() => this.endGame(data.reward), 500);
+          return;
+        }
       } else {
-        // No match - flip back after a delay
-        await new Promise((resolve) => setTimeout(resolve, 800));
-        this.flippedCards.forEach((cardId) => {
-          const cardEl = document.querySelector(`[data-card-id="${cardId}"]`);
-          if (cardEl) {
-            cardEl.classList.remove('flipped');
-          }
-        });
-      }
-
-      // Clear flipped cards
-      this.flippedCards = [];
-
-      // Check if game completed
-      if (data.gameComplete) {
-        this.endGame(data.reward);
+        // No match, flip cards back after delay
+        await this.unflipCards(selectedCardIds);
+        this.flippedCards = [];
       }
     } catch (err) {
       console.error('Move failed:', err);
-      // Flip cards back on error
-      this.flippedCards.forEach((cardId) => {
-        const cardEl = document.querySelector(`[data-card-id="${cardId}"]`);
-        if (cardEl) cardEl.classList.remove('flipped');
-      });
+      this.showNotification(i18n.t('flipcards.move_failed'), 'error');
+      
+      // Reset flipped cards on error
+      await this.unflipCards(selectedCardIds);
       this.flippedCards = [];
-      this.showNotification(err.message || i18n.t('flipcards.move_failed'), 'error');
     } finally {
       this.isProcessing = false;
+      this.setBoardLocked(false);
     }
   }
 
@@ -383,6 +394,7 @@ export class FlipCardsGame {
    * Display reward screen
    */
   showRewardScreen(reward = {}, stats = {}, newStats = {}) {
+    window.hopeTriggerHaptic?.('success');
     const safeReward = {
       points: Number(reward?.points || 0),
       xp: Number(reward?.xp || 0),
@@ -422,7 +434,7 @@ export class FlipCardsGame {
             <span class="reward-amount">+${safeReward.points}</span>
           </div>
           <div class="reward-item">
-            <span>✨ ${i18n.t('flipcards.xp_label')}</span>
+            <span>⚡ ${i18n.t('flipcards.xp_label')}</span>
             <span class="reward-amount">+${safeReward.xp}</span>
           </div>
           ${safeReward.bronzeTickets > 0 ? `
@@ -456,6 +468,7 @@ export class FlipCardsGame {
    * Display game over screen
    */
   showGameOverScreen(title, message, isVictory) {
+    window.hopeTriggerHaptic?.(isVictory ? 'success' : 'error');
     const modal = document.createElement('div');
     modal.className = 'reward-modal';
     modal.innerHTML = `
@@ -513,7 +526,7 @@ export class FlipCardsGame {
       navigateWithFeedback('flipcards.html', null, { reloadIfSame: true });
     } catch (err) {
       console.error('Failed to abandon game:', err);
-      this.showNotification(err.message || i18n.t('flipcards.failed_abandon_game'), 'error');
+      this.showNotification(i18n.t('flipcards.failed_abandon_game'), 'error');
       this.isAbandoningGame = false;
     }
   }

@@ -19,6 +19,15 @@ const router = express.Router();
 const MINING_REMINDER_LAST_RUN_KEY = 'mining_reminder_last_run';
 const WEEKLY_CONTEST_ENABLED_KEY = 'weekly_contest_enabled';
 const SYSTEM_USERNAME_RE = /^user_\d+$/i;
+const DEFAULT_TX_ANALYTICS_DAYS = 14;
+const MAX_TX_ANALYTICS_DAYS = 90;
+
+const TX_PURPOSE_BUCKETS = {
+  'daily-checkin': { key: 'dailyCheckInCount', label: 'Daily Check-In' },
+  'mystery-box-purchase': { key: 'mysteryBoxPurchaseCount', label: 'Mystery Box Purchase' },
+  'flipcards-pass': { key: 'gamePassCount', label: 'Game Pass' },
+  'weekly-drop-entry': { key: 'weeklyDropEntryCount', label: 'Weekly Drop Entry' }
+};
 
 function toFriendlyWallet(wallet) {
   if (!wallet || typeof wallet !== 'string') return null;
@@ -50,6 +59,35 @@ function sanitizeLimit(raw, fallback = 20, max = 100) {
   return Math.min(Math.floor(n), max);
 }
 
+function sanitizeDays(raw, fallback = DEFAULT_TX_ANALYTICS_DAYS, max = MAX_TX_ANALYTICS_DAYS) {
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 1) return fallback;
+  return Math.min(Math.floor(n), max);
+}
+
+function startOfUtcDay(date = new Date()) {
+  return new Date(Date.UTC(
+    date.getUTCFullYear(),
+    date.getUTCMonth(),
+    date.getUTCDate(),
+    0, 0, 0, 0
+  ));
+}
+
+function addUtcDays(date, days) {
+  const next = new Date(date);
+  next.setUTCDate(next.getUTCDate() + days);
+  return next;
+}
+
+function toUtcDayKey(date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function roundMoney(value) {
+  return Math.round((Number(value) || 0) * 100) / 100;
+}
+
 router.get('/stats', async (_req, res) => {
   try {
     const [users, admins, activeMiners, contestants, contestEnabled] = await Promise.all([
@@ -73,6 +111,132 @@ router.get('/stats', async (_req, res) => {
   } catch (err) {
     console.error('Admin stats error:', err);
     res.status(500).json({ error: 'Failed to load admin stats' });
+  }
+});
+
+router.get('/transactions/analytics', async (req, res) => {
+  try {
+    const days = sanitizeDays(req.query.days, DEFAULT_TX_ANALYTICS_DAYS, MAX_TX_ANALYTICS_DAYS);
+    const endExclusive = addUtcDays(startOfUtcDay(new Date()), 1);
+    const startDate = addUtcDays(endExclusive, -days);
+
+    const grouped = await Transaction.aggregate([
+      {
+        $match: {
+          status: 'verified',
+          createdAt: { $gte: startDate, $lt: endExclusive }
+        }
+      },
+      {
+        $group: {
+          _id: {
+            day: {
+              $dateToString: {
+                format: '%Y-%m-%d',
+                date: '$createdAt',
+                timezone: 'UTC'
+              }
+            },
+            purpose: '$purpose'
+          },
+          count: { $sum: 1 },
+          totalUsd: { $sum: { $ifNull: ['$expectedUsd', 0] } }
+        }
+      },
+      { $sort: { '_id.day': 1 } }
+    ]);
+
+    const rows = [];
+    const rowMap = new Map();
+    for (let cursor = new Date(startDate); cursor < endExclusive; cursor = addUtcDays(cursor, 1)) {
+      const dayKey = toUtcDayKey(cursor);
+      const row = {
+        dayKey,
+        totalTransactions: 0,
+        dailyCheckInCount: 0,
+        mysteryBoxPurchaseCount: 0,
+        gamePassCount: 0,
+        weeklyDropEntryCount: 0,
+        otherCount: 0,
+        totalUsd: 0
+      };
+      rows.push(row);
+      rowMap.set(dayKey, row);
+    }
+
+    for (const item of grouped) {
+      const dayKey = item?._id?.day;
+      const purpose = String(item?._id?.purpose || '').trim();
+      const row = rowMap.get(dayKey);
+      if (!row) continue;
+
+      const count = Number(item.count || 0);
+      const totalUsd = roundMoney(item.totalUsd);
+      row.totalTransactions += count;
+      row.totalUsd = roundMoney(row.totalUsd + totalUsd);
+
+      const bucket = TX_PURPOSE_BUCKETS[purpose];
+      if (bucket?.key) {
+        row[bucket.key] += count;
+      } else {
+        row.otherCount += count;
+      }
+    }
+
+    const summary = rows.reduce((acc, row) => {
+      acc.totalTransactions += row.totalTransactions;
+      acc.totalUsd = roundMoney(acc.totalUsd + row.totalUsd);
+      acc.dailyCheckInCount += row.dailyCheckInCount;
+      acc.mysteryBoxPurchaseCount += row.mysteryBoxPurchaseCount;
+      acc.gamePassCount += row.gamePassCount;
+      acc.weeklyDropEntryCount += row.weeklyDropEntryCount;
+      acc.otherCount += row.otherCount;
+      if (!acc.busiestDay || row.totalTransactions > acc.busiestDay.totalTransactions) {
+        acc.busiestDay = {
+          dayKey: row.dayKey,
+          totalTransactions: row.totalTransactions
+        };
+      }
+      return acc;
+    }, {
+      totalTransactions: 0,
+      totalUsd: 0,
+      dailyCheckInCount: 0,
+      mysteryBoxPurchaseCount: 0,
+      gamePassCount: 0,
+      weeklyDropEntryCount: 0,
+      otherCount: 0,
+      busiestDay: null
+    });
+
+    const featureTotals = [
+      { key: 'dailyCheckInCount', label: 'Daily Check-In', count: summary.dailyCheckInCount },
+      { key: 'mysteryBoxPurchaseCount', label: 'Mystery Box Purchase', count: summary.mysteryBoxPurchaseCount },
+      { key: 'gamePassCount', label: 'Game Pass', count: summary.gamePassCount },
+      { key: 'weeklyDropEntryCount', label: 'Weekly Drop Entry', count: summary.weeklyDropEntryCount }
+    ];
+    featureTotals.sort((a, b) => b.count - a.count);
+    summary.topFeature = featureTotals[0]?.count
+      ? featureTotals[0]
+      : { key: null, label: 'No verified transactions yet', count: 0 };
+    if (!summary.totalTransactions) {
+      summary.busiestDay = null;
+    }
+
+    res.json({
+      success: true,
+      analytics: {
+        generatedAt: new Date().toISOString(),
+        days,
+        startDate: startDate.toISOString(),
+        endDateExclusive: endExclusive.toISOString(),
+        summary,
+        rows
+      }
+    });
+  } catch (err) {
+    console.error('Admin transaction analytics error:', err);
+    res.status(500).json({ error: 'Failed to load transaction analytics' });
   }
 });
 

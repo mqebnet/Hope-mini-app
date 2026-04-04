@@ -1,27 +1,29 @@
 // public/profile.js
 import { updateTopBar, fetchUserDataOnce, getCachedUser } from './userData.js';
 import { canBootstrap } from './utils.js';
+import { i18n } from './i18n.js';
 
 const PROFILE_FALLBACK_HTML = `
 <div id="profile-panel" class="profile-panel" style="display: none;">
   <button id="close-profile-button" class="close-btn" aria-label="Close Profile">&times;</button>
-  <h2>User Profile</h2>
-  <p><strong>Username:</strong> <span id="profile-userid">-</span></p>
-  <p><strong>Level:</strong> <span id="profile-level">-</span></p>
-  <p><strong>Points:</strong> <span id="profile-points">-</span></p>
-  <p><strong>XP:</strong> <span id="profile-xp">-</span></p>
-  <p><strong>Bronze Tickets:</strong> <span id="profile-bronze-tickets">-</span></p>
-  <p><strong>Silver Tickets:</strong> <span id="profile-silver-tickets">-</span></p>
-  <p><strong>Gold Tickets:</strong> <span id="profile-gold-tickets">-</span></p>
-  <p><strong>Streak:</strong> <span id="profile-streak">-</span></p>
-  <p><strong>Perfect Streak Badge:</strong> <span id="profile-perfect-streak-badge">-</span></p>
+  <h2 data-i18n="profile.title">User Profile</h2>
+  <p><strong data-i18n="profile.username">Username:</strong> <span id="profile-userid">-</span></p>
+  <p><strong data-i18n="profile.level">Level:</strong> <span id="profile-level">-</span></p>
+  <p><strong data-i18n="profile.points">Points:</strong> <span id="profile-points">-</span></p>
+  <p><strong data-i18n="profile.xp">XP:</strong> <span id="profile-xp">-</span></p>
+  <p><strong data-i18n="profile.bronze_tickets">Bronze Tickets:</strong> <span id="profile-bronze-tickets">-</span></p>
+  <p><strong data-i18n="profile.silver_tickets">Silver Tickets:</strong> <span id="profile-silver-tickets">-</span></p>
+  <p><strong data-i18n="profile.gold_tickets">Gold Tickets:</strong> <span id="profile-gold-tickets">-</span></p>
+  <p><strong data-i18n="profile.streak">Streak:</strong> <span id="profile-streak">-</span></p>
+  <p><strong data-i18n="profile.perfect_streak_badge">Perfect Streak Badge:</strong> <span id="profile-perfect-streak-badge">-</span></p>
   <p id="profile-admin-row" style="display:none;">
-    <strong>Admin:</strong>
-    <button id="profile-admin-link" type="button">Open Admin Dashboard</button>
+    <strong data-i18n="profile.admin">Admin:</strong>
+    <button id="profile-admin-link" type="button" data-i18n="profile.open_admin">Open Admin Dashboard</button>
   </p>
 </div>`;
 
 let profileLoading = false;
+let lastProfileUser = null;
 
 function setText(id, value) {
   const el = document.getElementById(id);
@@ -40,8 +42,15 @@ function setProfileLoading() {
   setText('profile-perfect-streak-badge', '...');
 }
 
+function localizeProfilePanel() {
+  const panel = document.getElementById('profile-panel');
+  if (!panel) return;
+  i18n.applyTranslations(panel);
+}
+
 function applyUserToProfile(user) {
   if (!user) return;
+  lastProfileUser = user;
   setText('profile-userid', user.username);
   setText('profile-level', user.level);
   setText('profile-points', user.points);
@@ -51,7 +60,7 @@ function applyUserToProfile(user) {
   setText('profile-gold-tickets', user.goldTickets);
   setText('profile-streak', user.streak);
   const hasPerfectBadge = Number(user.streak || 0) >= 10;
-  setText('profile-perfect-streak-badge', hasPerfectBadge ? 'Earned' : 'Not yet');
+  setText('profile-perfect-streak-badge', hasPerfectBadge ? i18n.t('profile.badge_earned') : i18n.t('profile.badge_not_yet'));
   const adminRow = document.getElementById('profile-admin-row');
   if (adminRow) {
     adminRow.style.display = user.isAdmin ? 'block' : 'none';
@@ -73,6 +82,8 @@ async function ensureProfilePanel(profileContainer) {
 
   if (window.lucide) lucide.createIcons();
   profilePanel = document.getElementById('profile-panel');
+  localizeProfilePanel();
+  if (lastProfileUser) applyUserToProfile(lastProfileUser);
   return profilePanel;
 }
 
@@ -100,6 +111,11 @@ window.addEventListener('hope:userUpdated', (event) => {
   if (panel && panel.style.display !== 'none') {
     applyUserToProfile(user);
   }
+});
+
+window.addEventListener('hope:languageChanged', () => {
+  localizeProfilePanel();
+  if (lastProfileUser) applyUserToProfile(lastProfileUser);
 });
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -138,7 +154,7 @@ document.addEventListener('DOMContentLoaded', () => {
       await loadUserProfile();
     } catch (err) {
       console.error(err);
-      alert('Failed to load profile');
+      alert(i18n.t('common.something_happened'));
     } finally {
       profileLoading = false;
     }

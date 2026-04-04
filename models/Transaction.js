@@ -12,6 +12,16 @@ const TransactionSchema = new mongoose.Schema({
     enum: ['pending', 'verified', 'failed'],
     default: 'pending'
   },
+  rewardStatus: {
+    type: String,
+    enum: ['pending', 'processing', 'applied', 'skipped', 'failed'],
+    default: 'pending'
+  },
+  rewardedAt: { type: Date, default: null },
+  reconcileAttempts: { type: Number, default: 0 },
+  reconcileLockedAt: { type: Date, default: null },
+  lastReconcileError: { type: String, default: null },
+  rewardMeta: { type: mongoose.Schema.Types.Mixed, default: null },
   createdAt: { type: Date, default: Date.now }
 }, {
   versionKey: false,
@@ -20,5 +30,6 @@ const TransactionSchema = new mongoose.Schema({
 
 TransactionSchema.index({ telegramId: 1, createdAt: -1 });
 TransactionSchema.index({ txHash: 1 }, { unique: true });
+TransactionSchema.index({ telegramId: 1, status: 1, rewardStatus: 1, createdAt: -1 });
 
 module.exports = mongoose.models.Transaction || mongoose.model('Transaction', TransactionSchema);

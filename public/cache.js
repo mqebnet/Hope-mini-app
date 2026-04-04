@@ -27,27 +27,37 @@ function initializeCache() {
 }
 
 // Fetch user data with stale-while-revalidate behavior and deduplication.
-export async function fetchUserDataOnce() {
-  if (isFetching) return fetchPromise;
+export async function fetchUserDataOnce(options = {}) {
+  const force = Boolean(options?.force);
+  if (isFetching) {
+    if (!force) return fetchPromise;
+    try {
+      await fetchPromise;
+    } catch (_) {
+      // Force refresh should still proceed after any in-flight failure.
+    }
+  }
 
-  if (cachedUser) {
+  if (cachedUser && !force) {
     _refreshInBackground();
     return cachedUser;
   }
 
-  return _doFetch();
+  return _doFetch({ force });
 }
 
 function _refreshInBackground() {
   if (isFetching) return;
-  _doFetch({ suppressErrors: true });
+  _doFetch({ suppressErrors: true, force: false });
 }
 
-function _doFetch({ suppressErrors = false } = {}) {
+function _doFetch({ suppressErrors = false, force = false } = {}) {
   isFetching = true;
   fetchPromise = (async () => {
     try {
-      const res = await fetch('/api/user/me', {
+      const endpoint = force ? '/api/user/me?force=1' : '/api/user/me';
+      const res = await fetch(endpoint, {
+        method: 'GET',
         credentials: 'include',
         cache: 'no-store'
       });

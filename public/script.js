@@ -5,6 +5,55 @@ import { initializeWebSocketSync, disconnectWebSocketSync } from './wsync.js';
 import { wireNavigationFeedback } from './utils.js';
 
 let authAttempted = false;
+const WELCOME_BONUS_STORAGE_KEY = 'hope_welcome_bonus';
+
+function normalizeWelcomeBonusPayload(payload = {}) {
+  return {
+    amount: Number(payload.amount || 250),
+    bronzeTickets: Number(payload.bronzeTickets || 0),
+    inviterUsername: payload.inviterUsername || null
+  };
+}
+
+function buildWelcomeBonusMessage(payload) {
+  const amount = Number(payload.amount || 250);
+  const bronzeTickets = Number(payload.bronzeTickets || 0);
+  const rawInviter = String(payload.inviterUsername || '').trim();
+  const safeInviter = /^user_\d+$/i.test(rawInviter) ? '' : rawInviter;
+  const inviterLabel = safeInviter
+    ? (safeInviter.startsWith('@') ? safeInviter : `@${safeInviter}`)
+    : i18n.t('home.your_inviter');
+
+  const parts = [i18n.format('home.welcome_bonus_points_from', { amount, inviter: inviterLabel })];
+  if (bronzeTickets > 0) {
+    parts.push(i18n.format('home.welcome_bonus_bronze', { count: bronzeTickets }));
+  }
+  return parts.join(' ');
+}
+
+function tryDisplayWelcomeBonus(payload) {
+  if (typeof window.showStickyNotice !== 'function') return false;
+
+  const message = buildWelcomeBonusMessage(payload);
+  if (typeof window.fireConfetti === 'function') {
+    window.fireConfetti({ particleCount: 110, spread: 82, origin: { y: 0.6 } });
+  }
+  const modal = window.showStickyNotice(message, {
+    title: i18n.t('home.welcome_bonus_title'),
+    okText: i18n.t('common.ok')
+  });
+  return Boolean(modal);
+}
+
+function queueWelcomeBonus(payload) {
+  const normalized = normalizeWelcomeBonusPayload(payload);
+  sessionStorage.setItem(WELCOME_BONUS_STORAGE_KEY, JSON.stringify(normalized));
+
+  if (tryDisplayWelcomeBonus(normalized)) {
+    sessionStorage.removeItem(WELCOME_BONUS_STORAGE_KEY);
+  }
+  window.dispatchEvent(new CustomEvent('hope:welcomeBonusUpdated'));
+}
 
 window.onUserDataUpdate = function onUserDataUpdate(user) {
   if (!user || typeof user !== 'object') return;
@@ -51,8 +100,8 @@ window.addEventListener('hope:globalEvent', (event) => {
   if (detail.type === 'contest_results_published') {
     const week = String(detail.data?.week || '').trim();
     const notice = week
-      ? `Contest results published for ${week}.`
-      : 'Contest results were published.';
+      ? i18n.format('script.contest_results_published_for', { week })
+      : i18n.t('script.contest_results_published');
     if (typeof window.showSuccessToast === 'function') {
       window.showSuccessToast(notice);
     } else {
@@ -88,15 +137,14 @@ document.addEventListener('DOMContentLoaded', async () => {
       initializeTelegramWebApp();
     } else {
       if (startParam) {
-        const referralApplied = await registerInviteSession(startParam);
-        if (referralApplied) {
+        const referralSession = await registerInviteSession(startParam);
+        if (referralSession?.applied) {
           invalidateCache();
-          const inviteMessage = i18n.format('script.invited_bonus', { points: 250 });
-          if (typeof window.showSuccessToast === 'function') {
-            window.showSuccessToast(inviteMessage);
-          } else {
-            console.log(inviteMessage);
-          }
+          queueWelcomeBonus({
+            amount: Number(referralSession.bonusAmount || 250),
+            bronzeTickets: Number(referralSession.bonusBronzeTickets || 0),
+            inviterUsername: referralSession.inviterUsername || null
+          });
         }
       }
 
@@ -155,8 +203,23 @@ async function authenticateTelegramUser(initData, startParam = '') {
       body: JSON.stringify({ initData, startParam })
     });
 
-    if (!response.ok) {
+    let payload = null;
+    try {
+      payload = await response.json();
+    } catch (_) {
+      payload = null;
+    }
+
+    if (!response.ok || !payload?.success) {
       throw new Error(i18n.t('script.auth_failed'));
+    }
+
+    if (payload?.welcomeBonus) {
+      queueWelcomeBonus({
+        amount: Number(payload.bonusAmount || 250),
+        bronzeTickets: Number(payload.bonusBronzeTickets || 0),
+        inviterUsername: payload.inviterUsername || null
+      });
     }
 
     try {
@@ -192,10 +255,15 @@ async function registerInviteSession(startParam) {
       throw new Error(data?.error || `register-session failed (${response.status})`);
     }
 
-    return Boolean(data?.success && data?.applied);
+    return {
+      applied: Boolean(data?.success && data?.applied),
+      inviterUsername: data?.inviterUsername || null,
+      bonusAmount: Number(data?.bonusAmount || 0),
+      bonusBronzeTickets: Number(data?.bonusBronzeTickets || 0)
+    };
   } catch (err) {
     console.error('Invite register-session failed:', err);
-    return false;
+    return { applied: false };
   }
 }
 

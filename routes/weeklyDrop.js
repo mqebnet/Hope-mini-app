@@ -8,6 +8,7 @@ const { getUserLevel } = require('../utils/levelUtil');
 const { normalizeStreakIfMissed } = require('../utils/dailyCheckIn');
 const { getCurrentContestWeek } = require('../utils/contestWeek');
 const { verifyTransaction } = require('../utils/tonHandler');
+const { markTransactionRewardApplied } = require('../utils/transactionRecovery');
 
 const WEEKLY_CONTEST_ENABLED_KEY = 'weekly_contest_enabled';
 const SYSTEM_USERNAME_RE = /^user_\d+$/i;
@@ -34,7 +35,8 @@ router.get('/eligibility', async (req, res) => {
       return res.json({
         eligible: false,
         disabled: true,
-        reason: 'Weekly Drop is currently disabled.'
+        reason: 'Weekly Drop is currently disabled.',
+        reasonKey: 'weekly.disabled_status'
       });
     }
 
@@ -64,6 +66,30 @@ router.get('/eligibility', async (req, res) => {
       !!user.wallet &&
       !alreadyEntered;
 
+    let reason = null;
+    let reasonKey = null;
+    let reasonParams = null;
+
+    if (alreadyEntered) {
+      reason = `You have already entered ${currentWeek}.`;
+      reasonKey = 'weekly.already_entered';
+      reasonParams = { week: currentWeek };
+    } else if (!isEligibleLevel) {
+      reason = 'You must reach Believer level or higher.';
+      reasonKey = 'weekly.lock_require_level';
+    } else if (user.streak < 10) {
+      reason = 'You need a 10-day perfect streak.';
+      reasonKey = 'weekly.lock_require_streak';
+      reasonParams = { current: Number(user.streak || 0) };
+    } else if (user.goldTickets < 10) {
+      reason = 'You need at least 10 Gold tickets.';
+      reasonKey = 'weekly.lock_require_gold';
+      reasonParams = { current: Number(user.goldTickets || 0) };
+    } else if (!user.wallet) {
+      reason = 'Connect a TON wallet to receive prizes.';
+      reasonKey = 'weekly.lock_require_wallet';
+    }
+
     res.json({
       eligible,
       level,
@@ -72,17 +98,9 @@ router.get('/eligibility', async (req, res) => {
       hasWallet: !!user.wallet,
       alreadyEntered,
       currentWeek,
-      reason: alreadyEntered
-        ? `You have already entered ${currentWeek}.`
-        : !isEligibleLevel
-          ? 'You must reach Believer level or higher.'
-          : user.streak < 10
-            ? 'You need a 10-day perfect streak.'
-            : user.goldTickets < 10
-              ? 'You need at least 10 Gold tickets.'
-              : !user.wallet
-                ? 'Connect a TON wallet to receive prizes.'
-                : null
+      reason,
+      reasonKey,
+      reasonParams
     });
   } catch (err) {
     console.error('Eligibility error:', err);
@@ -143,6 +161,7 @@ router.post('/enter', async (req, res) => {
       txHash,
       txBoc,
       purpose: 'weekly-drop-entry',
+      taskId: currentWeek,
       requiredUsd: 0.5
     });
 
@@ -168,6 +187,7 @@ router.post('/enter', async (req, res) => {
         telegramId: String(user.telegramId),
         username: contestUsername,
         wallet: toFriendlyWallet(user.wallet),
+        entryTxRef: verification.txRef || txHash || txBoc || null,
         week: currentWeek
       });
     } catch (dbErr) {
@@ -180,6 +200,12 @@ router.post('/enter', async (req, res) => {
       }
       throw dbErr;
     }
+
+    await markTransactionRewardApplied({
+      telegramId: user.telegramId,
+      txRef: verification.txRef || txHash || txBoc,
+      meta: { kind: 'weekly-drop-entry', week: currentWeek, source: 'weeklyDrop.enter' }
+    });
 
     res.json({
       success: true,

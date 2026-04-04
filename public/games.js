@@ -18,8 +18,29 @@ const FALLBACK_GAMES = [
     name: 'Flip Cards',
     description: 'Match triplets of cards to win rewards. 60 seconds to match them all.',
     icon: '🎴'
+  },
+  {
+    id: 'slidingtiles',
+    name: 'Sliding Tiles',
+    description: 'Rebuild a scrambled neon grid before the timer burns out.',
+    icon: '🧩'
+  },
+  {
+    id: 'blocktower',
+    name: 'Block Tower',
+    description: 'Memorize the stack, then rebuild the tower before time runs out.',
+    icon: '🧱'
   }
 ];
+
+const GAME_PAGES = {
+  'mystery-box': 'mysteryBox.html',
+  flipcards: 'flipcards.html',
+  slidingtiles: 'slidingTiles.html',
+  blocktower: 'blockTower.html'
+};
+
+const PASS_REQUIRED_GAMES = new Set(['flipcards', 'slidingtiles', 'blocktower']);
 
 function localizeFallbackGames() {
   return FALLBACK_GAMES.map((game) => {
@@ -35,6 +56,20 @@ function localizeFallbackGames() {
         ...game,
         name: i18n.t('games.flipcards_name'),
         description: i18n.t('games.flipcards_desc')
+      };
+    }
+    if (game.id === 'slidingtiles') {
+      return {
+        ...game,
+        name: i18n.t('games.slidingtiles_name'),
+        description: i18n.t('games.slidingtiles_desc')
+      };
+    }
+    if (game.id === 'blocktower') {
+      return {
+        ...game,
+        name: i18n.t('games.blocktower_name'),
+        description: i18n.t('games.blocktower_desc')
       };
     }
     return game;
@@ -79,20 +114,47 @@ export async function renderGamesGrid(containerId = 'games-grid') {
     `;
 
     const playBtn = card.querySelector('.btn-play');
-    playBtn?.addEventListener('click', () => openGame(game.id, playBtn));
+    playBtn?.addEventListener('click', () => openGame(game, playBtn));
     container.appendChild(card);
   });
   window.hopeApplyTranslations?.();
 }
 
-export function openGame(gameId, trigger = null) {
-  if (gameId === 'mystery-box') {
-    navigateWithFeedback('mysteryBox.html', trigger);
+async function routePassGame(gameId, trigger = null) {
+  try {
+    const res = await fetch(`/api/games/${gameId}/status`, { credentials: 'include', cache: 'no-store' });
+    const data = await res.json();
+    if (res.ok && data?.hasActivePass) {
+      navigateWithFeedback(GAME_PAGES[gameId], trigger);
+      return;
+    }
+  } catch (_) {
+    // fall through to pass page
+  }
+
+  navigateWithFeedback(`gamepass.html?game=${encodeURIComponent(gameId)}`, trigger);
+}
+
+export async function openGame(gameOrId, trigger = null) {
+  const game = typeof gameOrId === 'string' ? { id: gameOrId } : (gameOrId || {});
+  const gameId = game.id;
+
+  if (game?.status === 'coming-soon') {
+    if (typeof window.showWarningToast === 'function') {
+      window.showWarningToast(i18n.t('games.coming_soon'));
+    } else {
+      alert(i18n.t('games.coming_soon'));
+    }
     return;
   }
 
-  if (gameId === 'flipcards') {
-    navigateWithFeedback('flipcardsPass.html', trigger);
+  if (gameId === 'mystery-box') {
+    navigateWithFeedback(GAME_PAGES[gameId], trigger);
+    return;
+  }
+
+  if (PASS_REQUIRED_GAMES.has(gameId) && GAME_PAGES[gameId]) {
+    await routePassGame(gameId, trigger);
     return;
   }
 

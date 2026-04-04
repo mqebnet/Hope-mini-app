@@ -64,7 +64,7 @@ const GameSessionSchema = new mongoose.Schema({
   moves: {
     type: [
       {
-        cardIds: [String], // cards flipped in this move (1-3 cards)
+        cardIds: [String], // cards flipped in this move (exactly 3 cards)
         timestamp: { type: Date, default: Date.now },
         duration: Number // milliseconds since game start
       }
@@ -152,8 +152,12 @@ GameSessionSchema.statics.shuffleCards = function(cards) {
 
 // Validate a move (anti-cheat)
 GameSessionSchema.methods.validateMove = function(cardIds) {
-  if (!Array.isArray(cardIds) || cardIds.length === 0 || cardIds.length > 3) {
-    return { valid: false, reason: 'Invalid card selection (must flip 1-3 cards)' };
+  if (!Array.isArray(cardIds) || cardIds.length !== 3) {
+    return { valid: false, reason: 'Invalid card selection (must flip exactly 3 cards)' };
+  }
+
+  if (new Set(cardIds).size !== 3) {
+    return { valid: false, reason: 'Invalid card selection (duplicate cards)' };
   }
 
   // Check if all cards exist and are not already matched

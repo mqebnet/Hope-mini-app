@@ -10,6 +10,63 @@ let pendingVerifications = {};
 let readyToClaimTasks = {};
 const PENDING_CHECKIN_TX_KEY = 'pendingCheckInTx';
 const PENDING_CHECKIN_TX_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+const TASK_I18N_MAP = {
+  'daily-checkin': {
+    title: 'tasks.task_daily_checkin_title',
+    description: 'tasks.task_daily_checkin_desc'
+  },
+  'visit-telegram': {
+    title: 'tasks.task_visit_telegram_title',
+    description: 'tasks.task_visit_telegram_desc'
+  },
+  'twitter-engage': {
+    title: 'tasks.task_twitter_engage_title',
+    description: 'tasks.task_twitter_engage_desc'
+  },
+  'watch-youtube': {
+    title: 'tasks.task_watch_youtube_title',
+    description: 'tasks.task_watch_youtube_desc'
+  },
+  'join-telegram': {
+    title: 'tasks.task_join_telegram_title',
+    description: 'tasks.task_join_telegram_desc'
+  },
+  'subscribe-youtube': {
+    title: 'tasks.task_subscribe_youtube_title',
+    description: 'tasks.task_subscribe_youtube_desc'
+  },
+  'follow-twitter': {
+    title: 'tasks.task_follow_twitter_title',
+    description: 'tasks.task_follow_twitter_desc'
+  },
+  'join-group': {
+    title: 'tasks.task_join_group_title',
+    description: 'tasks.task_join_group_desc'
+  },
+  'future-task': {
+    title: 'tasks.task_future_title',
+    description: 'tasks.task_future_desc'
+  }
+};
+
+function getLocalizedTaskCopy(task) {
+  const mapping = TASK_I18N_MAP[task?.id];
+  if (!mapping) {
+    return {
+      title: task?.title || '',
+      description: task?.description || ''
+    };
+  }
+
+  const points = Number(task?.reward || 0);
+  const titleCandidate = i18n.t(mapping.title);
+  const descriptionCandidate = i18n.format(mapping.description, { points });
+
+  return {
+    title: titleCandidate !== mapping.title ? titleCandidate : (task?.title || ''),
+    description: descriptionCandidate !== mapping.description ? descriptionCandidate : (task?.description || '')
+  };
+}
 
 function savePendingCheckInTx(txHash, txBoc) {
   try {
@@ -117,6 +174,11 @@ window.addEventListener('hope:globalEvent', (event) => {
   if (!data.daily || !data.oneTime) return;
   if (!currentUser) return;
   taskDefinitions = data;
+  renderAllTasks();
+});
+
+window.addEventListener('hope:languageChanged', () => {
+  if (!taskDefinitions) return;
   renderAllTasks();
 });
 
@@ -241,6 +303,7 @@ function createTaskElement(task, type) {
   const wrapper = document.createElement('div');
   wrapper.className = 'task-item';
   wrapper.dataset.taskId = task.id;
+  const localized = getLocalizedTaskCopy(task);
 
   let buttonHtml;
   let statusHtml = '';
@@ -302,8 +365,8 @@ function createTaskElement(task, type) {
 
   wrapper.innerHTML = `
     <div class="task-info">
-      <h3>${task.title}</h3>
-      <p>${task.description}</p>
+      <h3>${localized.title}</h3>
+      <p>${localized.description}</p>
     </div>
     ${buttonHtml}
     ${statusHtml}
@@ -369,7 +432,7 @@ async function handleButtonClick(e) {
       const data = await res.json();
 
       if (!res.ok) {
-        showErrorToast(data.error || i18n.t('tasks.start_verify_failed'));
+        showErrorToast(i18n.t('tasks.start_verify_failed'));
         btn.disabled = false;
         btn.textContent = i18n.t('tasks.go');
         return;
@@ -394,7 +457,7 @@ async function handleButtonClick(e) {
       const data = await res.json();
 
       if (!res.ok) {
-        showErrorToast(data.error || i18n.t('tasks.claim_failed'));
+        showErrorToast(i18n.t('tasks.claim_failed'));
         btn.disabled = false;
         btn.textContent = i18n.t('home.claim');
         return;
@@ -437,7 +500,7 @@ async function handleButtonClick(e) {
       renderAllTasks();
       return;
     }
-    showErrorToast(err?.message || i18n.t('tasks.task_failed'));
+    showErrorToast(i18n.t('tasks.task_failed'));
   }
 }
 
@@ -508,7 +571,7 @@ async function completeTask(taskId) {
     body: JSON.stringify({ taskId })
   });
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error || i18n.t('tasks.complete_task_failed'));
+  if (!res.ok) throw new Error(i18n.t('tasks.complete_task_failed'));
   applyUserUpdateFromTaskResponse(data);
   return data;
 }

@@ -5,6 +5,7 @@ const CompletedTask = require('../models/CompletedTask');
 const DailyTaskCompletion = require('../models/DailyTaskCompletion');
 const PendingTaskVerification = require('../models/PendingTaskVerification');
 const { verifyTransaction } = require('../utils/tonHandler');
+const { markTransactionRewardApplied } = require('../utils/transactionRecovery');
 const { getUserLevel, getNextLevelThreshold } = require('../utils/levelUtil');
 const stateEmitter = require('../utils/stateEmitter');
 const {
@@ -95,6 +96,11 @@ router.post('/daily-checkin', async (req, res) => {
     }
 
     await user.save();
+    await markTransactionRewardApplied({
+      telegramId: user.telegramId,
+      txRef: proofRef,
+      meta: { kind: 'daily-checkin', source: 'tasks.daily-checkin' }
+    });
     stateEmitter.emit('user:updated', {
       telegramId: user.telegramId,
       points: user.points,

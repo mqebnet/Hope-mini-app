@@ -7,6 +7,7 @@ const INVITE_JOIN_BONUS_POINTS = 250;
 const INVITE_JOIN_BONUS_BRONZE_TICKETS = 10;
 const INVITER_AUTO_REWARD_POINTS = 50;
 const MIN_TELEGRAM_ID_DIGITS = 9;
+const SYSTEM_USERNAME_RE = /^user_\d+$/i;
 
 function parseInviteCandidates(startParam) {
   if (!startParam || typeof startParam !== 'string') return [];
@@ -108,8 +109,13 @@ async function applyReferralAttribution(user, startParam) {
   const result = {
     applied: true,
     inviterTelegramId: inviter.telegramId,
+    inviterUsername: (inviter.username && !SYSTEM_USERNAME_RE.test(String(inviter.username)))
+      ? String(inviter.username).trim()
+      : null,
     inviterUpdated: inserted ? 1 : 0,
-    inviterRewardPoints: inserted ? INVITER_AUTO_REWARD_POINTS : 0
+    inviterRewardPoints: inserted ? INVITER_AUTO_REWARD_POINTS : 0,
+    inviteeRewardPoints: INVITE_JOIN_BONUS_POINTS,
+    inviteeRewardBronzeTickets: INVITE_JOIN_BONUS_BRONZE_TICKETS
   };
   console.log('[referral] result', {
     applied: result.applied,

@@ -45,6 +45,20 @@
     .realtime-value { color: #d8f6ea; font-family: Consolas, Monaco, monospace; }
     .realtime-ok { color: #00ffaa; font-weight: 700; }
     .realtime-bad { color: #ff8c66; font-weight: 700; }
+    .analytics-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .analytics-controls .admin-select { width: auto; min-width: 150px; }
+    .analytics-summary-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); gap: 10px; margin-top: 12px; }
+    .analytics-stat { background: rgba(0, 0, 0, 0.22); border: 1px solid rgba(0, 255, 170, 0.14); border-radius: 12px; padding: 12px; }
+    .analytics-stat-label { color: #8aa6b8; font-size: 0.8rem; margin-bottom: 6px; }
+    .analytics-stat-value { color: #ffffff; font-size: 1.35rem; font-weight: 700; }
+    .analytics-stat-sub { color: #9eead7; font-size: 0.82rem; margin-top: 4px; }
+    .analytics-table-wrap { overflow-x: auto; margin-top: 12px; }
+    .analytics-table { width: 100%; border-collapse: collapse; min-width: 860px; font-size: 0.85rem; }
+    .analytics-table th, .analytics-table td { padding: 9px 8px; border-bottom: 1px solid rgba(255,255,255,0.08); text-align: left; }
+    .analytics-table th { color: #9eead7; font-weight: 700; white-space: nowrap; }
+    .analytics-table td { color: #e7f6ef; }
+    .analytics-table tr:hover td { background: rgba(0, 255, 170, 0.03); }
+    .analytics-note { margin-top: 10px; color: #8aa6b8; font-size: 0.8rem; }
   </style>
 </head>
 <body>
@@ -69,6 +83,27 @@
     <section class="admin-card">
       <h2>Overview</h2>
       <div id="admin-stats" class="admin-grid"></div>
+    </section>
+
+    <section class="admin-card">
+      <div class="toggle-row">
+        <div>
+          <h2 style="margin:0;">Transaction Analytics</h2>
+          <div class="muted">Daily verified transaction activity by feature.</div>
+        </div>
+        <div class="analytics-controls">
+          <select id="tx-analytics-days" class="admin-select">
+            <option value="7">Last 7 days</option>
+            <option value="14" selected>Last 14 days</option>
+            <option value="30">Last 30 days</option>
+            <option value="60">Last 60 days</option>
+          </select>
+          <button id="btn-load-tx-analytics" class="admin-btn alt">Reload</button>
+        </div>
+      </div>
+      <div id="tx-analytics-summary" class="analytics-summary-grid"></div>
+      <div id="tx-analytics-table-wrap" class="analytics-table-wrap"></div>
+      <div class="analytics-note">Shows verified on-chain transactions only. Free in-app ticket exchange is excluded.</div>
     </section>
 
     <section class="admin-card">

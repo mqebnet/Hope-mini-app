@@ -41,6 +41,9 @@ Common optional variables:
 
 - `PORT` (default `3000`)
 - `NODE_ENV`
+- `REDIS_URL` (default `redis://localhost:6379`)
+- `WS_MAX_BUFFER_MB` (default `5`)
+- `CLUSTER_WORKERS` (used by PM2 cluster mode)
 - `ALLOWED_ORIGINS`
 - `COOKIE_SAMESITE`
 - `ADMIN_TELEGRAM_IDS`

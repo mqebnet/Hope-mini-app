@@ -4,14 +4,53 @@ import { i18n } from './i18n.js';
 import { navigateWithFeedback } from './utils.js';
 
 const PASS_USD_DEFAULT = 0.55;
+const root = document.getElementById('gamepass-root');
+
+const GAME_META = {
+  flipcards: {
+    nameKey: 'games.flipcards_name',
+    fallbackName: 'Flip Cards',
+    page: 'flipcards.html',
+    icon: '🎴'
+  },
+  slidingtiles: {
+    nameKey: 'games.slidingtiles_name',
+    fallbackName: 'Sliding Tiles',
+    page: 'slidingTiles.html',
+    icon: '🧩'
+  },
+  blocktower: {
+    nameKey: 'games.blocktower_name',
+    fallbackName: 'Block Tower',
+    page: 'blockTower.html',
+    icon: '🧱'
+  }
+};
+
 let currentPassUsd = PASS_USD_DEFAULT;
 
-const root = document.getElementById('flipcards-pass-root');
+function getSelectedGame() {
+  const params = new URLSearchParams(window.location.search);
+  const gameId = String(params.get('game') || 'flipcards').toLowerCase();
+  return { id: gameId, ...(GAME_META[gameId] || GAME_META.flipcards) };
+}
+
+function tWithFallback(key, fallback) {
+  const value = i18n.t(key);
+  return value && value !== key ? value : fallback;
+}
+
+function getSelectedGameName() {
+  const selectedGame = getSelectedGame();
+  return tWithFallback(selectedGame.nameKey, selectedGame.fallbackName);
+}
 
 document.addEventListener('DOMContentLoaded', async () => {
   if (window.Telegram?.WebApp) window.Telegram.WebApp.ready();
 
   try {
+    document.title = tWithFallback('pass.document_title', 'Hope - Game Pass');
+
     const cached = getCachedUser();
     if (cached) updateTopBar(cached);
 
@@ -22,13 +61,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     updateTopBar(user);
   } catch (err) {
-    console.error('Flipcards pass init failed:', err);
+    console.error('Game pass init failed:', err);
     showNotification(i18n.t('pass.failed_load_page'), 'error');
   }
 });
 
 async function getPassStatus() {
-  const res = await fetch('/api/games/flipcards/status', { credentials: 'include', cache: 'no-store' });
+  const selectedGame = getSelectedGame();
+  const res = await fetch(`/api/games/${selectedGame.id}/status`, {
+    credentials: 'include',
+    cache: 'no-store'
+  });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || i18n.t('pass.failed_check_status'));
   return data;
@@ -36,45 +79,52 @@ async function getPassStatus() {
 
 function renderCard({ hasActivePass, passValidUntil, passCost, requiresRevalidation }) {
   if (!root) return;
+
+  const selectedGame = getSelectedGame();
+  const selectedGameName = getSelectedGameName();
   currentPassUsd = Number(passCost || PASS_USD_DEFAULT);
   const price = currentPassUsd.toFixed(2);
   const activeText = hasActivePass && passValidUntil
     ? i18n.format('pass.active_until', { date: new Date(passValidUntil).toLocaleString() })
-    : i18n.t('pass.unlock_24h');
+    : tWithFallback('pass.unlock_24h', 'Unlock all game-pass titles for 24 hours');
 
   root.innerHTML = `
     <div class="pass-card">
-      <div class="pass-icon">🎴</div>
-      <h2>${i18n.t('pass.title')}</h2>
+      <div class="pass-icon">${selectedGame.icon}</div>
+      <h2>${tWithFallback('pass.title', 'Game Pass')}</h2>
       <p class="pass-description">${activeText}</p>
+      <div class="pass-target-game">
+        <span class="pass-target-label">${tWithFallback('pass.selected_game', 'Selected game')}</span>
+        <strong>${selectedGameName}</strong>
+      </div>
 
       <div class="pass-features">
-        <div class="feature"><span class="feature-icon">♾️</span><span>${i18n.t('pass.feature_unlimited')}</span></div>
-        <div class="feature"><span class="feature-icon">⏱️</span><span>${i18n.t('pass.feature_timer')}</span></div>
-        <div class="feature"><span class="feature-icon">🏆</span><span>${i18n.t('pass.feature_rewards')}</span></div>
+        <div class="feature"><span class="feature-icon">🎮</span><span>${tWithFallback('pass.feature_unlimited', 'Unlimited plays for 24h')}</span></div>
+        <div class="feature"><span class="feature-icon">🗝️</span><span>${tWithFallback('pass.feature_shared_access', 'One pass unlocks Flip Cards, Sliding Tiles, and Block Tower')}</span></div>
+        <div class="feature"><span class="feature-icon">🏆</span><span>${tWithFallback('pass.feature_rewards', 'Earn points, XP and tickets')}</span></div>
       </div>
 
       <div class="pass-price">
-        <span class="price-label">${i18n.t('pass.daily_pass')}</span>
+        <span class="price-label">${tWithFallback('pass.daily_pass', 'Daily Pass')}</span>
         <span class="price-amount">$${price}</span>
       </div>
 
-      <button id="flipcards-primary-btn" class="btn-purchase-pass">
-        ${hasActivePass ? i18n.t('pass.play_flipcards') : i18n.t('pass.purchase_pass')}
+      <button id="gamepass-primary-btn" class="btn-purchase-pass">
+        ${hasActivePass ? tWithFallback('pass.play_selected_game', 'Play Selected Game') : tWithFallback('pass.purchase_pass', 'Purchase Pass')}
       </button>
-      <button id="flipcards-back-btn" class="btn-cancel-pass">${i18n.t('pass.back_to_games')}</button>
+      <button id="gamepass-back-btn" class="btn-cancel-pass">${tWithFallback('pass.back_to_games', 'Back to Games')}</button>
       ${requiresRevalidation ? `<p class="pass-description" style="margin-top:10px;color:#ffd166;">${i18n.t('pass.legacy_pass')}</p>` : ''}
     </div>
   `;
   window.hopeApplyTranslations?.();
 
-  const primaryBtn = document.getElementById('flipcards-primary-btn');
-  const backBtn = document.getElementById('flipcards-back-btn');
+  const primaryBtn = document.getElementById('gamepass-primary-btn');
+  const backBtn = document.getElementById('gamepass-back-btn');
 
   if (primaryBtn) {
     primaryBtn.addEventListener('click', async () => {
       if (hasActivePass) {
-        navigateWithFeedback('flipcards.html', primaryBtn);
+        navigateWithFeedback(selectedGame.page, primaryBtn);
         return;
       }
       await purchasePass(primaryBtn);
@@ -94,9 +144,11 @@ async function renderPassUI() {
 }
 
 async function purchasePass(button) {
+  const selectedGame = getSelectedGame();
   const original = button.textContent;
   button.disabled = true;
   button.textContent = i18n.t('pass.preparing_wallet');
+
   try {
     if (typeof tonConnectUI.restoreConnection === 'function') {
       await tonConnectUI.restoreConnection();
@@ -131,7 +183,7 @@ async function purchasePass(button) {
     const txBoc = tx?.boc || '';
     if (!txHash && !txBoc) throw new Error(i18n.t('pass.tx_proof_missing'));
 
-    const purchaseRes = await fetch('/api/games/flipcards/purchase', {
+    const purchaseRes = await fetch(`/api/games/${selectedGame.id}/purchase`, {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -141,10 +193,10 @@ async function purchasePass(button) {
     if (!purchaseRes.ok) throw new Error(purchaseData.error || i18n.t('pass.verification_failed'));
 
     showNotification(i18n.t('pass.purchased_success'), 'success');
-    navigateWithFeedback('flipcards.html', button);
+    navigateWithFeedback(selectedGame.page, button);
   } catch (err) {
-    console.error('Flipcards pass purchase failed:', err);
-    showNotification(err.message || i18n.t('pass.purchase_failed'), 'error');
+    console.error('Game pass purchase failed:', err);
+    showNotification(i18n.t('pass.purchase_failed'), 'error');
     button.disabled = false;
     button.textContent = original;
   }

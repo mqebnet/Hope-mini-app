@@ -26,7 +26,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     <p id="wallet-address" class="wallet-popover-address">-</p>
     <button id="wallet-disconnect-btn" class="wallet-disconnect-btn">${i18n.t('wallet.disconnect')}</button>
   `;
-  topNav.appendChild(menu);
+  document.body.appendChild(menu);
 
   const walletPicker = document.createElement('div');
   walletPicker.id = 'wallet-picker';
@@ -41,7 +41,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       `).join('')}
     </div>
   `;
-  topNav.appendChild(walletPicker);
+  document.body.appendChild(walletPicker);
 
   const addressEl = menu.querySelector('#wallet-address');
   const disconnectBtn = menu.querySelector('#wallet-disconnect-btn');
@@ -70,13 +70,42 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   const closeMenu = () => menu.classList.add('hidden');
   const closeWalletPicker = () => walletPicker.classList.add('hidden');
+  const positionPopover = (panel) => {
+    if (!panel || panel.classList.contains('hidden')) return;
+
+    const buttonRect = button.getBoundingClientRect();
+    const panelRect = panel.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const gap = 8;
+    const sidePadding = 10;
+
+    let top = buttonRect.bottom + gap;
+    let left = buttonRect.right - panelRect.width;
+
+    const minLeft = sidePadding;
+    const maxLeft = Math.max(sidePadding, viewportWidth - panelRect.width - sidePadding);
+    left = Math.min(Math.max(left, minLeft), maxLeft);
+
+    const maxTop = Math.max(gap, viewportHeight - panelRect.height - gap);
+    top = Math.min(top, maxTop);
+
+    panel.style.top = `${Math.max(gap, top)}px`;
+    panel.style.left = `${left}px`;
+  };
+  const positionWalletPanels = () => {
+    positionPopover(menu);
+    positionPopover(walletPicker);
+  };
   const toggleMenu = () => {
     closeWalletPicker();
     menu.classList.toggle('hidden');
+    positionWalletPanels();
   };
   const toggleWalletPicker = () => {
     closeMenu();
     walletPicker.classList.toggle('hidden');
+    positionWalletPanels();
   };
 
   const updateMenuText = () => {
@@ -96,6 +125,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     addressEl.textContent = shortAddress(fullAddress);
     addressEl.title = fullAddress;
+    positionWalletPanels();
   };
 
   const saveWalletToServer = async (address) => {
@@ -162,10 +192,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (await disconnectNonMainnetWallet(restoredWallet)) {
     updateUI(null);
     updateMenu(null);
-  } else {
-    updateUI(restoredWallet);
-    updateMenu(restoredWallet);
-  }
+    } else {
+      updateUI(restoredWallet);
+      updateMenu(restoredWallet);
+      positionWalletPanels();
+    }
 
   if (tonConnectUI.wallet && getWalletChain(tonConnectUI.wallet) === MAINNET_CHAIN) {
     saveWalletToServer(getWalletAddress(tonConnectUI.wallet));
@@ -186,6 +217,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateUI(wallet);
     updateMenu(wallet);
     closeWalletPicker();
+    positionWalletPanels();
 
     if (wallet) {
       saveWalletToServer(getWalletAddress(wallet));
@@ -249,4 +281,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     }
   });
+
+  window.addEventListener('resize', positionWalletPanels);
+  window.addEventListener('scroll', positionWalletPanels, { passive: true });
 });

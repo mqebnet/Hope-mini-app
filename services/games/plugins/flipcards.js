@@ -1,20 +1,15 @@
 const GameSession = require('../../../models/GameSession');
 const User = require('../../../models/User');
-const Transaction = require('../../../models/Transaction');
 const { getUserLevel } = require('../../../utils/levelUtil');
-const { verifyTransaction } = require('../../../utils/tonHandler');
 const stateEmitter = require('../../../utils/stateEmitter');
 const { GameEngineError } = require('../GameEngine');
-
-const FLIPCARDS_PASS_USD = Number(process.env.FLIPCARDS_PASS_USD || 0.55);
-const FLIPCARDS_PASS_DURATION_MS = 24 * 60 * 60 * 1000;
-
-function getTelegramId(ctx) {
-  const value = ctx?.user?.telegramId ?? ctx?.telegramId ?? null;
-  const telegramId = Number(value);
-  if (!Number.isFinite(telegramId)) throw new GameEngineError('Unauthorized', 401);
-  return telegramId;
-}
+const {
+  GAME_PASS_USD,
+  getTelegramId,
+  getActivePassInfo,
+  purchaseSharedGamePass,
+  getSharedPassStatus
+} = require('../sharedSupport');
 
 function toClientCards(cards = []) {
   return cards.map((card) => ({
@@ -24,57 +19,16 @@ function toClientCards(cards = []) {
   }));
 }
 
-async function getActivePassInfo(user) {
-  const now = Date.now();
-  const validUntilMs = new Date(user?.flipcardsPass?.validUntil || 0).getTime();
-  if (Number.isFinite(validUntilMs) && validUntilMs > now) {
-    return {
-      active: true,
-      validUntil: new Date(validUntilMs),
-      txRef: user?.flipcardsPass?.txRef || null
-    };
-  }
-
-  // Backward compatibility for users with old data shape:
-  // infer active pass from recent verified flipcards-pass transaction.
-  const latestPassTx = await Transaction.findOne({
-    telegramId: user.telegramId,
-    purpose: 'flipcards-pass',
-    status: 'verified'
-  })
-    .sort({ createdAt: -1 })
-    .lean();
-
-  if (!latestPassTx?.createdAt) {
-    return { active: false, validUntil: null, txRef: user?.flipcardsPass?.txRef || null };
-  }
-
-  const purchasedAtMs = new Date(latestPassTx.createdAt).getTime();
-  if (!Number.isFinite(purchasedAtMs)) {
-    return { active: false, validUntil: null, txRef: latestPassTx.txHash || null };
-  }
-  const inferredValidUntilMs = purchasedAtMs + FLIPCARDS_PASS_DURATION_MS;
-  if (inferredValidUntilMs <= now) {
-    return { active: false, validUntil: null, txRef: latestPassTx.txHash || null };
-  }
-
-  return {
-    active: true,
-    validUntil: new Date(inferredValidUntilMs),
-    txRef: latestPassTx.txHash || null
-  };
-}
-
 module.exports = {
   id: 'flipcards',
   version: '1.0.0',
   meta: {
     name: 'Flip Cards',
-    description: `Match triplets to win rewards. Pass required: $${FLIPCARDS_PASS_USD.toFixed(2)}/24h`,
+    description: `Match triplets of cards to win rewards.`,
     icon: '🎴',
     type: 'skill',
     category: 'games',
-    entryFeeUsd: FLIPCARDS_PASS_USD,
+    entryFeeUsd: GAME_PASS_USD,
     dailyPassRequired: true
   },
 
@@ -85,7 +39,7 @@ module.exports = {
 
     const passInfo = await getActivePassInfo(user);
     if (!passInfo.active) {
-      throw new GameEngineError(`Daily pass required. Purchase for $${FLIPCARDS_PASS_USD.toFixed(2)} to play for 24 hours.`, 402);
+      throw new GameEngineError(`Daily game pass required. Purchase for $${GAME_PASS_USD.toFixed(2)} to play all pass games for 24 hours.`, 402);
     }
 
     const { difficulty = 'normal' } = payload;
@@ -305,66 +259,16 @@ module.exports = {
 
   async purchase(ctx, payload = {}) {
     const telegramId = getTelegramId(ctx);
-    const { txHash, txBoc } = payload;
-    if (!txHash && !txBoc) {
-      throw new GameEngineError('Missing transaction proof', 400);
-    }
-
-    const user = await User.findOne({ telegramId });
-    if (!user) throw new GameEngineError('User not found', 404);
-
-    const passInfo = await getActivePassInfo(user);
-    if (passInfo.active) {
-      return {
-        success: true,
-        message: 'Daily pass already active',
-        passValidUntil: passInfo.validUntil,
-        passCost: FLIPCARDS_PASS_USD,
-        active: true
-      };
-    }
-
-    const verification = await verifyTransaction({
+    return purchaseSharedGamePass({
       telegramId,
-      txHash,
-      txBoc,
-      purpose: 'flipcards-pass',
-      requiredUsd: FLIPCARDS_PASS_USD
+      txHash: payload?.txHash,
+      txBoc: payload?.txBoc,
+      sourceGameId: 'flipcards'
     });
-    if (!verification.ok) {
-      throw new GameEngineError(verification.reason || 'Invalid payment', 400);
-    }
-
-    const validUntil = new Date(Date.now() + FLIPCARDS_PASS_DURATION_MS);
-    user.flipcardsPass = {
-      validUntil,
-      purchasedAt: new Date(),
-      txRef: verification.txRef || null
-    };
-    await user.save();
-
-    return {
-      success: true,
-      message: 'Daily pass purchased and verified',
-      passValidUntil: validUntil,
-      passCost: FLIPCARDS_PASS_USD,
-      active: true
-    };
   },
 
   async getStatus(ctx) {
     const telegramId = getTelegramId(ctx);
-    const user = await User.findOne({ telegramId });
-    if (!user) throw new GameEngineError('User not found', 404);
-    const passInfo = await getActivePassInfo(user);
-    const active = passInfo.active;
-
-    return {
-      success: true,
-      hasActivePass: active,
-      passCost: FLIPCARDS_PASS_USD,
-      passValidUntil: active ? passInfo.validUntil : null,
-      requiresRevalidation: false
-    };
+    return getSharedPassStatus(telegramId);
   }
 };

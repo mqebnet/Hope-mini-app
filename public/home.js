@@ -114,7 +114,7 @@ async function retryPendingCheckInVerification() {
   try {
     await verifyDailyCheckInTx(pending.txHash, pending.txBoc);
     clearPendingCheckInTx();
-    await fetchUser();
+    await fetchUser({ force: true });
     await refreshDailyCheckInStatus();
   } catch (err) {
     const message = (err?.serverError || err?.message || '').toLowerCase();
@@ -159,11 +159,27 @@ function showWeeklyDropNotice(message, type = 'info') {
 }
 
 function getWeeklyDropLockReason(user) {
-  const serverReason = String(latestWeeklyEligibility?.reason || '').trim();
-  if (serverReason) return serverReason;
-
   if (!weeklyContestEnabled || latestWeeklyEligibility?.disabled) {
     return i18n.t('weekly.disabled_status');
+  }
+
+  if (latestWeeklyEligibility?.alreadyEntered) {
+    const week = String(latestWeeklyEligibility?.currentWeek || '').trim();
+    if (week) {
+      return i18n.format('weekly.already_entered', { week });
+    }
+    return i18n.t('weekly.not_eligible');
+  }
+
+  const reasonKey = String(latestWeeklyEligibility?.reasonKey || '').trim();
+  if (reasonKey) {
+    const params = (latestWeeklyEligibility?.reasonParams && typeof latestWeeklyEligibility.reasonParams === 'object')
+      ? latestWeeklyEligibility.reasonParams
+      : {};
+    const translated = i18n.format(reasonKey, params);
+    if (translated && translated !== reasonKey) {
+      return translated;
+    }
   }
 
   const isBelieverOrAbove = [
@@ -175,13 +191,17 @@ function getWeeklyDropLockReason(user) {
   const hasWallet = String(user?.wallet || '').trim().length > 0;
 
   const missing = [];
-  if (!isBelieverOrAbove) missing.push('Reach Believer level or higher.');
-  if (!hasPerfectStreak) missing.push(`Maintain a 10-day streak (current: ${Number(user?.streak || 0)}/10).`);
-  if (!hasGold) missing.push(`Need at least 10 Gold tickets (current: ${Number(user?.goldTickets || 0)}/10).`);
-  if (!hasWallet) missing.push('Connect a TON wallet to receive prizes.');
+  if (!isBelieverOrAbove) missing.push(i18n.t('weekly.lock_require_level'));
+  if (!hasPerfectStreak) {
+    missing.push(i18n.format('weekly.lock_require_streak', { current: Number(user?.streak || 0) }));
+  }
+  if (!hasGold) {
+    missing.push(i18n.format('weekly.lock_require_gold', { current: Number(user?.goldTickets || 0) }));
+  }
+  if (!hasWallet) missing.push(i18n.t('weekly.lock_require_wallet'));
 
   if (!missing.length) return i18n.t('weekly.not_eligible');
-  return `Weekly Drop locked: ${missing.join(' ')}`;
+  return i18n.format('weekly.lock_locked_prefix', { reasons: missing.join(' ') });
 }
 
 async function onWeeklyDropLockedClick(btn, fallbackUser) {
@@ -297,21 +317,48 @@ function showWelcomeBonusIfPresent() {
     payload = JSON.parse(sessionStorage.getItem(WELCOME_BONUS_STORAGE_KEY) || 'null');
   } catch (_) {
     payload = null;
-  } finally {
     sessionStorage.removeItem(WELCOME_BONUS_STORAGE_KEY);
   }
 
-  if (!payload) return;
+  if (!payload) return false;
 
-  const amount = Number(payload.amount || 100);
+  const shown = renderWelcomeBonus(payload);
+  if (shown) {
+    sessionStorage.removeItem(WELCOME_BONUS_STORAGE_KEY);
+  }
+
+  return shown;
+}
+
+function renderWelcomeBonus(payload) {
+  const amount = Number(payload.amount || 250);
+  const bronzeTickets = Number(payload.bronzeTickets || 0);
+  const rawInviter = String(payload.inviterUsername || '').trim();
+  const safeInviter = /^user_\d+$/i.test(rawInviter) ? '' : rawInviter;
+  const inviterLabel = safeInviter
+    ? (safeInviter.startsWith('@') ? safeInviter : `@${safeInviter}`)
+    : i18n.t('home.your_inviter');
+
+  const messageParts = [
+    i18n.format('home.welcome_bonus_points_from', { amount, inviter: inviterLabel })
+  ];
+  if (bronzeTickets > 0) {
+    messageParts.push(i18n.format('home.welcome_bonus_bronze', { count: bronzeTickets }));
+  }
+  const message = messageParts.join(' ');
+
   if (typeof window.fireConfetti === 'function') {
     window.fireConfetti({ particleCount: 110, spread: 82, origin: { y: 0.6 } });
   }
-  if (typeof window.showSuccessToast === 'function') {
-    window.showSuccessToast(`Welcome! You received ${amount} points from your friend's invite!`);
-  } else {
-    alert(`Welcome! You received ${amount} points from your friend's invite!`);
+  if (typeof window.showStickyNotice === 'function') {
+    const modal = window.showStickyNotice(message, {
+      title: i18n.t('home.welcome_bonus_title'),
+      okText: i18n.t('common.ok')
+    });
+    return Boolean(modal);
   }
+
+  return false;
 }
 
 async function bootstrap() {
@@ -333,7 +380,11 @@ async function bootstrap() {
       updateTopBar(user);
       updateWeeklyDropEligibility(user);
       syncMiningUI(user.miningStartedAt);
-      showWelcomeBonusIfPresent();
+      const shown = showWelcomeBonusIfPresent();
+      if (!shown) {
+        setTimeout(() => showWelcomeBonusIfPresent(), 200);
+        setTimeout(() => showWelcomeBonusIfPresent(), 900);
+      }
     }
   } catch (err) {
     console.error('Bootstrap failed:', err);
@@ -401,6 +452,17 @@ window.addEventListener('hope:languageChanged', () => {
   }
 });
 
+window.addEventListener('hope:welcomeBonusUpdated', () => {
+  const shown = showWelcomeBonusIfPresent();
+  if (!shown) {
+    setTimeout(() => showWelcomeBonusIfPresent(), 120);
+  }
+});
+
+window.addEventListener('load', () => {
+  showWelcomeBonusIfPresent();
+});
+
 async function fetchUser(options = {}) {
   const force = Boolean(options.force);
   try {
@@ -409,7 +471,7 @@ async function fetchUser(options = {}) {
     if (!force) user = getCachedUser();
 
     if (!user) {
-      const fresh = await fetchUserDataOnce();
+      const fresh = await fetchUserDataOnce({ force });
       if (fresh) {
         const existing = getCachedUser() || {};
         user = { ...existing, ...fresh };
@@ -445,6 +507,27 @@ function updateUI(user) {
   document.getElementById('bronze-tickets').textContent = formatCompact(user.bronzeTickets ?? 0);
   document.getElementById('silver-tickets').textContent = formatCompact(user.silverTickets ?? 0);
   document.getElementById('gold-tickets').textContent = formatCompact(user.goldTickets ?? 0);
+}
+
+function syncUserStreakFromStatus(status) {
+  const nextStreak = Number(status?.streak);
+  if (!Number.isFinite(nextStreak)) return;
+
+  const cached = getCachedUser();
+  if (!cached) return;
+
+  const currentStreak = Number(cached.streak || 0);
+  if (currentStreak === nextStreak) return;
+
+  const merged = { ...cached, streak: nextStreak };
+  setCachedUser(merged);
+
+  if (typeof window.onUserDataUpdate === 'function') {
+    window.onUserDataUpdate(merged);
+  } else {
+    updateTopBar(merged);
+    updateUI(merged);
+  }
 }
 
 function formatUtcTime(iso) {
@@ -511,15 +594,15 @@ function showCheckInSuccessAnimation(reward) {
   pop.className = 'checkin-success-pop';
   pop.innerHTML = `
     <div class="checkin-success-card">
-      <div class="checkin-success-title">Check-in Complete</div>
-      <div class="checkin-success-reward"><span id="checkin-points">+0</span> Points</div>
+      <div class="checkin-success-title">${i18n.t('checkin.complete_title')}</div>
+      <div class="checkin-success-reward"><span id="checkin-points">+0</span> ${i18n.t('common.points')}</div>
       <div class="checkin-success-grid">
         <div class="checkin-success-pill bronze">
-          <span class="pill-label">Bronze</span>
+          <span class="pill-label">${i18n.t('common.bronze')}</span>
           <span id="checkin-bronze" class="pill-value">+0</span>
         </div>
         <div class="checkin-success-pill xp">
-          <span class="pill-label">XP</span>
+          <span class="pill-label">${i18n.t('topbar.xp')}</span>
           <span id="checkin-xp" class="pill-value">+0</span>
         </div>
       </div>
@@ -553,7 +636,7 @@ function showCheckInSuccessAnimation(reward) {
 
 async function fetchDailyCheckInStatus() {
   const res = await fetch('/api/dailyCheckIn/status', { credentials: 'include', cache: 'no-store' });
-  if (!res.ok) throw new Error('Failed to fetch daily check-in status');
+  if (!res.ok) throw new Error(i18n.t('checkin.fetch_status_failed'));
   return res.json();
 }
 
@@ -561,6 +644,7 @@ async function refreshDailyCheckInStatus({ autoOpen } = { autoOpen: false }) {
   try {
     const data = await fetchDailyCheckInStatus();
     dailyCheckInStatus = data;
+    syncUserStreakFromStatus(data);
 
     if (dailyCheckInStreakText) {
       dailyCheckInStreakText.textContent =
@@ -672,28 +756,49 @@ async function startMining() {
   try {
     const res = await fetch('/api/mining/start', { method: 'POST', credentials: 'include' });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Failed to start mining');
-    syncMiningUI(data.miningStartedAt);
+    if (!res.ok) {
+      const serverError = String(data?.error || '').toLowerCase();
+      if (serverError.includes('already active') || serverError.includes('already in progress')) {
+        const cached = getCachedUser();
+        if (cached?.miningStartedAt) {
+          syncMiningUI(cached.miningStartedAt);
+          return;
+        }
+        await fetchUser({ force: true });
+        return;
+      }
+      throw new Error(data.error || i18n.t('home.start_mining_failed'));
+    }
+
+    if (data?.miningStartedAt) {
+      const cached = getCachedUser() || {};
+      setCachedUser({ ...cached, miningStartedAt: data.miningStartedAt });
+      syncMiningUI(data.miningStartedAt);
+      return;
+    }
+
+    await fetchUser({ force: true });
   } catch (err) {
     console.error(err);
-    alert(err.message);
+    alert(i18n.t('home.start_mining_failed'));
   }
 }
 
 async function claimMining() {
-  // Optimistic update — show reward immediately, confirm with server in background.
+  // Optimistic update - show reward immediately, confirm with server in background.
   // The mining bar is only claimable when full, so rejection is extremely rare.
   const miningReward = { points: 250 };
+  let claimConfirmed = false;
   if (miningBtn) {
     miningBtn.disabled = true;
     miningBtn.textContent = i18n.t('home.claiming');
   }
 
-  // Update UI instantly — don't wait for server
+  // Update UI instantly - don't wait for server
   if (typeof window.showRewardPopup === 'function') {
     window.showRewardPopup(miningReward, { title: i18n.t('home.reward_title'), durationMs: 2600 });
   } else if (typeof window.showSuccessToast === 'function') {
-    window.showSuccessToast('+250 points!');
+    window.showSuccessToast(i18n.format('home.mining_reward_points', { points: 250 }));
   }
   if (typeof window.fireConfetti === 'function') {
     window.fireConfetti({ particleCount: 90, spread: 75, origin: { y: 0.62 } });
@@ -705,25 +810,51 @@ async function claimMining() {
     const data = await res.json();
 
     if (!res.ok) {
-      // Server rejected — restore mining UI and inform user
-      throw new Error(data.error || 'Claim failed');
+      // Server rejected - restore mining UI and inform user
+      throw new Error(data.error || i18n.t('home.mining_claim_failed'));
     }
+    claimConfirmed = true;
 
-    // Refresh user data silently after server confirms
+    // Claim confirmed: keep mining UI reset immediately.
     resetMiningUI();
     if (miningBtn) {
       miningBtn.disabled = false;
     }
-    await fetchUser({ force: true });
+
+    // Apply immediate local state to avoid stale fetch flipping UI back.
+    const cached = getCachedUser() || {};
+    const serverPoints = Number(data?.points);
+    const merged = {
+      ...cached,
+      points: Number.isFinite(serverPoints) ? serverPoints : Number(cached.points || 0) + 250,
+      level: data?.level || cached.level,
+      miningStartedAt: null
+    };
+    setCachedUser(merged);
+    if (typeof window.onUserDataUpdate === 'function') {
+      window.onUserDataUpdate(merged);
+    } else {
+      updateTopBar(merged);
+      updateUI(merged);
+    }
+
+    // Best-effort authoritative refresh.
+    try {
+      await fetchUser({ force: true });
+    } catch (syncErr) {
+      console.warn('Post-claim user sync failed (kept local success state):', syncErr);
+    }
   } catch (err) {
     console.error('Mining claim failed:', err);
-    // Rollback: restore the mining complete state so user can try again
-    setMiningCompleteUI();
-    if (miningBtn) {
-      miningBtn.disabled = false;
-    }
-    if (typeof window.showErrorToast === 'function') {
-      window.showErrorToast(err.message || 'Mining claim failed — please try again');
+    if (!claimConfirmed) {
+      // Roll back only when claim itself was not confirmed by server.
+      setMiningCompleteUI();
+      if (miningBtn) {
+        miningBtn.disabled = false;
+      }
+      if (typeof window.showErrorToast === 'function') {
+        window.showErrorToast(i18n.t('home.mining_claim_failed'));
+      }
     }
   }
 }
@@ -748,22 +879,22 @@ async function handleCheckIn(button) {
       await tonConnectUI.openModal();
     }
     if (!tonConnectUI.wallet) {
-      throw new Error('Please connect your TON wallet first');
+      throw new Error(i18n.t('checkin.wallet_required'));
     }
 
     const status = await fetchDailyCheckInStatus();
     if (status.checkedInToday) {
       dailyCheckInStatus = status;
       setDailyCheckInButtonState(status);
-      throw new Error('Already checked in today');
+      throw new Error(i18n.t('checkin.already_checked_in_today'));
     }
 
     button.textContent = i18n.t('home.waiting_payment');
     const priceRes = await fetch('/api/tonAmount/ton-amount', { credentials: 'include' });
-    if (!priceRes.ok) throw new Error('Failed to get TON amount');
+    if (!priceRes.ok) throw new Error(i18n.t('checkin.ton_amount_failed'));
     const { tonAmount, recipientAddress } = await priceRes.json();
-    if (!recipientAddress) throw new Error('Payment recipient is not configured');
-    if (typeof tonAmount !== 'number' || tonAmount <= 0) throw new Error('Invalid TON amount');
+    if (!recipientAddress) throw new Error(i18n.t('checkin.recipient_not_configured'));
+    if (typeof tonAmount !== 'number' || tonAmount <= 0) throw new Error(i18n.t('checkin.invalid_ton_amount'));
 
     const tx = await tonConnectUI.sendTransaction({
       validUntil: Math.floor(Date.now() / 1000) + 300,
@@ -777,7 +908,7 @@ async function handleCheckIn(button) {
 
     const txHash = tx?.transaction?.hash || tx?.txid?.hash || tx?.hash || '';
     const txBoc = tx?.boc || '';
-    if (!txHash && !txBoc) throw new Error('Transaction proof missing');
+    if (!txHash && !txBoc) throw new Error(i18n.t('checkin.tx_proof_missing'));
 
     savePendingCheckInTx(txHash, txBoc);
     const verifyData = await verifyDailyCheckInTx(txHash, txBoc);
@@ -793,11 +924,11 @@ async function handleCheckIn(button) {
     } else {
       showCheckInSuccessAnimation(reward);
     }
-    await fetchUser();
+    await fetchUser({ force: true });
     await refreshDailyCheckInStatus();
   } catch (err) {
     console.error('Daily check-in failed:', err);
-    alert(err.message || 'Check-in failed');
+    alert(i18n.t('checkin.failed'));
   } finally {
     checkInInProgress = false;
     if (button === dailyCheckInModalBtn) {
@@ -844,3 +975,4 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 });
+

@@ -5,6 +5,7 @@ const User = require('../models/User');
 const CompletedTask = require('../models/CompletedTask');
 const DailyTaskCompletion = require('../models/DailyTaskCompletion');
 const { getNextLevelThreshold, getUserLevel } = require('../utils/levelUtil');
+const { hasRecoverableState, reconcileUserStartup } = require('../utils/transactionRecovery');
 const {
   normalizeStreakIfMissed,
   getCheckInDayKey,
@@ -61,8 +62,15 @@ router.get('/me', async (req, res) => {
     const forceRefresh = String(req.query?.force || '').toLowerCase() === '1'
       || String(req.query?.force || '').toLowerCase() === 'true';
     const cached = userDataCache.get(telegramId);
-    if (!forceRefresh && cached && Date.now() - cached.ts < USER_CACHE_TTL_MS) {
+    const recoveryNeeded = forceRefresh || await hasRecoverableState(telegramId);
+
+    if (!recoveryNeeded && cached && Date.now() - cached.ts < USER_CACHE_TTL_MS) {
       return res.json(cached.data);
+    }
+
+    if (recoveryNeeded) {
+      await reconcileUserStartup(telegramId);
+      invalidateUserCache(telegramId);
     }
 
     const user = await User.findOne({ telegramId })

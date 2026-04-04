@@ -41,7 +41,9 @@ async function authenticateWithTelegram() {
 
     if (data.welcomeBonus) {
       sessionStorage.setItem('hope_welcome_bonus', JSON.stringify({
-        amount: Number(data.bonusAmount || 100)
+        amount: Number(data.bonusAmount || 250),
+        bronzeTickets: Number(data.bonusBronzeTickets || 0),
+        inviterUsername: data.inviterUsername || null
       }));
     }
 

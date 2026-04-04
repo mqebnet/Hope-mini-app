@@ -1,4 +1,4 @@
-//server.js
+// app.js
 require('dotenv').config();
 const express = require('express');
 const path = require('path');
@@ -18,6 +18,8 @@ const { authLimiter, gameLimiter, generalLimiter } = require('./middleware/rateL
 const { startNotificationScheduler } = require('./utils/notificationScheduler');
 const socketIo = require('socket.io');
 const stateEmitter = require('./utils/stateEmitter');
+const { createClient } = require('redis');
+const { createAdapter } = require('@socket.io/redis-adapter');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -154,11 +156,42 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 3000;
-connectDB().then(() => {
+connectDB().then(async () => {
   startNotificationScheduler();
   const server = app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
+
+  // Redis adapter setup
+  const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+  let redisReady = false;
+  let pubClient, subClient;
+
+  try {
+    pubClient = createClient({ url: redisUrl });
+    subClient = pubClient.duplicate();
+
+    // Attach a silent no-op BEFORE connect to prevent unhandled error
+    // events from crashing Node during the initial connection attempt
+    pubClient.on('error', () => {});
+    subClient.on('error', () => {});
+
+    await Promise.all([pubClient.connect(), subClient.connect()]);
+
+    // Replace silent handlers with real ones after confirmed connection
+    pubClient.removeAllListeners('error');
+    subClient.removeAllListeners('error');
+    pubClient.on('error', (err) => console.error('[Redis] pub error:', err.message));
+    subClient.on('error', (err) => console.error('[Redis] sub error:', err.message));
+
+    redisReady = true;
+    console.log('[Redis] Connected successfully');
+  } catch (err) {
+    console.warn('[Redis] Unavailable — running in single-process mode');
+    // Explicitly disconnect to stop all background retry attempts
+    try { await pubClient?.disconnect(); } catch {}
+    try { await subClient?.disconnect(); } catch {}
+  }
 
   // Setup Socket.IO for real-time data sync (WebSocket fallback to polling)
   const io = socketIo(server, {
@@ -167,8 +200,15 @@ connectDB().then(() => {
       credentials: true
     },
     transports: ['websocket', 'polling'],
-    serveClient: false
+    serveClient: false,
+    maxHttpBufferSize: (parseInt(process.env.WS_MAX_BUFFER_MB) || 5) * 1e6
   });
+  if (redisReady) {
+    io.adapter(createAdapter(pubClient, subClient));
+    console.log('[Socket.IO] Redis adapter attached');
+  } else {
+    console.warn('[Socket.IO] Running without Redis adapter — not safe for multi-process');
+  }
 
   // Authenticate WebSocket connections via JWT token (from auth param or httpOnly cookie)
   io.use((socket, next) => {
@@ -257,20 +297,31 @@ connectDB().then(() => {
     io.emit('global:event', data);
   });
 
-  server.on('error', (err) => {
+  server.on('error', async (err) => {
     if (err.code === 'EADDRINUSE') {
       console.error(`Port ${PORT} is already in use.`);
       console.error(`Stop the existing process on ${PORT} or run with a different port (e.g. set PORT=3001).`);
+      await Promise.allSettled([pubClient.quit(), subClient.quit()]);
       process.exit(1);
       return;
     }
     if (err.code === 'EACCES') {
       console.error(`Permission denied for port ${PORT}. Try a non-privileged port.`);
+      await Promise.allSettled([pubClient.quit(), subClient.quit()]);
       process.exit(1);
       return;
     }
     console.error('Server startup error:', err);
+    await Promise.allSettled([pubClient.quit(), subClient.quit()]);
     process.exit(1);
+  });
+
+  process.on('SIGTERM', async () => {
+    console.log('[Shutdown] SIGTERM received');
+    if (redisReady) {
+      await Promise.all([pubClient.quit(), subClient.quit()]);
+    }
+    server.close(() => process.exit(0));
   });
 });
 

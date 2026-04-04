@@ -9,6 +9,12 @@ window.addEventListener('hope:userUpdated', (event) => {
   updateTopBar(user);
 });
 
+window.addEventListener('hope:languageChanged', () => {
+  loadProgress().catch((err) => {
+    console.warn('Invite language refresh failed:', err);
+  });
+});
+
 document.addEventListener("DOMContentLoaded", async () => {
   // Bootstrap lock: prevent running twice
   if (!canBootstrap('invite')) return;
@@ -36,13 +42,16 @@ document.addEventListener("DOMContentLoaded", async () => {
     const { inviteLink } = await linkRes.json();
     inviteLinkInput.value = inviteLink;
 
-    // Copy link
-    document.getElementById("copy-invite-btn").addEventListener("click", async (event) => {
+    // Share invite link via Telegram native share sheet
+    document.getElementById("copy-invite-btn").addEventListener("click", (event) => {
       const btn = event.currentTarget;
       if (!debounceButton(btn, 600)) return;
-      const copied = await copyTextToClipboard(inviteLinkInput.value || inviteLink);
-      if (copied) {
-        showNotification(i18n.t('invite.copied'), 'success');
+
+      const introText = i18n.t('invite.share_intro');
+
+      const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(inviteLinkInput.value || inviteLink)}&text=${encodeURIComponent(introText)}`;
+      if (window.Telegram?.WebApp?.openTelegramLink) {
+        window.Telegram.WebApp.openTelegramLink(shareUrl);
       } else {
         showNotification(i18n.t('invite.verification_failed'), 'error');
       }
@@ -126,7 +135,8 @@ async function loadProgress() {
           await loadProgress();
         };
       } catch (e) {
-        showNotification(e.message || i18n.t('invite.verification_failed'), "error");
+        console.error('Invite verification failed:', e);
+        showNotification(i18n.t('invite.verification_failed'), "error");
       }
     };
   });
@@ -146,41 +156,13 @@ async function loadReferralLeaderboard() {
     row.className = 'leaderboard-row';
     row.innerHTML = `
       <span>${i + 1}</span>
-      <span>${u.username || `User ${u.userId}`}</span>
+      <span>${u.username || i18n.format('invite.user_fallback', { id: u.userId })}</span>
       <span>${u.referrals}</span>
     `;
     container.appendChild(row);
   });
 }
 
-
-async function copyTextToClipboard(text) {
-  const value = String(text || '').trim();
-  if (!value) return false;
-
-  try {
-    if (navigator?.clipboard?.writeText) {
-      await navigator.clipboard.writeText(value);
-      return true;
-    }
-  } catch (_) {}
-
-  // Fallback for older WebViews
-  try {
-    const helper = document.createElement('textarea');
-    helper.value = value;
-    helper.setAttribute('readonly', '');
-    helper.style.position = 'absolute';
-    helper.style.left = '-9999px';
-    document.body.appendChild(helper);
-    helper.select();
-    const ok = document.execCommand('copy');
-    helper.remove();
-    return Boolean(ok);
-  } catch (_) {
-    return false;
-  }
-}
 
 // Tiny toast helper
 function showNotification(message, type = "info") {

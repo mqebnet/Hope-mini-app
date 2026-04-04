@@ -277,6 +277,7 @@ async function verifyTransaction({
   txHash,
   txBoc,
   purpose = 'payment',
+  taskId = null,
   requiredUsd,
   minConfirmations = 1
 }) {
@@ -330,20 +331,27 @@ async function verifyTransaction({
     return { ok: false, reason: 'Transaction already processed by another user' };
   }
 
+  const setFields = {
+    purpose,
+    expectedUsd: requiredUsd,
+    amountTon,
+    status: 'verified'
+  };
+  if (taskId !== null && taskId !== undefined) {
+    setFields.taskId = String(taskId);
+  }
+
   await Transaction.updateOne(
     { txHash: txRef },
     {
       $setOnInsert: {
         telegramId,
         txHash: txRef,
+        rewardStatus: 'pending',
+        reconcileAttempts: 0,
         createdAt: new Date()
       },
-      $set: {
-        purpose,
-        expectedUsd: requiredUsd,
-        amountTon,
-        status: 'verified'
-      }
+      $set: setFields
     },
     { upsert: true }
   );

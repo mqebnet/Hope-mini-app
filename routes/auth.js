@@ -12,6 +12,13 @@ const router = express.Router();
 const TELEGRAM_AUTH_MAX_AGE_SEC = Number(process.env.TELEGRAM_AUTH_MAX_AGE_SEC || 86400);
 const TELEGRAM_FUTURE_SKEW_SEC = Number(process.env.TELEGRAM_FUTURE_SKEW_SEC || 300);
 
+function maskHash(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '(empty)';
+  if (raw.length <= 12) return '***';
+  return `${raw.slice(0, 6)}...${raw.slice(-6)}`;
+}
+
 function getAdminIds() {
   return new Set(
     (process.env.ADMIN_TELEGRAM_IDS || '')
@@ -108,8 +115,8 @@ function parseAndValidateInitData(initData) {
 
   if (process.env.NODE_ENV !== 'production') {
     console.log('AUTH DATE:', authDate, 'NOW:', nowSec, 'AGE:', ageSec, 'FUTURE:', futureSec);
-    console.log('RECEIVED HASH:', hash);
-    console.log('CALCULATED HASH:', computedHash);
+    console.log('RECEIVED HASH (masked):', maskHash(hash));
+    console.log('CALCULATED HASH (masked):', maskHash(computedHash));
   }
 
   if (!validHash) {
@@ -230,13 +237,17 @@ router.post('/telegram', async (req, res) => {
 
     let welcomeBonus = false;
     let bonusAmount = 0;
+    let bonusBronzeTickets = 0;
+    let inviterUsername = null;
 
     // Apply referral attribution whenever user has no inviter yet and deep-link param exists.
     if (!user.invitedBy && startParam) {
       const referralResult = await applyReferralAttribution(user, startParam);
       if (referralResult?.applied) {
         welcomeBonus = true;
-        bonusAmount = 100;
+        bonusAmount = Number(referralResult?.inviteeRewardPoints || 250);
+        bonusBronzeTickets = Number(referralResult?.inviteeRewardBronzeTickets || 0);
+        inviterUsername = referralResult?.inviterUsername || null;
       }
       if (process.env.NODE_ENV !== 'production') {
         console.log('Referral attribution result:', {
@@ -277,6 +288,8 @@ router.post('/telegram', async (req, res) => {
       success: true,
       welcomeBonus,
       bonusAmount,
+      bonusBronzeTickets,
+      inviterUsername,
       user: {
         id: user.telegramId,
         username: user.username,

@@ -3,6 +3,18 @@
   const MAX_TOASTS = 4;
   const AUTO_CLOSE_MS = 3600;
   const originalAlert = window.alert.bind(window);
+  const HAPTIC_STORAGE_KEY = 'hope_haptic_enabled';
+  const SOUND_STORAGE_KEY = 'hope_sound_enabled';
+  let audioCtx = null;
+  const translate = (key, fallback) => {
+    try {
+      if (typeof window.hopeI18nT === 'function') {
+        const value = window.hopeI18nT(key);
+        if (typeof value === 'string' && value && value !== key) return value;
+      }
+    } catch (_) {}
+    return fallback;
+  };
 
   function ensureHost() {
     if (!document.body) return null;
@@ -23,18 +35,117 @@
     setTimeout(() => toast.remove(), 220);
   }
 
+  function parseEnabled(raw, fallback = true) {
+    if (raw === null || raw === undefined) return fallback;
+    const value = String(raw).trim().toLowerCase();
+    if (value === '1' || value === 'true') return true;
+    if (value === '0' || value === 'false') return false;
+    return fallback;
+  }
+
+  function isHapticEnabled() {
+    return parseEnabled(localStorage.getItem(HAPTIC_STORAGE_KEY), true);
+  }
+
+  function isSoundEnabled() {
+    return parseEnabled(localStorage.getItem(SOUND_STORAGE_KEY), true);
+  }
+
+  function triggerHaptic(type) {
+    if (!isHapticEnabled()) return;
+
+    const haptic = window.Telegram?.WebApp?.HapticFeedback;
+    try {
+      if (haptic?.notificationOccurred) {
+        if (type === 'success') haptic.notificationOccurred('success');
+        else if (type === 'error') haptic.notificationOccurred('error');
+        else if (type === 'warn') haptic.notificationOccurred('warning');
+        else if (haptic.impactOccurred) haptic.impactOccurred('light');
+      } else if (haptic?.impactOccurred) {
+        const style = type === 'error' ? 'heavy' : type === 'warn' ? 'medium' : 'light';
+        haptic.impactOccurred(style);
+      }
+    } catch (_) {
+      // fall through to device vibration
+    }
+
+    try {
+      if (typeof navigator.vibrate === 'function') {
+        if (type === 'error') navigator.vibrate([45, 30, 45]);
+        else if (type === 'success') navigator.vibrate([25, 20, 25]);
+        else if (type === 'warn') navigator.vibrate([35]);
+        else navigator.vibrate([18]);
+      }
+    } catch (_) {
+      // best effort only
+    }
+  }
+
+  function ensureAudioContext() {
+    if (audioCtx && audioCtx.state !== 'closed') return audioCtx;
+    const Ctor = window.AudioContext || window.webkitAudioContext;
+    if (!Ctor) return null;
+    audioCtx = new Ctor();
+    return audioCtx;
+  }
+
+  function primeAudioContext() {
+    const ctx = ensureAudioContext();
+    if (!ctx) return;
+    if (ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
+    }
+    document.removeEventListener('pointerdown', primeAudioContext, true);
+    document.removeEventListener('keydown', primeAudioContext, true);
+  }
+
+  function playTone(type) {
+    if (!isSoundEnabled()) return;
+    const ctx = ensureAudioContext();
+    if (!ctx) return;
+
+    try {
+      if (ctx.state === 'suspended') {
+        ctx.resume().catch(() => {});
+      }
+      const now = ctx.currentTime;
+      const oscillator = ctx.createOscillator();
+      const gainNode = ctx.createGain();
+      oscillator.type = 'sine';
+      oscillator.frequency.value = type === 'success' ? 880 : type === 'error' ? 250 : type === 'warn' ? 420 : 660;
+      gainNode.gain.setValueAtTime(0.0001, now);
+      gainNode.gain.exponentialRampToValueAtTime(0.035, now + 0.01);
+      gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
+      oscillator.connect(gainNode);
+      gainNode.connect(ctx.destination);
+      oscillator.start(now);
+      oscillator.stop(now + 0.14);
+    } catch (_) {
+      // best effort only
+    }
+  }
+
+  function triggerFeedback(type) {
+    triggerHaptic(type);
+    playTone(type);
+  }
+
+  document.addEventListener('pointerdown', primeAudioContext, true);
+  document.addEventListener('keydown', primeAudioContext, true);
+
   function showNotification(message, type = 'info') {
     const host = ensureHost();
     if (!host) {
-      originalAlert(String(message || '').trim() || 'Something happened');
+      originalAlert(String(message || '').trim() || translate('common.something_happened', 'Something happened'));
       return null;
     }
     const safeType = ['info', 'success', 'error', 'warn'].includes(type) ? type : 'info';
+    triggerFeedback(safeType);
 
     const toast = document.createElement('div');
     toast.className = `notification ${safeType}`;
     toast.setAttribute('role', safeType === 'error' ? 'alert' : 'status');
-    toast.textContent = String(message || '').trim() || 'Something happened';
+    toast.textContent = String(message || '').trim() || translate('common.something_happened', 'Something happened');
     host.appendChild(toast);
 
     const existing = host.querySelectorAll('.notification');
@@ -48,11 +159,71 @@
     return toast;
   }
 
+  function showStickyNotice(message, options = {}) {
+    const host = document.body;
+    if (!host) {
+      originalAlert(String(message || '').trim() || translate('common.something_happened', 'Something happened'));
+      return null;
+    }
+
+    const noticeType = String(options.type || 'info');
+    triggerHaptic(noticeType);
+    const title = String(options.title || translate('common.notice', 'Notice')).trim() || translate('common.notice', 'Notice');
+    const okText = String(options.okText || translate('common.ok', 'OK')).trim() || translate('common.ok', 'OK');
+    const text = String(message || '').trim() || translate('common.something_happened', 'Something happened');
+
+    const existing = document.getElementById('sticky-notice-modal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'sticky-notice-modal';
+    modal.className = 'reward-modal';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-live', 'assertive');
+
+    const content = document.createElement('div');
+    content.className = 'reward-content';
+
+    const heading = document.createElement('h2');
+    heading.textContent = title;
+    content.appendChild(heading);
+
+    const body = document.createElement('p');
+    body.textContent = text;
+    content.appendChild(body);
+
+    const okButton = document.createElement('button');
+    okButton.type = 'button';
+    okButton.className = 'btn-primary';
+    okButton.textContent = okText;
+    content.appendChild(okButton);
+
+    modal.appendChild(content);
+    host.appendChild(modal);
+
+    const close = () => {
+      if (!modal.parentElement) return;
+      modal.remove();
+      if (typeof options.onClose === 'function') {
+        try { options.onClose(); } catch (_) {}
+      }
+    };
+
+    okButton.addEventListener('click', close, { once: true });
+    setTimeout(() => okButton.focus(), 0);
+
+    return modal;
+  }
+
   // Handle fetch errors globally, especially 429 rate limit
   window.addEventListener('unhandledrejection', (event) => {
     const err = event.reason;
     if (err?.message?.includes('RATE_LIMITED') || err?.status === 429) {
-      showNotification('Too many requests. Please wait a moment and try again.', 'error');
+      showNotification(
+        translate('common.rate_limited', 'Too many requests. Please wait a moment and try again.'),
+        'error'
+      );
       event.preventDefault();
     }
   });
@@ -66,7 +237,13 @@
   }
 
   function showRewardPopup(reward = {}, options = {}) {
-    const title = options.title || 'Reward Claimed';
+    triggerHaptic('success');
+    const title = options.title || translate('common.reward_claimed', 'Reward Claimed');
+    const pointsLabel = translate('common.points', 'Points');
+    const bronzeLabel = translate('common.bronze', 'Bronze');
+    const silverLabel = translate('common.silver', 'Silver');
+    const goldLabel = translate('common.gold', 'Gold');
+    const xpLabel = translate('topbar.xp', 'XP');
     const points = Number(reward.points || 0);
     const xp = Number(reward.xp || 0);
     const bronze = Number(reward.bronzeTickets || 0);
@@ -77,10 +254,10 @@
     if (existing) existing.remove();
 
     const pills = [
-      bronze > 0 ? '<div class="checkin-success-pill bronze"><span class="pill-label">Bronze</span><span data-count="' + bronze + '" class="pill-value">+0</span></div>' : '',
-      silver > 0 ? '<div class="checkin-success-pill silver"><span class="pill-label">Silver</span><span data-count="' + silver + '" class="pill-value">+0</span></div>' : '',
-      gold > 0 ? '<div class="checkin-success-pill gold"><span class="pill-label">Gold</span><span data-count="' + gold + '" class="pill-value">+0</span></div>' : '',
-      xp > 0 ? '<div class="checkin-success-pill xp"><span class="pill-label">XP</span><span data-count="' + xp + '" class="pill-value">+0</span></div>' : ''
+      bronze > 0 ? '<div class="checkin-success-pill bronze"><span class="pill-label">' + bronzeLabel + '</span><span data-count="' + bronze + '" class="pill-value">+0</span></div>' : '',
+      silver > 0 ? '<div class="checkin-success-pill silver"><span class="pill-label">' + silverLabel + '</span><span data-count="' + silver + '" class="pill-value">+0</span></div>' : '',
+      gold > 0 ? '<div class="checkin-success-pill gold"><span class="pill-label">' + goldLabel + '</span><span data-count="' + gold + '" class="pill-value">+0</span></div>' : '',
+      xp > 0 ? '<div class="checkin-success-pill xp"><span class="pill-label">' + xpLabel + '</span><span data-count="' + xp + '" class="pill-value">+0</span></div>' : ''
     ].filter(Boolean).join('');
 
     const pop = document.createElement('div');
@@ -89,7 +266,7 @@
     pop.innerHTML = `
       <div class="checkin-success-card">
         <div class="checkin-success-title">${title}</div>
-        <div class="checkin-success-reward"><span id="reward-points" data-count="${points}">+0</span> Points</div>
+        <div class="checkin-success-reward"><span id="reward-points" data-count="${points}">+0</span> ${pointsLabel}</div>
         <div class="checkin-success-grid">${pills}</div>
       </div>
     `;
@@ -175,6 +352,9 @@
   window.fireConfetti = fireConfetti;
   window.showSuccessToast = (msg) => showNotification(msg, 'success');
   window.showErrorToast = (msg) => showNotification(msg, 'error');
+  window.hopeTriggerHaptic = (type = 'info') => triggerHaptic(type);
+  window.hopeTriggerFeedback = (type = 'info') => triggerFeedback(type);
+  window.showStickyNotice = showStickyNotice;
 
   // Keep legacy alert() calls visually consistent in app UI.
   window.alert = (msg) => {

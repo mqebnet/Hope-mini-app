@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
 const { verifyTransaction } = require('../utils/tonHandler');
+const { markTransactionRewardApplied } = require('../utils/transactionRecovery');
 const stateEmitter = require('../utils/stateEmitter');
 const {
   DAILY_CHECKIN_REWARD,
@@ -94,6 +95,11 @@ router.post('/verify', async (req, res) => {
     }
 
     await user.save();
+    await markTransactionRewardApplied({
+      telegramId: user.telegramId,
+      txRef: proofRef,
+      meta: { kind: 'daily-checkin', source: 'dailyCheckIn.verify' }
+    });
 
     // Emit real-time update via WebSocket
     stateEmitter.emit('user:updated', {

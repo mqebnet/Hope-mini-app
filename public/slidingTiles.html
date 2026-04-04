@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Hope - Flip Cards Pass</title>
+  <title>Hope - Sliding Tiles</title>
   <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js" defer></script>
   <script src="https://telegram.org/js/telegram-web-app.js" defer></script>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
@@ -11,18 +11,22 @@
 </head>
 <body>
 <header id="top-nav">
-  <button id="profile-button" aria-label="Profile Menu"><i data-lucide="user"></i></button>
+  <button id="profile-button" aria-label="Profile Menu">
+    <i data-lucide="user"></i>
+  </button>
+
   <div id="user-stats">
-    <p class="tag" data-i18n="topbar.level">Level</p><span id="current-level">-</span>
-    <p class="tag" data-i18n="topbar.xp">XP</p><span id="user-exp">-</span>
+    <p class="tag" data-i18n="topbar.level">Level</p>
+    <span id="current-level">-</span>
+    <p class="tag" data-i18n="topbar.xp">XP</p>
+    <span id="user-exp">-</span>
   </div>
+
   <div id="ticket-icons">
     <span id="bronze-tickets">-</span>
     <span id="silver-tickets">-</span>
     <span id="gold-tickets">-</span>
   </div>
-  <div id="ton-connect-ui"></div>
-  <button id="ton-connect-button" aria-label="Connect Wallet"></button>
 </header>
 
 <div id="display-panel">
@@ -34,8 +38,12 @@
 </div>
 
 <main id="main-content">
-  <div id="flipcards-pass-root" class="pass-purchase-screen"></div>
+  <h1 class="page-title" data-i18n="slidingtiles.title">Sliding Tiles</h1>
+  <p class="arcade-subtitle" data-i18n="slidingtiles.subtitle">Rebuild the grid before the timer burns out.</p>
+  <div id="slidingtiles-game"></div>
 </main>
+
+<div id="profile-container"></div>
 
 <footer id="bottom-nav">
   <a href="index.html" class="nav-btn" data-page="home"><i data-lucide="home"></i> <span data-i18n="nav.home">Home</span></a>
@@ -48,17 +56,15 @@
 <script src="notify.js" defer></script>
 <script type="module" src="userData.js"></script>
 <script type="module" src="script.js"></script>
-<script type="module" src="tonconnect.js"></script>
-<script type="module" src="connectWallet.js"></script>
-<script type="module" src="flipcardsPass.js"></script>
+<script type="module" src="slidingTiles.js"></script>
+<script type="module" src="profile.js"></script>
 <script src="activeTab.js" defer></script>
+
 <script>
   document.addEventListener('DOMContentLoaded', () => {
+    if (window.Telegram?.WebApp) window.Telegram.WebApp.ready();
     if (window.lucide) window.lucide.createIcons();
   });
 </script>
 </body>
 </html>
-
-
-

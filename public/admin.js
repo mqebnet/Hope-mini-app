@@ -67,6 +67,17 @@ let lastUsers = [];
 let contestEnabled = true;
 let adminRealtimeRefreshTimer = null;
 
+function formatShortDate(dayKey) {
+  if (!dayKey || !/^\d{4}-\d{2}-\d{2}$/.test(dayKey)) return fmt(dayKey);
+  const [year, month, day] = dayKey.split('-');
+  return `${day}/${month}/${year.slice(-2)}`;
+}
+
+function formatUsd(value) {
+  const amount = Number(value || 0);
+  return `$${amount.toFixed(2)}`;
+}
+
 function updateRealtimeStatus(detail = {}) {
   const wsConnected = Boolean(detail.wsConnected);
   const statusEl = document.getElementById('realtime-status');
@@ -91,6 +102,7 @@ function scheduleAdminRealtimeRefresh() {
     adminRealtimeRefreshTimer = null;
     await Promise.allSettled([
       loadStats(),
+      loadTransactionAnalytics(),
       loadUsers(currentUsersPage || 1),
       loadContestOverview(),
       loadLastMiningReminderRun()
@@ -131,6 +143,103 @@ async function loadStats() {
     }
   } catch (err) {
     showResult('admin-stats', `Error: ${err.message}`, true);
+  }
+}
+
+function renderTransactionAnalytics(analytics = {}) {
+  const summaryWrap = document.getElementById('tx-analytics-summary');
+  const tableWrap = document.getElementById('tx-analytics-table-wrap');
+  if (!summaryWrap || !tableWrap) return;
+
+  const summary = analytics.summary || {};
+  const rows = Array.isArray(analytics.rows) ? [...analytics.rows].reverse() : [];
+  const busiestDay = summary.busiestDay?.dayKey ? formatShortDate(summary.busiestDay.dayKey) : '-';
+  const topFeatureLabel = summary.topFeature?.label || 'No verified transactions yet';
+  const topFeatureCount = Number(summary.topFeature?.count || 0);
+
+  summaryWrap.innerHTML = [
+    `
+      <div class="analytics-stat">
+        <div class="analytics-stat-label">Verified Transactions</div>
+        <div class="analytics-stat-value">${fmt(summary.totalTransactions ?? 0)}</div>
+        <div class="analytics-stat-sub">Across ${fmt(analytics.days ?? 0)} day(s)</div>
+      </div>
+    `,
+    `
+      <div class="analytics-stat">
+        <div class="analytics-stat-label">Total USD</div>
+        <div class="analytics-stat-value">${escapeHtml(formatUsd(summary.totalUsd || 0))}</div>
+        <div class="analytics-stat-sub">Expected verified value</div>
+      </div>
+    `,
+    `
+      <div class="analytics-stat">
+        <div class="analytics-stat-label">Top Feature</div>
+        <div class="analytics-stat-value">${fmt(topFeatureLabel)}</div>
+        <div class="analytics-stat-sub">${fmt(topFeatureCount)} transaction(s)</div>
+      </div>
+    `,
+    `
+      <div class="analytics-stat">
+        <div class="analytics-stat-label">Busiest Day</div>
+        <div class="analytics-stat-value">${fmt(busiestDay)}</div>
+        <div class="analytics-stat-sub">${fmt(summary.busiestDay?.totalTransactions ?? 0)} transaction(s)</div>
+      </div>
+    `
+  ].join('');
+
+  const body = rows.map((row) => `
+    <tr>
+      <td>${fmt(formatShortDate(row.dayKey))}</td>
+      <td>${fmt(row.totalTransactions ?? 0)}</td>
+      <td>${fmt(row.dailyCheckInCount ?? 0)}</td>
+      <td>${fmt(row.mysteryBoxPurchaseCount ?? 0)}</td>
+      <td>${fmt(row.gamePassCount ?? 0)}</td>
+      <td>${fmt(row.weeklyDropEntryCount ?? 0)}</td>
+      <td>${fmt(formatUsd(row.totalUsd || 0))}</td>
+    </tr>
+  `).join('');
+
+  tableWrap.innerHTML = `
+    <table class="analytics-table">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Transaction Count</th>
+          <th>Daily Check-In</th>
+          <th>Mystery Box Purchase</th>
+          <th>Game Pass</th>
+          <th>Weekly Drop Entry</th>
+          <th>Total Amount (USD)</th>
+        </tr>
+      </thead>
+      <tbody>${body}</tbody>
+    </table>
+  `;
+}
+
+async function loadTransactionAnalytics() {
+  const days = document.getElementById('tx-analytics-days')?.value || '14';
+  const summaryWrap = document.getElementById('tx-analytics-summary');
+  const tableWrap = document.getElementById('tx-analytics-table-wrap');
+
+  if (summaryWrap) {
+    summaryWrap.innerHTML = '<div class="muted">Loading transaction analytics...</div>';
+  }
+  if (tableWrap) {
+    tableWrap.innerHTML = '';
+  }
+
+  try {
+    const data = await api(`/api/admin/transactions/analytics?days=${encodeURIComponent(days)}`);
+    renderTransactionAnalytics(data.analytics || {});
+  } catch (err) {
+    if (summaryWrap) {
+      summaryWrap.innerHTML = `<div class="error">Error: ${escapeHtml(err.message)}</div>`;
+    }
+    if (tableWrap) {
+      tableWrap.innerHTML = '';
+    }
   }
 }
 
@@ -557,6 +666,10 @@ if (btnNext) btnNext.addEventListener('click', () => loadUsers(Math.min(totalUse
 
 const btnLoadUsers = document.getElementById('btn-load-users');
 if (btnLoadUsers) btnLoadUsers.addEventListener('click', () => loadUsers(1));
+const btnLoadTxAnalytics = document.getElementById('btn-load-tx-analytics');
+if (btnLoadTxAnalytics) btnLoadTxAnalytics.addEventListener('click', loadTransactionAnalytics);
+const txAnalyticsDays = document.getElementById('tx-analytics-days');
+if (txAnalyticsDays) txAnalyticsDays.addEventListener('change', loadTransactionAnalytics);
 const btnUpdateUser = document.getElementById('btn-update-user');
 if (btnUpdateUser) btnUpdateUser.addEventListener('click', updateUser);
 const btnResetUser = document.getElementById('btn-reset-user');
@@ -583,6 +696,7 @@ const btnRunReminders = document.getElementById('btn-run-mining-reminders');
 if (btnRunReminders) btnRunReminders.addEventListener('click', runMiningRemindersNow);
 
 loadStats();
+loadTransactionAnalytics();
 loadContestToggle();
 loadTasks();
 loadUsers(1);

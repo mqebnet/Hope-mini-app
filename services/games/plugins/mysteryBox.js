@@ -2,6 +2,7 @@ const User = require('../../../models/User');
 const MysteryBox = require('../../../models/MysteryBox');
 const { getUserLevel } = require('../../../utils/levelUtil');
 const { verifyTransaction } = require('../../../utils/tonHandler');
+const { markTransactionRewardApplied } = require('../../../utils/transactionRecovery');
 const { GameEngineError } = require('../GameEngine');
 const stateEmitter = require('../../../utils/stateEmitter');
 
@@ -119,6 +120,25 @@ module.exports = {
     const proofRef = verification.txRef || txHash || txBoc;
     const user = await User.findOne({ telegramId });
     if (!user) throw new GameEngineError('User not found', 404);
+
+    // Idempotent retry: if this exact transaction was already recorded for this user,
+    // return current status instead of failing, so frontend recovery can continue safely.
+    const existingForUser = await MysteryBox.findOne({ telegramId, transactionId: proofRef }).lean();
+    if (existingForUser) {
+      const { start, end } = getTodayRange();
+      const todayBoxes = await MysteryBox.find({
+        telegramId,
+        purchaseTime: { $gte: start, $lt: end }
+      }).sort({ purchaseTime: 1 }).lean();
+
+      return {
+        ...statusPayload(todayBoxes),
+        message: `Transaction already processed for ${existingForUser.boxType} mystery box`,
+        boxType: existingForUser.boxType,
+        alreadyProcessed: true
+      };
+    }
+
     const alreadyUsed = await MysteryBox.exists({ transactionId: proofRef });
     if (alreadyUsed) throw new GameEngineError('Transaction already used', 400);
 
@@ -142,6 +162,11 @@ module.exports = {
       status: 'purchased',
       purchaseTime: new Date(),
       transactionId: proofRef
+    });
+    await markTransactionRewardApplied({
+      telegramId,
+      txRef: proofRef,
+      meta: { kind: 'mystery-box-purchase', boxType, source: 'games.mystery-box.purchase' }
     });
 
     const updatedTodayBoxes = await MysteryBox.find({
