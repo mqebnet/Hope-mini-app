@@ -19,6 +19,7 @@ const stateEmitter = require('./stateEmitter');
 
 const VERIFY_DELAY_MS = 24 * 60 * 60 * 1000;
 const GAME_PASS_DURATION_MS = 24 * 60 * 60 * 1000;
+const WEEKLY_REQUIRED_GOLD_TICKETS = Math.max(1, Number(process.env.WEEKLY_DROP_GOLD_TICKETS || 10));
 const RECOVERY_TX_LIMIT = 50;
 const LOCK_STALE_MS = 3 * 60 * 1000;
 const BOX_ORDER = ['bronze', 'silver', 'gold'];
@@ -93,7 +94,7 @@ function getRecoverableTxQuery(telegramId) {
     status: 'verified',
     $or: [
       { rewardStatus: { $exists: false } },
-      { rewardStatus: { $in: ['pending', 'failed', 'skipped'] } },
+      { rewardStatus: { $in: ['pending', 'failed'] } },
       { rewardStatus: 'processing', reconcileLockedAt: { $lte: staleBefore } }
     ]
   };
@@ -162,7 +163,7 @@ async function claimTransactionForRecovery(txId) {
       status: 'verified',
       $or: [
         { rewardStatus: { $exists: false } },
-        { rewardStatus: { $in: ['pending', 'failed', 'skipped'] } },
+        { rewardStatus: { $in: ['pending', 'failed'] } },
         { rewardStatus: 'processing', reconcileLockedAt: { $lte: staleBefore } }
       ]
     },
@@ -215,7 +216,7 @@ async function recoverFlipcardsPass(user, tx) {
   const purchasedAt = tx.createdAt ? new Date(tx.createdAt) : new Date();
   const candidateValidUntil = new Date(purchasedAt.getTime() + GAME_PASS_DURATION_MS);
 
-  const currentPass = user?.gamePass || user?.flipcardsPass || null;
+  const currentPass = user?.gamePass || null;
   const currentTxRef = String(currentPass?.txRef || '').trim();
   const currentValidUntilMs = new Date(currentPass?.validUntil || 0).getTime();
   const candidateValidUntilMs = candidateValidUntil.getTime();
@@ -233,9 +234,7 @@ async function recoverFlipcardsPass(user, tx) {
     purchasedAt,
     txRef
   };
-  // Write both fields during migration to keep backward compatibility.
   user.gamePass = nextPass;
-  user.flipcardsPass = nextPass;
   return { applied: true, changedUser: true, meta: { kind: 'flipcards-pass', mode: 'restored' } };
 }
 
@@ -296,9 +295,9 @@ async function recoverWeeklyDropEntry(user, tx) {
   });
 
   let deductedGold = 0;
-  if ((user.goldTickets || 0) >= 10) {
-    user.goldTickets -= 10;
-    deductedGold = 10;
+  if ((user.goldTickets || 0) >= WEEKLY_REQUIRED_GOLD_TICKETS) {
+    user.goldTickets -= WEEKLY_REQUIRED_GOLD_TICKETS;
+    deductedGold = WEEKLY_REQUIRED_GOLD_TICKETS;
   }
 
   return {

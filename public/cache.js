@@ -7,6 +7,13 @@ const CACHE_VERSION = 1;
 let cachedUser = null;
 let isFetching = false;
 let fetchPromise = null;
+// Set to true by wsync.js when WebSocket is active
+// Suppresses background HTTP refresh since WS pushes updates instead
+let wsActive = false;
+
+export function setWsActive(active) {
+  wsActive = Boolean(active);
+}
 
 // Initialize cache from localStorage on module load
 function initializeCache() {
@@ -47,6 +54,7 @@ export async function fetchUserDataOnce(options = {}) {
 }
 
 function _refreshInBackground() {
+  if (wsActive) return;  // WebSocket is pushing updates, skip HTTP refresh
   if (isFetching) return;
   _doFetch({ suppressErrors: true, force: false });
 }

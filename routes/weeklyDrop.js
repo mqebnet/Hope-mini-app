@@ -12,6 +12,8 @@ const { markTransactionRewardApplied } = require('../utils/transactionRecovery')
 
 const WEEKLY_CONTEST_ENABLED_KEY = 'weekly_contest_enabled';
 const SYSTEM_USERNAME_RE = /^user_\d+$/i;
+const WEEKLY_REQUIRED_GOLD_TICKETS = Math.max(1, Number(process.env.WEEKLY_DROP_GOLD_TICKETS || 10));
+const WEEKLY_ENTRY_USD = Math.max(0.01, Number(process.env.WEEKLY_DROP_ENTRY_USD || 0.5));
 
 function toFriendlyWallet(wallet) {
   if (!wallet || typeof wallet !== 'string') return null;
@@ -36,7 +38,9 @@ router.get('/eligibility', async (req, res) => {
         eligible: false,
         disabled: true,
         reason: 'Weekly Drop is currently disabled.',
-        reasonKey: 'weekly.disabled_status'
+        reasonKey: 'weekly.disabled_status',
+        requiredGoldTickets: WEEKLY_REQUIRED_GOLD_TICKETS,
+        entryUsd: WEEKLY_ENTRY_USD
       });
     }
 
@@ -62,7 +66,7 @@ router.get('/eligibility', async (req, res) => {
     const eligible =
       isEligibleLevel &&
       user.streak >= 10 &&
-      user.goldTickets >= 10 &&
+      user.goldTickets >= WEEKLY_REQUIRED_GOLD_TICKETS &&
       !!user.wallet &&
       !alreadyEntered;
 
@@ -81,10 +85,13 @@ router.get('/eligibility', async (req, res) => {
       reason = 'You need a 10-day perfect streak.';
       reasonKey = 'weekly.lock_require_streak';
       reasonParams = { current: Number(user.streak || 0) };
-    } else if (user.goldTickets < 10) {
-      reason = 'You need at least 10 Gold tickets.';
+    } else if (user.goldTickets < WEEKLY_REQUIRED_GOLD_TICKETS) {
+      reason = `You need at least ${WEEKLY_REQUIRED_GOLD_TICKETS} Gold tickets.`;
       reasonKey = 'weekly.lock_require_gold';
-      reasonParams = { current: Number(user.goldTickets || 0) };
+      reasonParams = {
+        current: Number(user.goldTickets || 0),
+        requiredGoldTickets: WEEKLY_REQUIRED_GOLD_TICKETS
+      };
     } else if (!user.wallet) {
       reason = 'Connect a TON wallet to receive prizes.';
       reasonKey = 'weekly.lock_require_wallet';
@@ -98,6 +105,8 @@ router.get('/eligibility', async (req, res) => {
       hasWallet: !!user.wallet,
       alreadyEntered,
       currentWeek,
+      requiredGoldTickets: WEEKLY_REQUIRED_GOLD_TICKETS,
+      entryUsd: WEEKLY_ENTRY_USD,
       reason,
       reasonKey,
       reasonParams
@@ -136,8 +145,8 @@ router.post('/enter', async (req, res) => {
     if (user.streak < 10) {
       return res.status(400).json({ error: 'Perfect 10-day streak required.' });
     }
-    if (user.goldTickets < 10) {
-      return res.status(400).json({ error: 'Not enough Gold tickets (need 10).' });
+    if (user.goldTickets < WEEKLY_REQUIRED_GOLD_TICKETS) {
+      return res.status(400).json({ error: `Not enough Gold tickets (need ${WEEKLY_REQUIRED_GOLD_TICKETS}).` });
     }
     if (!user.wallet) {
       return res.status(400).json({
@@ -162,7 +171,7 @@ router.post('/enter', async (req, res) => {
       txBoc,
       purpose: 'weekly-drop-entry',
       taskId: currentWeek,
-      requiredUsd: 0.5
+      requiredUsd: WEEKLY_ENTRY_USD
     });
 
     if (!verification.ok) {
@@ -175,7 +184,7 @@ router.post('/enter', async (req, res) => {
       });
     }
 
-    user.goldTickets -= 10;
+    user.goldTickets -= WEEKLY_REQUIRED_GOLD_TICKETS;
     await user.save();
 
     try {
@@ -192,7 +201,7 @@ router.post('/enter', async (req, res) => {
       });
     } catch (dbErr) {
       if (dbErr.code === 11000) {
-        user.goldTickets += 10;
+        user.goldTickets += WEEKLY_REQUIRED_GOLD_TICKETS;
         await user.save();
         return res.status(400).json({
           error: `You have already entered ${currentWeek}.`

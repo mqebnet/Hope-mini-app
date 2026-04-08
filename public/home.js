@@ -1,7 +1,7 @@
 // home.js
 import { updateTopBar, formatPoints, formatCompact, fetchUserDataOnce, getCachedUser, setCachedUser } from './userData.js';
 import { tonConnectUI } from './tonconnect.js';
-import { canBootstrap, debounceButton, navigateWithFeedback } from './utils.js';
+import { canBootstrap, debounceButton, navigateWithFeedback, getTxProof } from './utils.js';
 import { i18n } from './i18n.js';
 
 const MINING_DURATION_MS = 6 * 60 * 60 * 1000;
@@ -187,7 +187,8 @@ function getWeeklyDropLockReason(user) {
     'Master', 'Grandmaster', 'Legend', 'Eldrin'
   ].includes(user?.level);
   const hasPerfectStreak = Number(user?.streak || 0) >= 10;
-  const hasGold = Number(user?.goldTickets || 0) >= 10;
+  const requiredGoldTickets = Math.max(1, Math.round(Number(latestWeeklyEligibility?.requiredGoldTickets) || 10));
+  const hasGold = Number(user?.goldTickets || 0) >= requiredGoldTickets;
   const hasWallet = String(user?.wallet || '').trim().length > 0;
 
   const missing = [];
@@ -196,7 +197,10 @@ function getWeeklyDropLockReason(user) {
     missing.push(i18n.format('weekly.lock_require_streak', { current: Number(user?.streak || 0) }));
   }
   if (!hasGold) {
-    missing.push(i18n.format('weekly.lock_require_gold', { current: Number(user?.goldTickets || 0) }));
+    missing.push(i18n.format('weekly.lock_require_gold', {
+      current: Number(user?.goldTickets || 0),
+      requiredGoldTickets
+    }));
   }
   if (!hasWallet) missing.push(i18n.t('weekly.lock_require_wallet'));
 
@@ -248,7 +252,8 @@ function updateWeeklyDropEligibility(user) {
   ].includes(user.level);
 
   const hasPerfectStreak = (user.streak || 0) >= 10;
-  const hasGold = (user.goldTickets || 0) >= 10;
+  const requiredGoldTickets = Math.max(1, Math.round(Number(latestWeeklyEligibility?.requiredGoldTickets) || 10));
+  const hasGold = (user.goldTickets || 0) >= requiredGoldTickets;
   const localEligible = isBelieverOrAbove && hasPerfectStreak && hasGold;
   const serverDisabled = Boolean(latestWeeklyEligibility?.disabled) || !weeklyContestEnabled;
   const hasServerEligibility = typeof latestWeeklyEligibility?.eligible === 'boolean';
@@ -518,7 +523,7 @@ function syncUserStreakFromStatus(status) {
 
   const currentStreak = Number(cached.streak || 0);
   if (currentStreak === nextStreak) return;
-
+weekly.title
   const merged = { ...cached, streak: nextStreak };
   setCachedUser(merged);
 
@@ -906,8 +911,7 @@ async function handleCheckIn(button) {
       ]
     });
 
-    const txHash = tx?.transaction?.hash || tx?.txid?.hash || tx?.hash || '';
-    const txBoc = tx?.boc || '';
+    const { txHash, txBoc } = getTxProof(tx, 'daily-checkin');
     if (!txHash && !txBoc) throw new Error(i18n.t('checkin.tx_proof_missing'));
 
     savePendingCheckInTx(txHash, txBoc);
@@ -975,4 +979,3 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 });
-

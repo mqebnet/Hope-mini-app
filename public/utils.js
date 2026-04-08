@@ -235,3 +235,77 @@ export function wireNavigationFeedback(root = document) {
     });
   });
 }
+
+/**
+ * Extract { txHash, txBoc } from a wallet sendTransaction() response.
+ *
+ * Different wallets (Tonkeeper, OKX, MyTonWallet, Telegram Wallet) return
+ * the transaction proof in different shapes. This function exhaustively
+ * searches all known paths so callers never have to think about it.
+ *
+ * Priority:
+ *  1. BOC - the canonical TonConnect proof. Backend can derive the tx hash
+ *     from it, so a BOC alone is always sufficient for verification.
+ *  2. Hash - a shortcut that avoids one BOC-decode step on the backend.
+ *     We still collect it when present, but BOC takes precedence.
+ *
+ * @param {unknown} tx - Raw response from tonConnectUI.sendTransaction()
+ * @param {string}  [context=''] - Label for logging (e.g. 'daily-checkin')
+ * @returns {{ txHash: string, txBoc: string }}
+ */
+export function getTxProof(tx, context = '') {
+  const label = context ? `[getTxProof:${context}]` : '[getTxProof]';
+
+  if (!tx || typeof tx !== 'object') {
+    console.warn(`${label} received non-object response:`, typeof tx);
+    return { txHash: '', txBoc: '' };
+  }
+
+  // BOC extraction
+  const txBoc = (
+    tx.boc ||
+    tx.result?.boc ||
+    tx.payload?.boc ||
+    tx.data?.boc ||
+    tx.transaction?.boc ||
+    tx.response?.boc ||
+    ''
+  );
+
+  // Hash extraction
+  const txHash = (
+    tx.transaction?.hash ||
+    tx.txid?.hash ||
+    tx.hash ||
+    tx.result?.hash ||
+    tx.tx_hash ||
+    tx.txHash ||
+    tx.transaction_hash ||
+    ''
+  );
+
+  if (!txBoc && !txHash) {
+    const safeShape = JSON.stringify(
+      Object.fromEntries(
+        Object.keys(tx).map((k) => [
+          k,
+          typeof tx[k] === 'string'
+            ? `<string(${tx[k].length})>`
+            : typeof tx[k]
+        ])
+      )
+    );
+    console.warn(`${label} Could not extract txHash or txBoc. Response shape:`, safeShape);
+
+    try {
+      fetch('/api/debug/wallet-response', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ context, shape: safeShape, ts: Date.now() })
+      }).catch(() => {});
+    } catch (_) {}
+  }
+
+  return { txHash, txBoc };
+}

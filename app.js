@@ -23,15 +23,21 @@ const { createAdapter } = require('@socket.io/redis-adapter');
 
 const app = express();
 app.set('trust proxy', 1);
-app.set('etag', false);
 
-app.use((req, _, next) => {
-  console.log(`[REQ] ${req.method} ${req.path}`);
-  next();
-});
+if (process.env.NODE_ENV !== 'production') {
+  app.use((req, _, next) => {
+    console.log(`[REQ] ${req.method} ${req.path}`);
+    next();
+  });
+}
 
 if (!process.env.MONGODB_URI) {
   console.error('MONGODB_URI is not defined in .env file');
+  process.exit(1);
+}
+
+if (!process.env.JWT_SECRET) {
+  console.error('JWT_SECRET is not defined in .env file');
   process.exit(1);
 }
 
@@ -72,13 +78,63 @@ app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// -- Compression (before static + routes so all responses are compressed) --
+app.use(compression());
+
+// -- Security headers -------------------------------------------------------
+// CSP must explicitly allow the external CDN scripts used in HTML pages.
+// Blocking any of these would cause a blank screen in production.
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: [
+        "'self'",
+        "'unsafe-inline'", // required: inline <script> blocks in HTML pages
+        'https://unpkg.com', // Lucide icons
+        'https://telegram.org', // Telegram WebApp SDK
+        'https://cdn.jsdelivr.net', // canvas-confetti
+        'https://cdn.socket.io', // Socket.IO client
+        'https://esm.sh' // TonConnect UI is loaded from here
+      ],
+      styleSrc: [
+        "'self'",
+        "'unsafe-inline'" // required: inline styles used throughout
+      ],
+      imgSrc: ["'self'", 'data:', 'https:'],
+      connectSrc: [
+        "'self'",
+        'https://tonapi.io', // TON blockchain API
+        'https://api.ton.cat', // TON price feed
+        'wss:', // WebSocket connections (Socket.IO)
+        'https:' // TonConnect wallet bridges (dynamic URLs)
+      ],
+      frameSrc: ["'self'", 'https:'],
+      objectSrc: ["'none'"],
+      upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? [] : null
+    }
+  },
+  // HSTS: only enable in production - breaks local dev over http://
+  hsts: process.env.NODE_ENV === 'production'
+    ? { maxAge: 31536000, includeSubDomains: true }
+    : false,
+  // crossOriginEmbedderPolicy breaks Telegram WebView embedding
+  crossOriginEmbedderPolicy: false
+}));
+
 app.use(express.static(path.join(__dirname, 'public'), {
-  etag: false,
+  etag: true,          // fingerprints files by content - enables 304 responses
+  lastModified: true,  // secondary validator for clients that don't support ETags
   setHeaders: (res, filePath) => {
-    if (filePath.endsWith('.js') || filePath.endsWith('.html') || filePath.endsWith('.css')) {
-      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-      res.setHeader('Pragma', 'no-cache');
-      res.setHeader('Expires', '0');
+    if (filePath.endsWith('.html')) {
+      // HTML: always revalidate so updated script tags are picked up after deploy
+      res.setHeader('Cache-Control', 'no-cache');
+    } else if (filePath.endsWith('.js') || filePath.endsWith('.css')) {
+      // JS/CSS: cache locally, revalidate with server (304 if unchanged = 0 bytes)
+      res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+    } else {
+      // Images, fonts, icons: cache for 7 days (rarely change)
+      res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
     }
   }
 }));
@@ -110,6 +166,7 @@ app.get('/admin', require('./middleware/pageAuth'), adminAuth, (req, res) => {
 
 app.use('/api', require('./middleware/apiAuth'));
 
+app.use('/api/debug', require('./routes/debug'));
 app.use('/api/me', require('./routes/me'));
 app.use('/api/user', userRouter);
 app.use('/api/tasks', tasksRouter);
@@ -122,8 +179,6 @@ app.use('/api/dailyCheckIn', dailyCheckInRouter);
 app.use('/api/transactions', require('./routes/transactions'));
 app.use('/api/admin', adminAuth, require('./routes/admin'));
 app.use('/api/games', require('./routes/games'));
-app.use(helmet());
-app.use(compression());
 
 const routes = ['weeklyDrop', 'rewards', 'tonAmount', 'invite'];
 routes.forEach((route) => {
@@ -185,6 +240,7 @@ connectDB().then(async () => {
     subClient.on('error', (err) => console.error('[Redis] sub error:', err.message));
 
     redisReady = true;
+    app.locals.redisClient = pubClient;
     console.log('[Redis] Connected successfully');
   } catch (err) {
     console.warn('[Redis] Unavailable — running in single-process mode');
@@ -232,8 +288,7 @@ connectDB().then(async () => {
     }
 
     try {
-      const jwtSecret = process.env.JWT_SECRET || 'development-secret-key';
-      const decoded = require('jsonwebtoken').verify(token, jwtSecret);
+      const decoded = require('jsonwebtoken').verify(token, process.env.JWT_SECRET);
       socket.userId = decoded.id || decoded.telegramId;
       socket.telegramId = decoded.telegramId;
       console.log(`[WS] User ${socket.telegramId} authenticated via token`);

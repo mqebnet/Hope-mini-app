@@ -236,7 +236,7 @@ class BlockTowerGame {
             <span>${t('blocktower.build_hint', 'If the full tower is wrong, remove blocks from the top only and rebuild before time runs out.')}</span>
           </div>
 
-          <button id="blocktower-abandon" class="btn-cancel-pass btn-abandon">${t('blocktower.leave_game', 'Leave Game')}</button>
+          <button id="blocktower-abandon" class="btn-leave-game btn-abandon">${t('blocktower.leave_game', 'Leave Game')}</button>
         </div>
       `;
     }

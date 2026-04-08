@@ -3,7 +3,7 @@
 // Reduces backend requests by ~90% by pushing updates instead of fetching
 // Falls back to polling (every 30s) if WebSocket unavailable
 
-import { setCachedUser, getCachedUser } from './userData.js';
+import { setCachedUser, getCachedUser, setWsActive } from './userData.js';
 
 let socket = null;
 let isConnected = false;
@@ -59,6 +59,7 @@ function _connectWebSocket() {
     socket.on('connect', () => {
       console.log('[WSync] Connected to WebSocket server');
       isConnected = true;
+      setWsActive(true);  // suppress background HTTP refresh
       
       // Stop polling when WebSocket is active
       if (pollInterval) {
@@ -78,6 +79,7 @@ function _connectWebSocket() {
     socket.on('disconnect', () => {
       console.warn('[WSync] Disconnected from WebSocket server, falling back to polling');
       isConnected = false;
+      setWsActive(false);  // re-enable HTTP refresh as fallback
       startPollingFallback();
       emitConnectionStatus('disconnect');
     });
@@ -85,6 +87,7 @@ function _connectWebSocket() {
     socket.on('connect_error', (error) => {
       console.warn('[WSync] Connection error:', error.message);
       isConnected = false;
+      setWsActive(false);
       startPollingFallback();
       emitConnectionStatus('connect_error');
     });

@@ -8,7 +8,7 @@ const ArcadeGameSessionSchema = new mongoose.Schema({
   },
   gameType: {
     type: String,
-    enum: ['slidingtiles', 'blocktower'],
+    enum: ['slidingtiles', 'blocktower', 'shellgame'],
     required: true,
     index: true
   },

@@ -24,6 +24,7 @@ const gameLimiter = rateLimit({
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: process.env.NODE_ENV === 'production' ? 100 : 1000,
+  keyGenerator: (req) => req.user?.telegramId?.toString() || req.ip,
   message: { success: false, error: 'Too many requests, please try again later' },
   skip: (req) => {
     // Skip for game routes (they have their own generous limiter)

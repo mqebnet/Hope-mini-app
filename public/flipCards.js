@@ -143,7 +143,7 @@ export class FlipCardsGame {
           ${i18n.t('flipcards.purchase_daily_pass')}
         </button>
 
-        <button class="btn-cancel-pass" data-loading-href="flipcards.html" data-loading-reload>
+        <button class="btn-back-games" data-loading-href="flipcards.html" data-loading-reload>
           ${i18n.t('flipcards.back_to_games')}
         </button>
       </div>

@@ -1,9 +1,11 @@
 import { fetchUserData, updateTopBar, getCachedUser } from './userData.js';
 import { tonConnectUI } from './tonconnect.js';
 import { i18n } from './i18n.js';
-import { navigateWithFeedback } from './utils.js';
+import { getTxProof, navigateWithFeedback } from './utils.js';
 
 const PASS_USD_DEFAULT = 0.55;
+const PENDING_GAMEPASS_TX_KEY = 'pendingGamePassPurchaseTx';
+const PENDING_GAMEPASS_TX_MAX_AGE_MS = 30 * 60 * 1000;
 const root = document.getElementById('gamepass-root');
 
 const GAME_META = {
@@ -24,10 +26,67 @@ const GAME_META = {
     fallbackName: 'Block Tower',
     page: 'blockTower.html',
     icon: '🧱'
+  },
+  shellgame: {
+    nameKey: 'games.shellgame_name',
+    fallbackName: 'Red ball',
+    page: 'shellGame.html',
+    icon: '\u{1F534}'
   }
 };
 
 let currentPassUsd = PASS_USD_DEFAULT;
+
+function savePendingGamePassTx(txHash, txBoc) {
+  try {
+    localStorage.setItem(PENDING_GAMEPASS_TX_KEY, JSON.stringify({
+      txHash: txHash || '',
+      txBoc: txBoc || '',
+      timestamp: Date.now()
+    }));
+  } catch (err) {
+    console.warn('Failed to persist pending game pass transaction:', err);
+  }
+}
+
+function clearPendingGamePassTx() {
+  try {
+    localStorage.removeItem(PENDING_GAMEPASS_TX_KEY);
+  } catch (err) {
+    console.warn('Failed to clear pending game pass transaction:', err);
+  }
+}
+
+function loadPendingGamePassTx() {
+  try {
+    const raw = localStorage.getItem(PENDING_GAMEPASS_TX_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const timestamp = Number(parsed?.timestamp || 0);
+    const txHash = typeof parsed?.txHash === 'string' ? parsed.txHash.trim() : '';
+    const txBoc = typeof parsed?.txBoc === 'string' ? parsed.txBoc.trim() : '';
+    if (!txHash && !txBoc) {
+      clearPendingGamePassTx();
+      return null;
+    }
+    if (!Number.isFinite(timestamp) || Date.now() - timestamp > PENDING_GAMEPASS_TX_MAX_AGE_MS) {
+      clearPendingGamePassTx();
+      return null;
+    }
+    return { txHash, txBoc };
+  } catch (err) {
+    console.warn('Failed to parse pending game pass transaction:', err);
+    clearPendingGamePassTx();
+    return null;
+  }
+}
+
+function setPassPendingState() {
+  const primaryBtn = document.getElementById('gamepass-primary-btn');
+  if (!primaryBtn) return;
+  primaryBtn.disabled = true;
+  primaryBtn.textContent = i18n.t('pass.waiting_payment');
+}
 
 function getSelectedGame() {
   const params = new URLSearchParams(window.location.search);
@@ -37,12 +96,23 @@ function getSelectedGame() {
 
 function tWithFallback(key, fallback) {
   const value = i18n.t(key);
+  if (key === 'pass.feature_shared_access') {
+    return getSharedAccessText();
+  }
   return value && value !== key ? value : fallback;
 }
 
 function getSelectedGameName() {
   const selectedGame = getSelectedGame();
   return tWithFallback(selectedGame.nameKey, selectedGame.fallbackName);
+}
+
+function getSharedAccessText() {
+  const translated = i18n.t('pass.feature_shared_access');
+  if (translated && translated !== 'pass.feature_shared_access' && /red ball/i.test(translated)) {
+    return translated;
+  }
+  return 'One pass unlocks Flip Cards, Sliding Tiles, Block Tower, and Red ball';
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -60,6 +130,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     ]);
 
     updateTopBar(user);
+    if (loadPendingGamePassTx()) {
+      setPassPendingState();
+      await retryPendingGamePassPurchase();
+    }
   } catch (err) {
     console.error('Game pass init failed:', err);
     showNotification(i18n.t('pass.failed_load_page'), 'error');
@@ -112,7 +186,7 @@ function renderCard({ hasActivePass, passValidUntil, passCost, requiresRevalidat
       <button id="gamepass-primary-btn" class="btn-purchase-pass">
         ${hasActivePass ? tWithFallback('pass.play_selected_game', 'Play Selected Game') : tWithFallback('pass.purchase_pass', 'Purchase Pass')}
       </button>
-      <button id="gamepass-back-btn" class="btn-cancel-pass">${tWithFallback('pass.back_to_games', 'Back to Games')}</button>
+      <button id="gamepass-back-btn" class="btn-back-games">${tWithFallback('pass.back_to_games', 'Back to Games')}</button>
       ${requiresRevalidation ? `<p class="pass-description" style="margin-top:10px;color:#ffd166;">${i18n.t('pass.legacy_pass')}</p>` : ''}
     </div>
   `;
@@ -141,6 +215,70 @@ function renderCard({ hasActivePass, passValidUntil, passCost, requiresRevalidat
 async function renderPassUI() {
   const status = await getPassStatus();
   renderCard(status);
+  if (loadPendingGamePassTx()) {
+    setPassPendingState();
+  }
+}
+
+async function retryPendingGamePassPurchase(options = {}) {
+  const { notifyOnRetry = false } = options;
+  const pending = loadPendingGamePassTx();
+  if (!pending) return 'none';
+
+  setPassPendingState();
+  try {
+    const selectedGame = getSelectedGame();
+    const purchaseRes = await fetch(`/api/games/${selectedGame.id}/purchase`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ txHash: pending.txHash, txBoc: pending.txBoc })
+    });
+    const purchaseData = await purchaseRes.json().catch(() => ({}));
+
+    if (purchaseRes.ok) {
+      clearPendingGamePassTx();
+      await renderPassUI();
+      return 'resolved';
+    }
+
+    const errorMsg = String(purchaseData?.error || '').trim();
+    const normalized = errorMsg.toLowerCase();
+    const alreadyApplied =
+      normalized.includes('already active') ||
+      normalized.includes('transaction already used');
+    if (alreadyApplied) {
+      clearPendingGamePassTx();
+      await renderPassUI();
+      return 'resolved';
+    }
+
+    const hardFailure =
+      normalized.includes('below required') ||
+      normalized.includes('wrong recipient') ||
+      normalized.includes('no outgoing payment') ||
+      normalized.includes('invalid wallet') ||
+      normalized.includes('user not found');
+    if (hardFailure) {
+      clearPendingGamePassTx();
+      await renderPassUI();
+      if (notifyOnRetry && errorMsg) {
+        showNotification(errorMsg, 'error');
+      }
+      return 'failed';
+    }
+
+    if (notifyOnRetry) {
+      showNotification(i18n.t('pass.waiting_payment'), 'info');
+    }
+    return 'pending';
+  } catch (err) {
+    console.warn('Pending game pass purchase retry failed:', err);
+    if (notifyOnRetry) {
+      showNotification(i18n.t('pass.waiting_payment'), 'info');
+    }
+    return 'pending';
+  }
 }
 
 async function purchasePass(button) {
@@ -150,6 +288,11 @@ async function purchasePass(button) {
   button.textContent = i18n.t('pass.preparing_wallet');
 
   try {
+    const pendingResult = await retryPendingGamePassPurchase({ notifyOnRetry: true });
+    if (pendingResult !== 'none') {
+      return;
+    }
+
     if (typeof tonConnectUI.restoreConnection === 'function') {
       await tonConnectUI.restoreConnection();
     } else if (tonConnectUI.connectionRestored && typeof tonConnectUI.connectionRestored.then === 'function') {
@@ -179,9 +322,9 @@ async function purchasePass(button) {
       ]
     });
 
-    const txHash = tx?.transaction?.hash || tx?.txid?.hash || tx?.hash || '';
-    const txBoc = tx?.boc || '';
+    const { txHash, txBoc } = getTxProof(tx, 'game-pass');
     if (!txHash && !txBoc) throw new Error(i18n.t('pass.tx_proof_missing'));
+    savePendingGamePassTx(txHash, txBoc);
 
     const purchaseRes = await fetch(`/api/games/${selectedGame.id}/purchase`, {
       method: 'POST',
@@ -192,6 +335,7 @@ async function purchasePass(button) {
     const purchaseData = await purchaseRes.json();
     if (!purchaseRes.ok) throw new Error(purchaseData.error || i18n.t('pass.verification_failed'));
 
+    clearPendingGamePassTx();
     showNotification(i18n.t('pass.purchased_success'), 'success');
     navigateWithFeedback(selectedGame.page, button);
   } catch (err) {

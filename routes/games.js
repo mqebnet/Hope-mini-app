@@ -14,6 +14,8 @@ function getMoveCooldownMs(gameId) {
       return 90;
     case 'blocktower':
       return 90;
+    case 'shellgame':
+      return 300;
     default:
       return 300;
   }

@@ -49,10 +49,25 @@ function queueWelcomeBonus(payload) {
   const normalized = normalizeWelcomeBonusPayload(payload);
   sessionStorage.setItem(WELCOME_BONUS_STORAGE_KEY, JSON.stringify(normalized));
 
+  window.dispatchEvent(new CustomEvent('hope:welcomeBonusUpdated'));
+
+  if (typeof window.showStickyNotice !== 'function') {
+    let attempts = 0;
+    const poll = setInterval(() => {
+      attempts++;
+      if (typeof window.showStickyNotice === 'function') {
+        clearInterval(poll);
+        window.dispatchEvent(new CustomEvent('hope:welcomeBonusUpdated'));
+      } else if (attempts >= 20) {
+        clearInterval(poll);
+      }
+    }, 100);
+    return;
+  }
+
   if (tryDisplayWelcomeBonus(normalized)) {
     sessionStorage.removeItem(WELCOME_BONUS_STORAGE_KEY);
   }
-  window.dispatchEvent(new CustomEvent('hope:welcomeBonusUpdated'));
 }
 
 window.onUserDataUpdate = function onUserDataUpdate(user) {

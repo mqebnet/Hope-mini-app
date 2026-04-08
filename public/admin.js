@@ -219,7 +219,7 @@ function renderTransactionAnalytics(analytics = {}) {
 }
 
 async function loadTransactionAnalytics() {
-  const days = document.getElementById('tx-analytics-days')?.value || '14';
+  const days = document.getElementById('tx-analytics-days')?.value || '7';
   const summaryWrap = document.getElementById('tx-analytics-summary');
   const tableWrap = document.getElementById('tx-analytics-table-wrap');
 

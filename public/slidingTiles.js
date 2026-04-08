@@ -160,7 +160,7 @@ class SlidingTilesGame {
         </div>
 
         <p class="flipcards-instructions">${t('slidingtiles.instructions', 'Slide numbered tiles into order with the empty slot in the bottom-right corner.')}</p>
-        <button id="slidingtiles-abandon" class="btn-cancel-pass btn-abandon">${t('slidingtiles.leave_game', 'Leave Game')}</button>
+        <button id="slidingtiles-abandon" class="btn-leave-game btn-abandon">${t('slidingtiles.leave_game', 'Leave Game')}</button>
       </div>
     `;
 

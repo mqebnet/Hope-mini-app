@@ -4,6 +4,7 @@ const flipcardsPlugin = require('./plugins/flipcards');
 const mysteryBoxPlugin = require('./plugins/mysteryBox');
 const slidingTilesPlugin = require('./plugins/slidingTiles');
 const blockTowerPlugin = require('./plugins/blockTower');
+const shellGamePlugin = require('./plugins/shellgame');
 const quizPlugin = require('./plugins/quiz');
 const treasureHuntPlugin = require('./plugins/treasureHunt');
 
@@ -12,6 +13,7 @@ registry.register(mysteryBoxPlugin);
 registry.register(flipcardsPlugin);
 registry.register(slidingTilesPlugin);
 registry.register(blockTowerPlugin);
+registry.register(shellGamePlugin);
 registry.register(quizPlugin);
 registry.register(treasureHuntPlugin);
 

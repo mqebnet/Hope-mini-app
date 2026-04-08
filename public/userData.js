@@ -5,11 +5,12 @@ import {
   fetchUserDataOnce,
   getCachedUser,
   setCachedUser,
-  invalidateCache
+  invalidateCache,
+  setWsActive
 } from './cache.js';
 
 // Re-export cache functions for convenience
-export { fetchUserDataOnce, getCachedUser, setCachedUser, invalidateCache };
+export { fetchUserDataOnce, getCachedUser, setCachedUser, invalidateCache, setWsActive };
 
 export function formatPoints(points = 0) {
   if (points < 100000) return points.toLocaleString();

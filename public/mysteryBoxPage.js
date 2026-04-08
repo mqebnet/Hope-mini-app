@@ -1,7 +1,7 @@
 import { fetchUserData, updateTopBar, getCachedUser, setCachedUser } from './userData.js';
 import { tonConnectUI } from './tonconnect.js';
 import { i18n } from './i18n.js';
-import { navigateWithFeedback } from './utils.js';
+import { navigateWithFeedback, getTxProof } from './utils.js';
 
 const BOX_PRICE_USD = 0.15;
 const BOX_ORDER = ['bronze', 'silver', 'gold'];
@@ -349,8 +349,7 @@ async function purchaseMysteryBox() {
     messages: [{ address: recipientAddress, amount: (tonAmount * 1e9).toFixed(0) }]
   });
 
-  const txHash = tx?.transaction?.hash || tx?.txid?.hash || tx?.hash || '';
-  const txBoc = tx?.boc || '';
+  const { txHash, txBoc } = getTxProof(tx, 'mystery-box');
   if (!txHash && !txBoc) throw new Error(i18n.t('marketplace.tx_proof_missing'));
   savePendingMysteryTx(txHash, txBoc);
   schedulePendingMysteryRecovery();

@@ -93,8 +93,8 @@
         </div>
         <div class="analytics-controls">
           <select id="tx-analytics-days" class="admin-select">
-            <option value="7">Last 7 days</option>
-            <option value="14" selected>Last 14 days</option>
+            <option value="7" selected>Last 7 days</option>
+            <option value="14">Last 14 days</option>
             <option value="30">Last 30 days</option>
             <option value="60">Last 60 days</option>
           </select>
@@ -216,7 +216,7 @@
   </main>
 
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-  <script src="/notify.js" defer></script>
+  <script type="module" src="/notify.js"></script>
   <script type="module" src="/script.js"></script>
   <script src="/admin.js"></script>
 </body>

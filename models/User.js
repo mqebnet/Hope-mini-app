@@ -19,10 +19,8 @@ const UserSchema = new mongoose.Schema({
 
   wallet: {
     type: String,
-    default: null,
-    trim: true,
-    unique: true,
-    sparse: true
+    default: undefined,
+    trim: true
   },
 
   inviteCode: { type: String, index: true, unique: true, sparse: true },
@@ -37,12 +35,6 @@ const UserSchema = new mongoose.Schema({
   },
   completedInviteTasks: { type: [Number], default: [] },
   gamePass: {
-    validUntil: { type: Date, default: null },
-    purchasedAt: { type: Date, default: null },
-    txRef: { type: String, default: null }
-  },
-  // Legacy field kept for backward compatibility during migration.
-  flipcardsPass: {
     validUntil: { type: Date, default: null },
     purchasedAt: { type: Date, default: null },
     txRef: { type: String, default: null }
@@ -78,8 +70,19 @@ UserSchema.pre('save', async function(next) {
 
 // Indexes
 UserSchema.index({ telegramId: 1 }, { unique: true });
+UserSchema.index(
+  { wallet: 1 },
+  {
+    name: 'wallet_unique_nonempty',
+    unique: true,
+    partialFilterExpression: {
+      wallet: { $type: 'string', $gt: '' }
+    }
+  }
+);
 UserSchema.index({ points: -1 });
-UserSchema.index({ level: 1, points: -1 });
+UserSchema.index({ level: 1, xp: -1, points: -1 });
+UserSchema.index({ miningStartedAt: 1 }, { sparse: true });
 UserSchema.index({ invitedCount: -1 });
 UserSchema.index({ invitedBy: 1 });
 

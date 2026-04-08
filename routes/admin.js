@@ -19,7 +19,7 @@ const router = express.Router();
 const MINING_REMINDER_LAST_RUN_KEY = 'mining_reminder_last_run';
 const WEEKLY_CONTEST_ENABLED_KEY = 'weekly_contest_enabled';
 const SYSTEM_USERNAME_RE = /^user_\d+$/i;
-const DEFAULT_TX_ANALYTICS_DAYS = 14;
+const DEFAULT_TX_ANALYTICS_DAYS = 7;
 const MAX_TX_ANALYTICS_DAYS = 90;
 
 const TX_PURPOSE_BUCKETS = {

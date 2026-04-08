@@ -12,27 +12,12 @@ const GAME_PASS_PURPOSE = 'flipcards-pass';
 
 function getStoredGamePass(user) {
   if (!user || typeof user !== 'object') return null;
-  return user.gamePass || user.flipcardsPass || null;
+  return user.gamePass || null;
 }
 
 function setStoredGamePass(user, pass) {
   if (!user || typeof user !== 'object') return;
-  // Write both fields during migration to avoid breaking old readers.
   user.gamePass = pass;
-  user.flipcardsPass = pass;
-}
-
-function hasPassPayload(pass) {
-  if (!pass || typeof pass !== 'object') return false;
-  return Boolean(pass.validUntil || pass.purchasedAt || pass.txRef);
-}
-
-async function migrateLegacyGamePassIfNeeded(user) {
-  if (!user || typeof user !== 'object') return;
-  if (hasPassPayload(user.gamePass)) return;
-  if (!hasPassPayload(user.flipcardsPass)) return;
-  user.gamePass = user.flipcardsPass;
-  await user.save();
 }
 
 function getTelegramId(ctx) {
@@ -90,7 +75,6 @@ async function getActivePassInfo(user) {
 async function loadUserWithActivePass(telegramId) {
   const user = await User.findOne({ telegramId });
   if (!user) throw new GameEngineError('User not found', 404);
-  await migrateLegacyGamePassIfNeeded(user);
 
   const passInfo = await getActivePassInfo(user);
   return { user, passInfo };

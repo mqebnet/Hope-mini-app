@@ -13,10 +13,10 @@ const TELEGRAM_MINI_APP_SHORT_NAME = (process.env.TELEGRAM_MINI_APP_SHORT_NAME |
   .replace(/^\/+|\/+$/g, '');
 
 const rewards = {
-  1: { points: 100, xp: 1 },
-  3: { points: 500, xp: 2 },
-  5: { points: 1000, xp: 3 },
-  10: { points: 2500, xp: 5 }
+  1: { points: 500, xp: 1 },
+  3: { points: 2000, xp: 2 },
+  5: { points: 3000, xp: 3 },
+  10: { points: 4500, xp: 5 }
 };
 
 async function reconcileInviteState(user) {

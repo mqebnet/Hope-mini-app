@@ -7,6 +7,8 @@ const REMINDER_COOLDOWN_MS = 6 * 60 * 60 * 1000;
 
 async function processMiningReminders() {
   const now = Date.now();
+  const sixHoursAgo = new Date(now - MINING_DURATION_MS);
+  const cooldownAgo = new Date(now - REMINDER_COOLDOWN_MS);
   const summary = {
     scanned: 0,
     due: 0,
@@ -15,22 +17,18 @@ async function processMiningReminders() {
   };
 
   const dueUsers = await User.find({
-    miningStartedAt: { $ne: null }
-  }).select('telegramId username miningStartedAt miningReminderSentAt');
+    miningStartedAt: { $lte: sixHoursAgo },
+    $or: [
+      { miningReminderSentAt: null },
+      { miningReminderSentAt: { $lte: cooldownAgo } }
+    ]
+  })
+    .select('telegramId username miningStartedAt miningReminderSentAt')
+    .limit(500);
   summary.scanned = dueUsers.length;
+  summary.due = dueUsers.length;
 
   for (const user of dueUsers) {
-    const startedAt = user.miningStartedAt ? new Date(user.miningStartedAt).getTime() : 0;
-    if (!startedAt || (now - startedAt) < MINING_DURATION_MS) {
-      continue;
-    }
-
-    const lastReminderAt = user.miningReminderSentAt ? new Date(user.miningReminderSentAt).getTime() : 0;
-    if (lastReminderAt && (now - lastReminderAt) < REMINDER_COOLDOWN_MS) {
-      continue;
-    }
-    summary.due += 1;
-
     const msg = [
       'Your mining cycle is complete.',
       'Open HOPE and tap <b>Claim</b> to collect your points.'

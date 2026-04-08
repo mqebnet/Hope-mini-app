@@ -8,7 +8,7 @@ Node.js/Express backend for the Hope Telegram mini app.
 - User profile, wallet linking, leaderboard, referrals
 - Mining (6-hour cycle)
 - Daily check-in with on-chain payment verification
-- Games Engine (`flipcards`, `mystery-box`, plus coming-soon plugins)
+- Games Engine (`flipcards`, `mystery-box`, `blocktower`, `slidingtiles`, `quiz`, `treasurehunt`)
 - Ticket exchange (free in-app conversion)
 - Weekly drop eligibility and entry
 - Admin operations and reward tooling
@@ -53,7 +53,11 @@ Common optional variables:
 - `RATE_LIMIT_EXEMPT_IPS`
 - `TON_API_URL`
 - `TON_PRICE_STALE_TTL_MS`
-- `FLIPCARDS_PASS_USD`
+- `FLIPCARDS_PASS_USD` (game pass price; legacy variable name kept for compatibility)
+- `TELEGRAM_BOT_USERNAME` (invite link bot username; default `hope_official_bot`)
+- `TELEGRAM_MINI_APP_SHORT_NAME` (invite link mini app short name; default `Hope`)
+- `WEEKLY_DROP_GOLD_TICKETS` (default `10`)
+- `WEEKLY_DROP_ENTRY_USD` (default `0.5`)
 - `CURRENT_CONTEST_WEEK`
 - `ENABLE_TELEGRAM_NOTIFICATIONS`
 
@@ -92,7 +96,7 @@ Server-side TON verification required:
 
 - Daily check-in (`/api/dailyCheckIn/verify`)
 - Mystery box purchase (`/api/mysteryBox/purchase`)
-- Flipcards pass purchase (`/api/games/flipcards/purchase`)
+- Game pass purchase (`/api/games/:gameId/purchase`, e.g. `gameId=flipcards`)
 - Weekly drop entry (`/api/weeklyDrop/enter`)
 
 No TON verification required:
@@ -129,7 +133,12 @@ Admin:
 - `/api/admin/*`
 - `/api/rewards/*`
 
-## 9. Related Docs
+## 9. Notes
+
+- Weekly Drop costs are runtime-configurable via `WEEKLY_DROP_GOLD_TICKETS` and `WEEKLY_DROP_ENTRY_USD` (used by both backend checks and frontend display).
+- Admin Transaction Analytics defaults to the last `7` days when no `days` query value is provided.
+
+## 10. Related Docs
 
 - [API_REFERENCE.md](./API_REFERENCE.md)
 - [DEVELOPMENT_GUIDE.md](./DEVELOPMENT_GUIDE.md)

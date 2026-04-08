@@ -263,4 +263,7 @@ GameSessionSchema.methods.detectSuspiciousActivity = function() {
   return { suspicious: false };
 };
 
+GameSessionSchema.index({ telegramId: 1, status: 1, startedAt: -1 });
+GameSessionSchema.index({ telegramId: 1, rewardClaimed: 1 });
+
 module.exports = mongoose.model('GameSession', GameSessionSchema);

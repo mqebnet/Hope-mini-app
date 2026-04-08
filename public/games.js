@@ -30,6 +30,12 @@ const FALLBACK_GAMES = [
     name: 'Block Tower',
     description: 'Memorize the stack, then rebuild the tower before time runs out.',
     icon: '🧱'
+  },
+  {
+    id: 'shellgame',
+    name: 'Red ball',
+    description: 'Watch the red ball, follow the cups, trust your eyes.',
+    icon: '\u{1F534}'
   }
 ];
 
@@ -37,10 +43,11 @@ const GAME_PAGES = {
   'mystery-box': 'mysteryBox.html',
   flipcards: 'flipcards.html',
   slidingtiles: 'slidingTiles.html',
-  blocktower: 'blockTower.html'
+  blocktower: 'blockTower.html',
+  shellgame: 'shellGame.html'
 };
 
-const PASS_REQUIRED_GAMES = new Set(['flipcards', 'slidingtiles', 'blocktower']);
+const PASS_REQUIRED_GAMES = new Set(['flipcards', 'slidingtiles', 'blocktower', 'shellgame']);
 
 function localizeFallbackGames() {
   return FALLBACK_GAMES.map((game) => {

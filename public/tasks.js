@@ -1,6 +1,6 @@
 import { updateTopBar, getCachedUser, setCachedUser } from './userData.js';
 import { tonConnectUI } from './tonconnect.js';
-import { canBootstrap, debounceButton } from './utils.js';
+import { canBootstrap, debounceButton, getTxProof } from './utils.js';
 import { i18n } from './i18n.js';
 
 let currentUser = null;
@@ -536,8 +536,7 @@ async function handleDailyCheckIn() {
     messages: [{ address: recipientAddress, amount: (tonAmount * 1e9).toFixed(0) }]
   });
 
-  const txHash = tx?.transaction?.hash || tx?.txid?.hash || tx?.hash || '';
-  const txBoc = tx?.boc || '';
+  const { txHash, txBoc } = getTxProof(tx, 'tasks-daily-checkin');
   if (!txHash && !txBoc) throw new Error(i18n.t('tasks.tx_proof_missing'));
 
   savePendingCheckInTx(txHash, txBoc);
