@@ -77,7 +77,7 @@ async function loadLeaderboard(levelIndex) {
     const res = await fetch(`/api/leaderboard/by-level/${levelIndex}`, { credentials: 'include' });
     const data = await res.json();
 
-    const { levelName, users } = data;
+    const { levelName, users = [], currentUser } = data;
     const list = document.getElementById('leaderboard-list');
     list.innerHTML = '';
 
@@ -87,23 +87,22 @@ async function loadLeaderboard(levelIndex) {
     });
 
     users.forEach((u, i) => {
-      const displayName = u.username || u.telegramId;
-      const row = document.createElement('div');
-      row.className = 'leaderboard-row';
-      row.innerHTML = `
-        <span class="rank">${i + 1}</span>
-        <span class="username" title="${displayName}">${displayName}</span>
-        <span class="xp">${formatNumber(u.xp)}</span>
-        <span class="points">${formatNumber(u.points)}</span>
-        <span class="streak">${u.streak ?? 0}</span>
-      `;
-
-      if (u.telegramId === currentUserId) {
-        row.classList.add('current-user');
-      }
-
-      list.appendChild(row);
+      list.appendChild(createMainLeaderboardRow({
+        rank: i + 1,
+        ...u
+      }, {
+        isCurrentUser: u.telegramId === currentUserId
+      }));
     });
+
+    const currentUserInTop = users.some((u) => u.telegramId === currentUserId);
+    if (currentUser && !currentUserInTop) {
+      list.appendChild(createDetachedDivider());
+      list.appendChild(createMainLeaderboardRow(currentUser, {
+        isCurrentUser: true,
+        detached: true
+      }));
+    }
 
     currentLevelIndex = levelIndex;
     window.currentLeaderboardLevel = levelIndex;
@@ -114,6 +113,46 @@ async function loadLeaderboard(levelIndex) {
   } finally {
     showLoading(false);
   }
+}
+
+function createMainLeaderboardRow(user, options = {}) {
+  const { isCurrentUser = false, detached = false } = options;
+  const displayName = user.username || user.telegramId;
+  const row = document.createElement('div');
+  row.className = 'leaderboard-row';
+  if (isCurrentUser) row.classList.add('current-user');
+  if (detached) row.classList.add('detached-current-user');
+
+  const rank = document.createElement('span');
+  rank.className = 'rank';
+  rank.textContent = String(user.rank ?? '');
+
+  const username = document.createElement('span');
+  username.className = 'username';
+  username.title = String(displayName);
+  username.textContent = String(displayName);
+
+  const xp = document.createElement('span');
+  xp.className = 'xp';
+  xp.textContent = formatNumber(user.xp);
+
+  const points = document.createElement('span');
+  points.className = 'points';
+  points.textContent = formatNumber(user.points);
+
+  const streak = document.createElement('span');
+  streak.className = 'streak';
+  streak.textContent = String(user.streak ?? 0);
+
+  row.append(rank, username, xp, points, streak);
+  return row;
+}
+
+function createDetachedDivider() {
+  const divider = document.createElement('div');
+  divider.className = 'leaderboard-divider';
+  divider.textContent = '...';
+  return divider;
 }
 
 function enableSwipeNavigation() {

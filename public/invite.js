@@ -3,9 +3,14 @@ import { fetchUserData, updateTopBar, getCachedUser } from './userData.js';
 import { canBootstrap, debounceButton } from './utils.js';
 import { i18n } from './i18n.js';
 
+let currentUserId = null;
+
 window.addEventListener('hope:userUpdated', (event) => {
   const user = event.detail;
   if (!user) return;
+  if (Number.isFinite(Number(user.telegramId))) {
+    currentUserId = Number(user.telegramId);
+  }
   updateTopBar(user);
 });
 
@@ -36,6 +41,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Update top bar with fresh data
     updateTopBar(userData);
+    currentUserId = Number(userData?.telegramId || 0) || null;
 
     // Load invite link for the current user
     const inviteLinkInput = document.getElementById("invite-link");
@@ -145,22 +151,59 @@ async function loadProgress() {
 async function loadReferralLeaderboard() {
   const res = await fetch('/api/invite/top-referrers', { credentials: 'include' });
   const data = await res.json();
+  const topUsers = Array.isArray(data?.top) ? data.top : [];
+  const currentUser = data?.currentUser || null;
 
   const container = document.getElementById('referral-leaderboard-list');
   if (!container) return;
 
   container.innerHTML = '';
 
-  data.forEach((u, i) => {
-    const row = document.createElement('div');
-    row.className = 'leaderboard-row';
-    row.innerHTML = `
-      <span>${i + 1}</span>
-      <span>${u.username || i18n.format('invite.user_fallback', { id: u.userId })}</span>
-      <span>${u.referrals}</span>
-    `;
-    container.appendChild(row);
+  topUsers.forEach((u) => {
+    container.appendChild(createReferralRow(u, {
+      isCurrentUser: u.userId === currentUserId
+    }));
   });
+
+  const currentUserInTop = topUsers.some((u) => u.userId === currentUserId);
+  if (currentUser && !currentUserInTop) {
+    container.appendChild(createDetachedDivider());
+    container.appendChild(createReferralRow(currentUser, {
+      isCurrentUser: true,
+      detached: true
+    }));
+  }
+}
+
+function createReferralRow(user, options = {}) {
+  const { isCurrentUser = false, detached = false } = options;
+  const row = document.createElement('div');
+  row.className = 'leaderboard-row referral-row';
+  if (isCurrentUser) row.classList.add('current-user');
+  if (detached) row.classList.add('detached-current-user');
+
+  const rank = document.createElement('span');
+  rank.className = 'rank';
+  rank.textContent = String(user.rank ?? '');
+
+  const username = document.createElement('span');
+  username.className = 'username';
+  username.textContent = String(user.username || i18n.format('invite.user_fallback', { id: user.userId }));
+  username.title = username.textContent;
+
+  const referrals = document.createElement('span');
+  referrals.className = 'referrals';
+  referrals.textContent = String(user.referrals ?? 0);
+
+  row.append(rank, username, referrals);
+  return row;
+}
+
+function createDetachedDivider() {
+  const divider = document.createElement('div');
+  divider.className = 'leaderboard-divider';
+  divider.textContent = '...';
+  return divider;
 }
 
 

@@ -6,6 +6,7 @@
     "start": "node app.js",
     "dev": "node --watch app.js",
     "migrate:wallet-index": "node scripts/migrateWalletIndex.js",
+    "seed:dummy-users": "node scripts/seed-dummy-users.js",
     "load:auth": "node tests/load/run-autocannon.js auth",
     "load:user-me": "node tests/load/run-autocannon.js user-me",
     "load:leaderboard": "node tests/load/run-autocannon.js leaderboard",

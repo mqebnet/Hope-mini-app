@@ -142,37 +142,6 @@ class RedBallGame {
       .redball-pass-panel-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
       .redball-pass{display:inline-flex;align-items:center;gap:8px;width:fit-content;padding:7px 12px;border-radius:999px;background:rgba(0,255,170,.12);color:#dcfff4;font-size:12px;text-transform:uppercase;letter-spacing:.04em}
       .redball-pass-dot{width:10px;height:10px;border-radius:50%;background:#00ffaa;box-shadow:0 0 16px rgba(0,255,170,.65)}
-      .redball-selector-shell.redball-shell.arcade-shell{max-width:660px;padding:20px 18px 24px;color:#202a34;border-color:rgba(129,104,72,.45);background:
-        linear-gradient(90deg, rgba(0,0,0,0) 0 38px, rgba(197,76,76,.28) 38px 40px, rgba(0,0,0,0) 40px),
-        repeating-linear-gradient(180deg, rgba(103,136,178,.18) 0 1px, rgba(247,242,229,.98) 1px 36px),
-        linear-gradient(180deg, rgba(247,242,229,.98), rgba(239,233,218,.98));box-shadow:0 18px 44px rgba(0,0,0,.28)}
-      .redball-selector-shell .redball-panel,.redball-selector-shell .redball-stage-card,.redball-selector-shell .redball-note{border:2px solid rgba(60,56,51,.45);background:rgba(255,251,242,.84);box-shadow:0 8px 18px rgba(65,53,41,.08);border-radius:22px}
-      .redball-selector-shell .redball-panel:before,.redball-selector-shell .redball-stage-card:before,.redball-selector-shell .redball-note:before{display:none}
-      .redball-sketch-pass{text-align:center;padding:18px 16px}
-      .redball-sketch-pass strong,.redball-sketch-pass small,.redball-sketch-heading,.redball-sketch-footer p,.redball-selector-shell .redball-level strong,.redball-selector-shell .redball-level-copy{font-family:'Comic Sans MS','Segoe Print','Bradley Hand',cursive}
-      .redball-sketch-pass p,.redball-sketch-pass small,.redball-sketch-footer p{color:#2c3440}
-      .redball-sketch-pass strong{color:#1f2630;font-size:24px;margin-bottom:6px}
-      .redball-sketch-pass small{font-size:18px}
-      .redball-selector-shell .redball-pass{margin:0 auto 10px;background:#1e2631;color:#fff4d7;border:1px solid rgba(30,38,49,.85)}
-      .redball-selector-shell .redball-pass-dot{display:none}
-      .redball-selector-shell .redball-pass-panel-head{justify-content:center;margin-bottom:6px}
-      .redball-selector-shell .redball-actions{justify-content:center}
-      .redball-selector-shell .redball-actions > *{flex:0 1 220px}
-      .redball-sketch-stage{padding:8px 4px 0;border:0;background:transparent;box-shadow:none}
-      .redball-sketch-heading{text-align:center;margin:2px 0 16px;font-size:34px;color:#1d2630}
-      .redball-sketch-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
-      .redball-selector-shell .redball-level{min-height:170px;padding:20px 18px;border:2px solid rgba(58,53,49,.55);border-radius:28px;background:rgba(255,251,244,.94);color:#1e2833;box-shadow:0 6px 0 rgba(71,61,50,.18);transform:rotate(-1deg)}
-      .redball-selector-shell .redball-level:hover,.redball-selector-shell .redball-level:focus-visible{transform:translateY(-2px) rotate(-1deg);border-color:rgba(58,53,49,.75);box-shadow:0 10px 0 rgba(71,61,50,.18)}
-      .redball-selector-shell .redball-level:nth-child(2){transform:rotate(1deg)}
-      .redball-selector-shell .redball-level:nth-child(2):hover,.redball-selector-shell .redball-level:nth-child(2):focus-visible{transform:translateY(-2px) rotate(1deg)}
-      .redball-selector-shell .redball-level-hard{grid-column:1/-1;min-height:188px;transform:rotate(-.5deg)}
-      .redball-selector-shell .redball-level-hard:hover,.redball-selector-shell .redball-level-hard:focus-visible{transform:translateY(-2px) rotate(-.5deg)}
-      .redball-selector-shell .redball-level strong{font-size:30px;color:#1e2731}
-      .redball-selector-shell .redball-level-tag{background:rgba(31,38,48,.08);color:#374455;border:1px dashed rgba(55,68,85,.4)}
-      .redball-selector-shell .redball-level-copy{margin-top:12px;font-size:21px;line-height:1.45;color:#1e2731}
-      .redball-selector-shell .redball-level small{margin-top:12px;font-size:14px;color:#46505e}
-      .redball-sketch-footer{padding:14px 12px 6px;text-align:center}
-      .redball-sketch-footer p{font-size:17px;line-height:1.5}
       .redball-section-head{display:flex;align-items:end;justify-content:space-between;gap:12px;margin-bottom:14px}
       .redball-section-head h3{margin:0;color:#fff5dc;text-align:left}
       .redball-section-head p{margin:0;color:#9ec0b4;font-size:13px;text-align:right}
@@ -245,33 +214,27 @@ class RedBallGame {
       .redball-page .page-title{margin:12px auto 6px;color:#ffffff;font-size:44px;line-height:1.05;font-family:'Poppins',Arial,sans-serif;font-weight:700}
       .redball-page .arcade-subtitle{max-width:430px;margin:0 auto 22px;color:#b3d9cc;font-size:17px;line-height:1.45;font-family:'Poppins',Arial,sans-serif}
       .redball-selector-shell.redball-shell.arcade-shell{max-width:520px;padding:10px 6px 18px;color:#ffffff;border:0;background:transparent;box-shadow:none}
-      .redball-selector-shell .redball-panel,.redball-selector-shell .redball-stage-card,.redball-selector-shell .redball-note{border:0;background:transparent;box-shadow:none;border-radius:0}
-      .redball-selector-shell .redball-panel:before,.redball-selector-shell .redball-stage-card:before,.redball-selector-shell .redball-note:before{display:none}
+      .redball-selector-shell .redball-panel,.redball-selector-shell .redball-note{border:0;background:transparent;box-shadow:none;border-radius:0}
+      .redball-selector-shell .redball-panel:before,.redball-selector-shell .redball-note:before{display:none}
       .redball-sketch-pass{max-width:320px;margin:0 auto 8px;padding:14px 16px;text-align:center;border:1px solid rgba(0,255,170,.22) !important;border-radius:12px !important;background:linear-gradient(135deg, rgba(0,50,100,.9), rgba(0,30,60,.95)) !important;box-shadow:0 0 15px rgba(0,255,170,.14) !important}
-      .redball-sketch-pass strong,.redball-sketch-pass small,.redball-sketch-heading,.redball-sketch-footer p,.redball-selector-shell .redball-level strong,.redball-selector-shell .redball-level-copy{font-family:'Poppins',Arial,sans-serif}
+      .redball-sketch-pass strong,.redball-sketch-pass small,.redball-sketch-footer p,.redball-selector-shell .redball-difficulty-title,.redball-selector-shell .redball-difficulty-copy{font-family:'Poppins',Arial,sans-serif}
       .redball-selector-shell .redball-pass-panel-head{justify-content:center;margin-bottom:6px}
       .redball-selector-shell .redball-pass{margin:0 auto;background:transparent;border:0;padding:0;color:#ffffff;font-size:18px;font-weight:700;letter-spacing:0;text-transform:none}
       .redball-selector-shell .redball-pass-dot{display:none}
       .redball-sketch-pass small{display:block;margin-top:6px;font-size:14px;color:#b3d9cc}
-      .redball-sketch-stage{padding:0}
-      .redball-sketch-heading{text-align:center;margin:18px 0 16px;font-size:18px;color:#00ffaa}
-      .redball-sketch-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;padding:0 10px}
-      .redball-selector-shell .redball-level{min-height:132px;padding:16px 14px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;border:2px solid rgba(0,255,170,.2) !important;border-radius:14px !important;background:linear-gradient(135deg, rgba(0,50,100,.9), rgba(0,30,60,.95)) !important;color:#b3d9cc !important;box-shadow:0 0 15px rgba(0,255,170,.18) !important;transform:none}
-      .redball-selector-shell .redball-level:hover,.redball-selector-shell .redball-level:focus-visible,.redball-selector-shell .redball-level:nth-child(2):hover,.redball-selector-shell .redball-level:nth-child(2):focus-visible,.redball-selector-shell .redball-level-hard:hover,.redball-selector-shell .redball-level-hard:focus-visible{transform:translateY(-2px);border-color:rgba(0,255,170,.6) !important;background:linear-gradient(135deg, rgba(0,80,120,.95), rgba(0,50,80,.98)) !important;box-shadow:0 0 18px rgba(0,255,170,.28) !important}
-      .redball-selector-shell .redball-level:nth-child(2),.redball-selector-shell .redball-level-hard{transform:none}
-      .redball-selector-shell .redball-level-hard{grid-column:1/-1}
-      .redball-level-icon{font-size:32px;line-height:1}
-      .redball-selector-shell .redball-level-top{display:block}
-      .redball-selector-shell .redball-level strong{font-size:16px;color:#ffffff}
-      .redball-selector-shell .redball-level-copy{margin-top:0;font-size:14px;line-height:1.4;color:#d9f4ea}
-      .redball-selector-shell .redball-level-tag,.redball-selector-shell .redball-level small{display:none}
+      .redball-selector-shell .redball-selector-stage{padding:20px}
+      .redball-selector-shell .difficulty-selector h3{margin-bottom:16px}
+      .redball-selector-shell .difficulty-buttons{padding:10px 0}
+      .redball-selector-shell .redball-difficulty-btn{min-height:152px}
+      .redball-selector-shell .redball-difficulty-title{display:block;font-size:16px;color:#ffffff;font-weight:700}
+      .redball-selector-shell .redball-difficulty-copy{display:block;font-size:14px;line-height:1.35;color:#d9f4ea}
       .redball-sketch-footer{padding:10px 16px 0;text-align:center}
       .redball-sketch-footer p{font-size:13px;line-height:1.45;color:#b3d9cc}
       @media (max-width:560px){
         .redball-page .page-title{font-size:36px}
         .redball-page .arcade-subtitle{font-size:16px}
-        .redball-sketch-grid{gap:14px;padding:0 6px}
-        .redball-selector-shell .redball-level{min-height:122px}
+        .redball-selector-shell .redball-selector-stage{padding:20px 12px}
+        .redball-selector-shell .redball-difficulty-btn{min-height:138px}
         .redball-hero,.redball-table-foot{grid-template-columns:1fr}
         .redball-hero-copy h2{font-size:28px}
         .redball-top{grid-template-columns:1fr}
@@ -389,26 +352,20 @@ class RedBallGame {
 
   getDifficultyCardsMarkup() {
     return `
-      <button class="redball-level redball-level-easy" data-difficulty="easy">
-        <span class="redball-level-icon" aria-hidden="true">🌱</span>
-        <div class="redball-level-top">
-          <strong>${t('shellgame.easy_label', 'Easy')}</strong>
-        </div>
-        <div class="redball-level-copy">${t('shellgame.easy_goal', 'Find the red ball at least 3 times in 5 rounds.')}</div>
+      <button class="difficulty-btn redball-difficulty-btn" data-difficulty="easy">
+        <span class="icon" aria-hidden="true">🌱</span>
+        <span class="redball-difficulty-title">${t('shellgame.easy_label', 'Easy')}</span>
+        <span class="redball-difficulty-copy">${t('shellgame.easy_goal', 'Find the red ball at least 3 times in 5 rounds.')}</span>
       </button>
-      <button class="redball-level redball-level-normal" data-difficulty="normal">
-        <span class="redball-level-icon" aria-hidden="true">⚡</span>
-        <div class="redball-level-top">
-          <strong>${t('shellgame.normal_label', 'Normal')}</strong>
-        </div>
-        <div class="redball-level-copy">${t('shellgame.normal_goal', 'Find the red ball 3 times in a row.')}</div>
+      <button class="difficulty-btn redball-difficulty-btn" data-difficulty="normal">
+        <span class="icon" aria-hidden="true">⚡</span>
+        <span class="redball-difficulty-title">${t('shellgame.normal_label', 'Normal')}</span>
+        <span class="redball-difficulty-copy">${t('shellgame.normal_goal', 'Find the red ball 3 times in a row.')}</span>
       </button>
-      <button class="redball-level redball-level-hard" data-difficulty="hard">
-        <span class="redball-level-icon" aria-hidden="true">🔥</span>
-        <div class="redball-level-top">
-          <strong>${t('shellgame.hard_label', 'Hard')}</strong>
-        </div>
-        <div class="redball-level-copy">${t('shellgame.hard_goal', 'Go 5 for 5. One wrong cup means game over.')}</div>
+      <button class="difficulty-btn redball-difficulty-btn" data-difficulty="hard">
+        <span class="icon" aria-hidden="true">🔥</span>
+        <span class="redball-difficulty-title">${t('shellgame.hard_label', 'Hard')}</span>
+        <span class="redball-difficulty-copy">${t('shellgame.hard_goal', 'Go 5 for 5. One wrong cup means game over.')}</span>
       </button>
     `;
   }
@@ -446,14 +403,14 @@ class RedBallGame {
     if (!this.container) return;
     this.clearTimers();
     this.phase = 'selector';
-    const sketchPassMarkup = this.getPassMarkup();
+    const passMarkup = this.getPassMarkup();
 
     this.container.innerHTML = `
       <div class="arcade-shell redball-shell redball-selector-shell redball-grid">
-        ${sketchPassMarkup}
-        <div class="redball-stage-card redball-sketch-stage">
-          <h3 class="redball-sketch-heading">${t('shellgame.select_difficulty', 'Select Difficulty')}</h3>
-          <div class="redball-sketch-grid">${this.getDifficultyCardsMarkup()}</div>
+        ${passMarkup}
+        <div class="difficulty-selector redball-selector-stage">
+          <h3>${t('shellgame.select_difficulty', 'Select Difficulty')}</h3>
+          <div class="difficulty-buttons">${this.getDifficultyCardsMarkup()}</div>
         </div>
         <div class="redball-note redball-sketch-footer"><p>${t('shellgame.rules_copy', 'The server keeps the answer hidden until after your guess. You only see the opening reveal and the shuffle sequence.')}</p></div>
       </div>
@@ -463,69 +420,7 @@ class RedBallGame {
       button.addEventListener('click', () => this.startGame(button.dataset.difficulty));
     });
     this.container.querySelector('#redball-buy-pass')?.addEventListener('click', () => navigateWithFeedback('gamepass.html?game=shellgame'));
-    return;
-    const passMarkupNew = this.getPassMarkup();
-
-    this.container.innerHTML = `
-      <div class="arcade-shell redball-shell redball-grid">
-        <section class="redball-hero">
-          <div class="redball-hero-copy">
-            <span class="redball-kicker">Arcade table</span>
-            <h2>${t('shellgame.title', 'Red ball')}</h2>
-            <p>${t('shellgame.hero_copy', 'A sharper casino-style layout for quick reads: watch the reveal, track the shuffle, and trust your final pick.')}</p>
-            <div class="redball-hero-meta">
-              <span>3 cups</span>
-              <span>5 rounds</span>
-              <span>${this.getDifficultyLabel()}</span>
-            </div>
-          </div>
-          <div class="redball-hero-art" aria-hidden="true">
-            <span class="redball-art-ball"></span>
-            <span class="redball-art-cup redball-art-cup-left"></span>
-            <span class="redball-art-cup redball-art-cup-mid"></span>
-            <span class="redball-art-cup redball-art-cup-right"></span>
-          </div>
-        </section>
-        ${passMarkupNew}
-        <div class="redball-stage-card difficulty-selector" style="padding:18px">
-          <div class="redball-section-head">
-            <h3>${t('shellgame.select_difficulty', 'Choose your table')}</h3>
-            <p>${t('shellgame.mode_hint', 'Each mode changes the pace and win rule.')}</p>
-          </div>
-          <div class="redball-buttons">${this.getDifficultyCardsMarkup()}</div>
-        </div>
-        <div class="redball-note"><p>${t('shellgame.rules_copy', 'The server keeps the answer hidden until after your guess. You only see the opening reveal and the shuffle sequence.')}</p></div>
-      </div>
-    `;
-
-    this.container.querySelectorAll('[data-difficulty]').forEach((button) => {
-      button.addEventListener('click', () => this.startGame(button.dataset.difficulty));
-    });
-    this.container.querySelector('#redball-buy-pass')?.addEventListener('click', () => navigateWithFeedback('gamepass.html?game=shellgame'));
-    return;
-    const passMarkup = this.getPassMarkup();
-
-    this.container.innerHTML = `
-      <div class="arcade-shell redball-grid">
-        ${passMarkup}
-        <div class="difficulty-selector" style="padding:0">
-          <h3>${t('shellgame.select_difficulty', 'Choose your table')}</h3>
-          <div class="redball-buttons">
-            <button class="redball-level" data-difficulty="easy"><strong>${t('shellgame.easy_label', 'Easy')}</strong>${t('shellgame.easy_goal', 'Find the red ball at least 3 times in 5 rounds.')}<small>${t('shellgame.easy_meta', '3 swaps per round · 6 second pick window')}</small></button>
-            <button class="redball-level" data-difficulty="normal"><strong>${t('shellgame.normal_label', 'Normal')}</strong>${t('shellgame.normal_goal', 'Build a 3-in-a-row streak before the 5 rounds run out.')}<small>${t('shellgame.normal_meta', '5 swaps per round · 4 second pick window')}</small></button>
-            <button class="redball-level" data-difficulty="hard"><strong>${t('shellgame.hard_label', 'Hard')}</strong>${t('shellgame.hard_goal', 'Go 5 for 5. One wrong cup ends the run instantly.')}<small>${t('shellgame.hard_meta', '7 swaps per round · 2.5 second pick window')}</small></button>
-          </div>
-        </div>
-        <div class="redball-note"><p>${t('shellgame.rules_copy', 'The server keeps the answer hidden until after your guess. You only see the opening reveal and the shuffle sequence.')}</p></div>
-      </div>
-    `;
-
-    this.container.querySelectorAll('[data-difficulty]').forEach((button) => {
-      button.addEventListener('click', () => this.startGame(button.dataset.difficulty));
-    });
-    this.container.querySelector('#redball-buy-pass')?.addEventListener('click', () => navigateWithFeedback('gamepass.html?game=shellgame'));
   }
-
   async startGame(difficulty = 'normal') {
     if (this.isProcessing) return;
     this.isProcessing = true;
@@ -1139,3 +1034,4 @@ window.redBallGame = game;
 document.addEventListener('DOMContentLoaded', () => {
   game.init();
 });
+

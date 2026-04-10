@@ -192,6 +192,7 @@ router.post('/claim', async (req, res) => {
 
 router.get('/top-referrers', async (req, res) => {
   try {
+    const currentUserId = Number(req.user?.telegramId);
     const top = await Referral.aggregate([
       {
         $group: {
@@ -227,11 +228,54 @@ router.get('/top-referrers', async (req, res) => {
       { $limit: 50 }
     ]);
 
-    res.json(top.map((u) => ({
-      userId: u.user.telegramId,
-      username: u.user.username,
-      referrals: Number(u.referrals || 0)
-    })));
+    let currentUser = null;
+    if (Number.isFinite(currentUserId)) {
+      const [currentReferrals, currentUserDoc] = await Promise.all([
+        Referral.countDocuments({ inviterId: currentUserId }),
+        User.findOne({ telegramId: currentUserId })
+          .select('telegramId username')
+          .lean()
+      ]);
+
+      if (currentUserDoc) {
+        const higherRanked = await Referral.aggregate([
+          {
+            $group: {
+              _id: '$inviterId',
+              referrals: { $sum: 1 }
+            }
+          },
+          {
+            $match: {
+              $or: [
+                { referrals: { $gt: currentReferrals } },
+                { referrals: currentReferrals, _id: { $lt: currentUserId } }
+              ]
+            }
+          },
+          {
+            $count: 'count'
+          }
+        ]);
+
+        currentUser = {
+          userId: currentUserDoc.telegramId,
+          username: currentUserDoc.username,
+          referrals: Number(currentReferrals || 0),
+          rank: Number(higherRanked[0]?.count || 0) + 1
+        };
+      }
+    }
+
+    res.json({
+      top: top.map((u, index) => ({
+        rank: index + 1,
+        userId: u.user.telegramId,
+        username: u.user.username,
+        referrals: Number(u.referrals || 0)
+      })),
+      currentUser
+    });
   } catch (err) {
     res.status(500).json({ error: 'Failed to load referral leaderboard' });
   }
