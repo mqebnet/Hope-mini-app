@@ -385,11 +385,6 @@ async function bootstrap() {
       updateTopBar(user);
       updateWeeklyDropEligibility(user);
       syncMiningUI(user.miningStartedAt);
-      const shown = showWelcomeBonusIfPresent();
-      if (!shown) {
-        setTimeout(() => showWelcomeBonusIfPresent(), 200);
-        setTimeout(() => showWelcomeBonusIfPresent(), 900);
-      }
     }
   } catch (err) {
     console.error('Bootstrap failed:', err);
@@ -956,9 +951,14 @@ document.addEventListener('DOMContentLoaded', () => {
     await bootstrap();
     await retryPendingCheckInVerification();
     await refreshDailyCheckInStatus({ autoOpen: true });
+    // Show welcome bonus AFTER the check-in calendar is rendered and
+    // (if applicable) the check-in modal has opened. User is settled
+    // into the home screen but hasn't had a chance to tap anything yet.
+    showWelcomeBonusIfPresent();
   })().catch((err) => {
     console.warn('Startup check-in recovery flow failed:', err);
     refreshDailyCheckInStatus({ autoOpen: true });
+    showWelcomeBonusIfPresent();
   });
 
   if (checkInBtn) checkInBtn.addEventListener('click', () => openDailyCheckInModal());
