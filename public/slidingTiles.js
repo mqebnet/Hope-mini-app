@@ -77,7 +77,7 @@ class SlidingTilesGame {
             <small>${t('slidingtiles.hard_meta', '150s • full grid pressure')}</small>
           </button>
         </div>
-        <p class="flipcards-instructions">${t('slidingtiles.instructions', 'Slide numbered tiles into order with the empty slot in the bottom-right corner.')}</p>
+        <p class="flipcards-instructions">${t('slidingtiles.instructions', 'Tap the numbered tiles to slide them into order with the empty slot in the bottom-right corner.')}</p>
       </div>
     `;
 
@@ -159,7 +159,7 @@ class SlidingTilesGame {
           ${boardHtml}
         </div>
 
-        <p class="flipcards-instructions">${t('slidingtiles.instructions', 'Slide numbered tiles into order with the empty slot in the bottom-right corner.')}</p>
+        <p class="flipcards-instructions">${t('slidingtiles.instructions', 'Tap the numbered tiles to slide them into order with the empty slot in the bottom-right corner.')}</p>
         <button id="slidingtiles-abandon" class="btn-leave-game btn-abandon">${t('slidingtiles.leave_game', 'Leave Game')}</button>
       </div>
     `;

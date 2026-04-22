@@ -19,8 +19,52 @@ const rewards = {
   10: { points: 4500, xp: 5 }
 };
 
-async function reconcileInviteState(user) {
-  const referralsCount = await Referral.countDocuments({ inviterId: user.telegramId });
+const INVITE_COUNT_TTL_SECONDS = 30;
+
+function getInviteCountCacheKey(telegramId) {
+  return `invite:count:${Number(telegramId)}`;
+}
+
+async function getCachedInviteCount(redisClient, telegramId) {
+  if (!redisClient) return null;
+  try {
+    const raw = await redisClient.get(getInviteCountCacheKey(telegramId));
+    if (raw === null) return null;
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+async function setCachedInviteCount(redisClient, telegramId, count) {
+  if (!redisClient) return;
+  try {
+    await redisClient.set(
+      getInviteCountCacheKey(telegramId),
+      String(Number(count) || 0),
+      { EX: INVITE_COUNT_TTL_SECONDS }
+    );
+  } catch {
+    // non-fatal cache miss
+  }
+}
+
+async function invalidateInviteCountCache(redisClient, telegramId) {
+  if (!redisClient) return;
+  try {
+    await redisClient.del(getInviteCountCacheKey(telegramId));
+  } catch {
+    // non-fatal cache miss
+  }
+}
+
+async function reconcileInviteState(user, redisClient = null) {
+  let referralsCount = await getCachedInviteCount(redisClient, user.telegramId);
+  if (!Number.isFinite(referralsCount)) {
+    referralsCount = await Referral.countDocuments({ inviterId: user.telegramId });
+    await setCachedInviteCount(redisClient, user.telegramId, referralsCount);
+  }
   const cachedCount = Number(user?.invitedCount || 0);
 
   if (referralsCount !== cachedCount) {
@@ -106,7 +150,8 @@ router.get('/progress', async (req, res) => {
   const telegramId = req.user.telegramId;
   const user = await User.findOne({ telegramId });
   if (!user) return res.status(404).json({ error: 'User not found' });
-  const { invitedCount: effectiveInvitedCount } = await reconcileInviteState(user);
+  const redisClient = req.app.locals.redisClient || null;
+  const { invitedCount: effectiveInvitedCount } = await reconcileInviteState(user, redisClient);
 
   const completedInviteTasks = Array.isArray(user.completedInviteTasks)
     ? user.completedInviteTasks.map((v) => Number(v)).filter((v) => Number.isFinite(v))
@@ -127,7 +172,8 @@ router.get('/verify', async (req, res) => {
   const telegramId = req.user.telegramId;
   const user = await User.findOne({ telegramId });
   if (!user) return res.status(404).json({ error: 'User not found' });
-  const { invitedCount: effectiveInvitedCount } = await reconcileInviteState(user);
+  const redisClient = req.app.locals.redisClient || null;
+  const { invitedCount: effectiveInvitedCount } = await reconcileInviteState(user, redisClient);
 
   const completed = effectiveInvitedCount >= target;
   const claimed = Array.isArray(user.completedInviteTasks)
@@ -145,7 +191,13 @@ router.post('/claim', async (req, res) => {
   const telegramId = req.user.telegramId;
   const user = await User.findOne({ telegramId });
   if (!user) return res.status(404).json({ error: 'User not found' });
-  const { invitedCount: effectiveInvitedCount } = await reconcileInviteState(user);
+  const redisClient = req.app.locals.redisClient || null;
+  const referralsCount = await Referral.countDocuments({ inviterId: user.telegramId });
+  const cachedCount = Number(user?.invitedCount || 0);
+  if (referralsCount !== cachedCount) {
+    user.invitedCount = referralsCount;
+  }
+  const effectiveInvitedCount = referralsCount;
 
   if (effectiveInvitedCount < target) {
     return res.status(400).json({ error: 'Target not reached' });
@@ -165,6 +217,7 @@ router.post('/claim', async (req, res) => {
   user.completedInviteTasks.push(target);
 
   await user.save();
+  await invalidateInviteCountCache(redisClient, user.telegramId);
   stateEmitter.emit('user:updated', {
     telegramId: user.telegramId,
     points: user.points,

@@ -61,12 +61,17 @@ router.get('/me', async (req, res) => {
     const telegramId = req.user.telegramId;
     const forceRefresh = String(req.query?.force || '').toLowerCase() === '1'
       || String(req.query?.force || '').toLowerCase() === 'true';
-    const cached = userDataCache.get(telegramId);
-    const recoveryNeeded = forceRefresh || await hasRecoverableState(telegramId);
-
-    if (!recoveryNeeded && cached && Date.now() - cached.ts < USER_CACHE_TTL_MS) {
-      return res.json(cached.data);
+    // Check cache FIRST - hasRecoverableState is expensive (2 DB queries)
+    // and should only run on a cache miss or when explicitly forced.
+    if (!forceRefresh) {
+      const cached = userDataCache.get(telegramId);
+      if (cached && Date.now() - cached.ts < USER_CACHE_TTL_MS) {
+        return res.json(cached.data);
+      }
     }
+
+    // Cache miss or force refresh - now check if recovery is needed
+    const recoveryNeeded = forceRefresh || await hasRecoverableState(telegramId);
 
     if (recoveryNeeded) {
       await reconcileUserStartup(telegramId);

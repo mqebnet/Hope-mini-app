@@ -1,4 +1,4 @@
-# Games Engine Architecture
+ # Games Engine Architecture
 
 The app now uses a plugin-based games engine.
 

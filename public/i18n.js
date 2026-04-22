@@ -301,7 +301,7 @@ class I18n {
           normal_meta: '110s • deeper scramble',
           hard_label: 'Hard',
           hard_meta: '150s • full grid pressure',
-          instructions: 'Slide numbered tiles into order with the empty slot in the bottom-right corner.',
+          instructions: 'Tap the numbered tiles to slide them into order with the empty slot in the bottom-right corner.',
           timer_label: 'Time',
           moves_label: 'Moves',
           goal_label: 'Goal',

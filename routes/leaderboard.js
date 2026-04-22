@@ -27,6 +27,21 @@ async function setCachedLeaderboard(redisClient, levelIndex, data) {
   }
 }
 
+async function invalidateLeaderboardCache(redisClient, levelIndex) {
+  if (!redisClient) return;
+  try {
+    if (levelIndex !== undefined) {
+      await redisClient.del(`leaderboard:${levelIndex}`);
+      return;
+    }
+    await Promise.all(
+      Array.from({ length: 10 }, (_, i) => redisClient.del(`leaderboard:${i + 1}`))
+    );
+  } catch {
+    // non-fatal
+  }
+}
+
 const LEVEL_MAP = {
   1: 'Seeker',
   2: 'Dreamer',
@@ -51,34 +66,6 @@ function serializeLeaderboardUser(user) {
   };
 }
 
-async function getCurrentUserRankForLevel(telegramId, levelName) {
-  if (!Number.isFinite(telegramId)) return null;
-
-  const currentUser = await User.findOne({ telegramId })
-    .select('telegramId username xp points level streak')
-    .lean();
-
-  if (!currentUser || currentUser.level !== levelName) {
-    return null;
-  }
-
-  const xp = Number(currentUser.xp || 0);
-  const points = Number(currentUser.points || 0);
-  const higherRankedCount = await User.countDocuments({
-    level: levelName,
-    $or: [
-      { xp: { $gt: xp } },
-      { xp, points: { $gt: points } },
-      { xp, points, telegramId: { $lt: telegramId } }
-    ]
-  });
-
-  return {
-    ...serializeLeaderboardUser(currentUser),
-    rank: higherRankedCount + 1
-  };
-}
-
 router.get('/by-level/:levelIndex', async (req, res) => {
   const levelIndex = Number(req.params.levelIndex);
   const levelName = LEVEL_MAP[levelIndex];
@@ -86,30 +73,33 @@ router.get('/by-level/:levelIndex', async (req, res) => {
 
   try {
     const redisClient = req.app.locals.redisClient || null;
+    const forceRefresh = String(req.query?.force || '').toLowerCase() === '1'
+      || String(req.query?.force || '').toLowerCase() === 'true';
 
-    let responseData = await getCachedLeaderboard(redisClient, levelIndex);
-    if (!responseData) {
-      const users = await User.find({ level: levelName })
-        .sort({ xp: -1, points: -1, telegramId: 1 })
-        .limit(100)
-        .select('telegramId username xp points level streak')
-        .lean();
-
-      responseData = {
-        levelIndex,
-        levelName,
-        users: users.map(serializeLeaderboardUser)
-      };
-
-      await setCachedLeaderboard(redisClient, levelIndex, responseData);
+    if (forceRefresh) {
+      await invalidateLeaderboardCache(redisClient, levelIndex);
     }
 
-    const currentUser = await getCurrentUserRankForLevel(Number(req.user?.telegramId), levelName);
+    const cached = await getCachedLeaderboard(redisClient, levelIndex);
+    if (cached) {
+      return res.json(cached);
+    }
 
-    res.json({
-      ...responseData,
-      currentUser
-    });
+    const users = await User.find({ level: levelName })
+      .sort({ xp: -1, points: -1, telegramId: 1 })
+      .limit(100)
+      .select('telegramId username xp points level streak')
+      .lean();
+
+    const responseData = {
+      levelIndex,
+      levelName,
+      users: users.map(serializeLeaderboardUser)
+    };
+
+    await setCachedLeaderboard(redisClient, levelIndex, responseData);
+
+    res.json(responseData);
   } catch (err) {
     console.error('Leaderboard error:', err);
     res.status(500).json({ error: 'Failed to load leaderboard' });

@@ -14,7 +14,7 @@ const dailyCheckInRouter = require('./routes/dailyCheckIn');
 const userRouter = require('./routes/user');
 const miningRouter = require('./routes/mining');
 const adminAuth = require('./middleware/adminAuth');
-const { authLimiter, gameLimiter, generalLimiter } = require('./middleware/rateLimiters');
+const { authLimiter, gameLimiter, generalLimiter, miningLimiter } = require('./middleware/rateLimiters');
 const { startNotificationScheduler } = require('./utils/notificationScheduler');
 const socketIo = require('socket.io');
 const stateEmitter = require('./utils/stateEmitter');
@@ -44,11 +44,13 @@ if (!process.env.JWT_SECRET) {
 const connectDB = async () => {
   try {
     await mongoose.connect(process.env.MONGODB_URI, {
-      maxPoolSize: 50,
-      minPoolSize: 5,
+      maxPoolSize: process.env.NODE_ENV === 'production' ? 150 : 50,
+      minPoolSize: process.env.NODE_ENV === 'production' ? 10 : 5,
       serverSelectionTimeoutMS: 5000,
       socketTimeoutMS: 45000,
-      connectTimeoutMS: 10000
+      connectTimeoutMS: 10000,
+      maxIdleTimeMS: 30000,
+      waitQueueTimeoutMS: 10000
     });
     console.log('Connected to MongoDB');
   } catch (err) {
@@ -122,7 +124,7 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false
 }));
 
-app.use(express.static(path.join(__dirname, 'public'), {
+app.use(express.static(path.join(__dirname, '../hope-frontend/public'), {
   etag: true,          // fingerprints files by content - enables 304 responses
   lastModified: true,  // secondary validator for clients that don't support ETags
   setHeaders: (res, filePath) => {
@@ -146,10 +148,8 @@ app.use('/api', (req, res, next) => {
   res.setHeader('Expires', '0');
   next();
 });
-app.use('/api/', generalLimiter); // fallback for all /api/ routes
-app.use('/api/auth', authLimiter); // strict: override for auth routes
-app.use('/api/web-auth', authLimiter); // strict: override for web auth routes
-// gameLimiter is applied directly on the games router in routes/games.js
+app.use('/api/auth', authLimiter);
+app.use('/api/web-auth', authLimiter);
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/web-auth', require('./routes/webAuth'));
 
@@ -165,13 +165,14 @@ app.get('/admin', require('./middleware/pageAuth'), adminAuth, (req, res) => {
 });
 
 app.use('/api', require('./middleware/apiAuth'));
+app.use('/api/mining', miningLimiter, miningRouter);
+app.use('/api/', generalLimiter);
 
 app.use('/api/debug', require('./routes/debug'));
 app.use('/api/me', require('./routes/me'));
 app.use('/api/user', userRouter);
 app.use('/api/tasks', tasksRouter);
 app.use('/api/leaderboard', leaderboardRouter);
-app.use('/api/mining', miningRouter);
 app.use('/api/exchangeTickets', require('./routes/exchangeTickets'));
 app.use('/api/mysteryBox', require('./routes/mysteryBox'));
 app.use('/api/boxes', require('./routes/boxes'));
@@ -257,7 +258,12 @@ connectDB().then(async () => {
     },
     transports: ['websocket', 'polling'],
     serveClient: false,
-    maxHttpBufferSize: (parseInt(process.env.WS_MAX_BUFFER_MB) || 5) * 1e6
+    maxHttpBufferSize: (parseInt(process.env.WS_MAX_BUFFER_MB) || 5) * 1e6,
+    pingTimeout: 20000,
+    pingInterval: 25000,
+    upgradeTimeout: 10000,
+    connectTimeout: 10000,
+    allowEIO3: false
   });
   if (redisReady) {
     io.adapter(createAdapter(pubClient, subClient));
@@ -379,5 +385,3 @@ connectDB().then(async () => {
     server.close(() => process.exit(0));
   });
 });
-
-
