@@ -1,46 +1,5 @@
 {
-  "name": "hope-mini-app",
-  "version": "1.0.0",
-  "main": "app.js",
-  "scripts": {
-    "start": "node app.js",
-    "dev": "node --watch app.js",
-    "migrate:wallet-index": "node scripts/migrateWalletIndex.js",
-    "seed:dummy-users": "node scripts/seed-dummy-users.js",
-    "load:auth": "node tests/load/run-autocannon.js auth",
-    "load:user-me": "node tests/load/run-autocannon.js user-me",
-    "load:leaderboard": "node tests/load/run-autocannon.js leaderboard",
-    "load:mining-start": "node tests/load/run-autocannon.js mining-start"
-  },
-  "keywords": [],
-  "author": "FY",
-  "license": "ISC",
-  "description": "",
-  "dependencies": {
-    "@socket.io/redis-adapter": "^8.3.0",
-    "@ton/core": "^0.60.1",
-    "@ton/ton": "^15.2.1",
-    "axios": "^1.7.9",
-    "compression": "^1.8.1",
-    "cookie-parser": "^1.4.7",
-    "cors": "^2.8.5",
-    "dotenv": "^16.5.0",
-    "express": "^4.21.2",
-    "express-rate-limit": "^7.5.0",
-    "helmet": "^8.1.0",
-    "ioredis": "^5.10.1",
-    "jsonwebtoken": "^9.0.2",
-    "luxon": "^3.5.0",
-    "mongoose": "^8.15.1",
-    "node-cron": "^3.0.3",
-    "node-telegram-bot-api": "^0.66.0",
-    "nodemailer": "^6.10.0",
-    "rate-limit-redis": "^4.3.1",
-    "redis": "^5.11.0",
-    "socket.io": "^4.8.3"
-  },
   "devDependencies": {
-    "@playwright/test": "^1.58.2",
-    "pm2": "^6.0.14"
+    "eslint": "^10.2.1"
   }
 }

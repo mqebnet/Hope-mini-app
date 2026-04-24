@@ -38,6 +38,8 @@ class SlidingTilesGame {
     this.moveCount = 0;
     this.mistakes = 0;
     this.container = document.getElementById('slidingtiles-game');
+    this.hasActivePass = false;
+    this.passValidUntil = null;
   }
 
   async init() {
@@ -51,7 +53,32 @@ class SlidingTilesGame {
       console.warn('Sliding Tiles user bootstrap failed:', err);
     }
 
+    await this.loadPassStatus();
     this.renderDifficultySelector();
+  }
+
+  async loadPassStatus() {
+    try {
+      const response = await fetch('/api/games/slidingtiles/status', { credentials: 'include', cache: 'no-store' });
+      const data = await response.json();
+      if (response.ok) {
+        this.hasActivePass = Boolean(data?.hasActivePass);
+        this.passValidUntil = data?.passValidUntil || null;
+      }
+    } catch (_) {
+      this.hasActivePass = false;
+      this.passValidUntil = null;
+    }
+  }
+
+  getPassActiveMarkup() {
+    if (!this.hasActivePass) return '';
+    return `
+      <div class="arcade-pass-banner">
+        <div class="arcade-pass-banner-head">Pass Active <span class="arcade-pass-banner-dot" aria-hidden="true"></span></div>
+        <small class="arcade-pass-banner-copy">${this.passValidUntil ? `until ${new Date(this.passValidUntil).toLocaleString()}` : 'Pass is active now.'}</small>
+      </div>
+    `;
   }
 
   renderDifficultySelector() {
@@ -59,6 +86,7 @@ class SlidingTilesGame {
 
     this.container.innerHTML = `
       <div class="difficulty-selector arcade-shell">
+        ${this.getPassActiveMarkup()}
         <h3>${t('slidingtiles.select_difficulty', 'Choose your grid')}</h3>
         <div class="difficulty-buttons">
           <button class="difficulty-btn" data-difficulty="easy">
@@ -78,12 +106,14 @@ class SlidingTilesGame {
           </button>
         </div>
         <p class="flipcards-instructions">${t('slidingtiles.instructions', 'Tap the numbered tiles to slide them into order with the empty slot in the bottom-right corner.')}</p>
+        <button type="button" class="btn-back-games arcade-entry-back" id="slidingtiles-back-market">${t('back_to_market', 'Back to Marketplace')}</button>
       </div>
     `;
 
     this.container.querySelectorAll('[data-difficulty]').forEach((button) => {
       button.addEventListener('click', () => this.startGame(button.dataset.difficulty));
     });
+    this.container.querySelector('#slidingtiles-back-market')?.addEventListener('click', () => navigateWithFeedback('marketPlace.html'));
   }
 
   async startGame(difficulty = 'normal') {
@@ -292,10 +322,10 @@ class SlidingTilesGame {
 
         <div class="rewards-earned">
           <h3>${t('slidingtiles.rewards_earned', 'Rewards Earned')}</h3>
-          <div class="reward-item"><span>${t('flipcards.points_label', 'Points')}</span><span class="reward-amount">+${Number(reward.points || 0)}</span></div>
-          <div class="reward-item"><span>${t('flipcards.xp_label', 'XP')}</span><span class="reward-amount">+${Number(reward.xp || 0)}</span></div>
-          ${Number(reward.bronzeTickets || 0) ? `<div class="reward-item"><span>${t('flipcards.bronze_tickets', 'Bronze Tickets')}</span><span class="reward-amount">+${Number(reward.bronzeTickets || 0)}</span></div>` : ''}
-          ${Number(reward.silverTickets || 0) ? `<div class="reward-item"><span>${t('flipcards.silver_tickets', 'Silver Tickets')}</span><span class="reward-amount">+${Number(reward.silverTickets || 0)}</span></div>` : ''}
+          <div class="reward-item"><span>⭐ ${t('flipcards.points_label', 'Points')}</span><span class="reward-amount">+${Number(reward.points || 0)}</span></div>
+          <div class="reward-item"><span>⚡ ${t('flipcards.xp_label', 'XP')}</span><span class="reward-amount">+${Number(reward.xp || 0)}</span></div>
+          ${Number(reward.bronzeTickets || 0) ? `<div class="reward-item"><span>🎫 ${t('flipcards.bronze_tickets', 'Bronze Tickets')}</span><span class="reward-amount">+${Number(reward.bronzeTickets || 0)}</span></div>` : ''}
+          ${Number(reward.silverTickets || 0) ? `<div class="reward-item"><span>🥈 ${t('flipcards.silver_tickets', 'Silver Tickets')}</span><span class="reward-amount">+${Number(reward.silverTickets || 0)}</span></div>` : ''}
         </div>
 
         <div class="new-stats">

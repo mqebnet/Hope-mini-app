@@ -31,6 +31,32 @@ export class FlipCardsGame {
     this.gameContainer = null;
     this.isGameActive = false;
     this.unflipDelayMs = 800;
+    this.hasActivePass = false;
+    this.passValidUntil = null;
+  }
+
+  async loadPassStatus() {
+    try {
+      const response = await fetch('/api/games/flipcards/status', { credentials: 'include', cache: 'no-store' });
+      const data = await response.json();
+      if (response.ok) {
+        this.hasActivePass = Boolean(data?.hasActivePass);
+        this.passValidUntil = data?.passValidUntil || null;
+      }
+    } catch (_) {
+      this.hasActivePass = false;
+      this.passValidUntil = null;
+    }
+  }
+
+  getPassActiveMarkup() {
+    if (!this.hasActivePass) return '';
+    return `
+      <div class="arcade-pass-banner">
+        <div class="arcade-pass-banner-head">Pass Active <span class="arcade-pass-banner-dot" aria-hidden="true"></span></div>
+        <small class="arcade-pass-banner-copy">${this.passValidUntil ? `until ${new Date(this.passValidUntil).toLocaleString()}` : 'Pass is active now.'}</small>
+      </div>
+    `;
   }
 
   setBoardLocked(locked) {
@@ -538,16 +564,20 @@ window.flipCardsGame = null;
 /**
  * Initialize Flip Cards game UI
  */
-export function initFlipCardsGame() {
+export async function initFlipCardsGame() {
   const gameContainer = document.getElementById('flipcards-game');
   if (!gameContainer) return;
 
   let isStartingGame = false;
+  const game = new FlipCardsGame();
+  window.flipCardsGame = game;
+  await game.loadPassStatus();
 
   // Render difficulty selector
   const difficultySelector = document.createElement('div');
-  difficultySelector.className = 'difficulty-selector';
+  difficultySelector.className = 'difficulty-selector arcade-shell';
   difficultySelector.innerHTML = `
+    ${game.getPassActiveMarkup()}
     <h3>${i18n.t('flipcards.select_difficulty')}</h3>
     <div class="difficulty-buttons">
       <button class="difficulty-btn" data-difficulty="easy">
@@ -563,10 +593,12 @@ export function initFlipCardsGame() {
         ${i18n.t('flipcards.hard_label')}
       </button>
     </div>
+    <button type="button" class="btn-back-games arcade-entry-back" id="flipcards-back-market">${i18n.t('Back to Marketplace') || 'Back'}</button>
   `;
 
   gameContainer.appendChild(difficultySelector);
   window.hopeApplyTranslations?.();
+  difficultySelector.querySelector('#flipcards-back-market')?.addEventListener('click', () => navigateWithFeedback('marketPlace.html'));
 
   // Difficulty button handlers
   document.querySelectorAll('.difficulty-btn').forEach((btn) => {
@@ -577,8 +609,6 @@ export function initFlipCardsGame() {
       isStartingGame = true;
 
       const difficulty = btn.dataset.difficulty;
-      const game = new FlipCardsGame();
-      window.flipCardsGame = game;
 
       // Create game UI first (before startGame)
       difficultySelector.style.display = 'none';

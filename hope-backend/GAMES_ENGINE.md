@@ -66,7 +66,7 @@ Mystery box routes now delegate to the engine:
    - game methods (`start`, etc).
 3. Register plugin in `services/games/index.js`.
 4. Game appears automatically in `GET /api/games/catalog`.
-5. Frontend games launcher (`public/games.js`) will render it automatically.
+5. Frontend games launcher (`hope-frontend/public/games.js`) will render it automatically.
 
 ## Bring Quiz/Treasure Hunt Live
 

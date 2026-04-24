@@ -44,7 +44,9 @@ if (!process.env.JWT_SECRET) {
 const connectDB = async () => {
   try {
     await mongoose.connect(process.env.MONGODB_URI, {
-      maxPoolSize: process.env.NODE_ENV === 'production' ? 150 : 50,
+      maxPoolSize: process.env.NODE_ENV === 'production'
+        ? (parseInt(process.env.MONGO_POOL_SIZE, 10) || 50)
+        : 20,
       minPoolSize: process.env.NODE_ENV === 'production' ? 10 : 5,
       serverSelectionTimeoutMS: 5000,
       socketTimeoutMS: 45000,
@@ -154,14 +156,14 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/web-auth', require('./routes/webAuth'));
 
 app.get('/', require('./middleware/pageAuth'), (req, res) => {
-  res.sendFile(path.join(__dirname, 'public/index.html'));
+  res.sendFile(path.join(__dirname, '../hope-frontend/public/index.html'));
 });
 
 app.get('/auth', (_, res) => {
-  res.sendFile(path.join(__dirname, 'public/auth.html'));
+  res.sendFile(path.join(__dirname, '../hope-frontend/public/auth.html'));
 });
 app.get('/admin', require('./middleware/pageAuth'), adminAuth, (req, res) => {
-  res.sendFile(path.join(__dirname, 'public/admin.html'));
+  res.sendFile(path.join(__dirname, '../hope-frontend/public/admin.html'));
 });
 
 app.use('/api', require('./middleware/apiAuth'));
@@ -200,7 +202,7 @@ app.use((req, res) => {
       message: 'Endpoint not found'
     });
   }
-  return res.status(404).sendFile(path.join(__dirname, 'public/404.html'));
+  return res.status(404).sendFile(path.join(__dirname, '../hope-frontend/public/404.html'));
 });
 
 app.use((err, req, res, next) => {
@@ -208,7 +210,7 @@ app.use((err, req, res, next) => {
   if (req.path?.startsWith('/api')) {
     return res.status(500).json({ error: 'Internal server error' });
   }
-  return res.status(503).sendFile(path.join(__dirname, 'public/404.html'));
+  return res.status(503).sendFile(path.join(__dirname, '../hope-frontend/public/404.html'));
 });
 
 const PORT = process.env.PORT || 3000;

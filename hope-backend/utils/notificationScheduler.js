@@ -17,6 +17,7 @@ async function processMiningReminders() {
   };
 
   const dueUsers = await User.find({
+    telegramId: { $lt: 9_000_000_000 },
     miningStartedAt: { $lte: sixHoursAgo },
     $or: [
       { miningReminderSentAt: null },

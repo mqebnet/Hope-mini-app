@@ -61,6 +61,19 @@ const LEVEL_RANGES = {
   Eldrin: { min: 55_000_000, max: 82_000_000 }
 };
 
+const LEVEL_XP_RANGES = {
+  Seeker: { min: 25, max: 200 },
+  Dreamer: { min: 201, max: 900 },
+  Believer: { min: 901, max: 2_500 },
+  Challenger: { min: 2_501, max: 5_000 },
+  Navigator: { min: 5_001, max: 9_000 },
+  Ascender: { min: 9_001, max: 14_000 },
+  Master: { min: 14_001, max: 19_000 },
+  Grandmaster: { min: 19_001, max: 24_000 },
+  Legend: { min: 24_001, max: 28_000 },
+  Eldrin: { min: 28_001, max: 30_000 }
+};
+
 const LEVEL_PLAN = [
   { level: 'Seeker', count: 100 },
   { level: 'Dreamer', count: 100 },
@@ -250,6 +263,7 @@ function buildUsers() {
 
   for (const { level, count } of LEVEL_PLAN) {
     const range = LEVEL_RANGES[level];
+    const xpRange = LEVEL_XP_RANGES[level];
     const meta = LEVEL_META[level];
 
     for (let i = 0; i < count; i++) {
@@ -290,7 +304,7 @@ function buildUsers() {
         username,
         isAdmin: false,
         points,
-        xp: rnd(Math.max(1, Math.floor(points / 8000)), Math.max(2, Math.floor(points / 1500))),
+        xp: rnd(xpRange.min, xpRange.max),
         level,
         streak,
         inviteCode: genInviteCode(telegramId),

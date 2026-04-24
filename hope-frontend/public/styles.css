@@ -2529,6 +2529,50 @@ input:checked + .slider:before {
   margin-bottom: 6px;
 }
 
+.arcade-pass-banner {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(0, 255, 170, 0.22);
+  background: linear-gradient(180deg, rgba(8, 44, 54, 0.94), rgba(5, 22, 30, 0.98));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  text-align: center;
+}
+
+.arcade-pass-banner-head {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #f0fff8;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.arcade-pass-banner-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: #2cf5a1;
+  box-shadow: 0 0 14px rgba(44, 245, 161, 0.65);
+}
+
+.arcade-pass-banner-copy {
+  display: block;
+  margin-top: 6px;
+  color: #9fc2b9;
+  font-size: 12px;
+}
+
+.arcade-entry-back {
+  display: block;
+  width: auto;
+  min-width: 190px;
+  max-width: 240px;
+  margin: 16px auto 0;
+  padding: 10px 18px;
+}
+
 .slidingtiles-board {
   --grid-size: 4;
   display: grid;

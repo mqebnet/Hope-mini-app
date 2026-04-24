@@ -46,6 +46,8 @@ class BlockTowerGame {
     this.previewAnimationFrame = null;
     this.buildPhaseBound = false;
     this.handleBuildClick = this.handleBuildClick.bind(this);
+    this.hasActivePass = false;
+    this.passValidUntil = null;
   }
 
   async init() {
@@ -59,7 +61,32 @@ class BlockTowerGame {
       console.warn('Block Tower user bootstrap failed:', err);
     }
 
+    await this.loadPassStatus();
     this.renderDifficultySelector();
+  }
+
+  async loadPassStatus() {
+    try {
+      const response = await fetch('/api/games/blocktower/status', { credentials: 'include', cache: 'no-store' });
+      const data = await response.json();
+      if (response.ok) {
+        this.hasActivePass = Boolean(data?.hasActivePass);
+        this.passValidUntil = data?.passValidUntil || null;
+      }
+    } catch (_) {
+      this.hasActivePass = false;
+      this.passValidUntil = null;
+    }
+  }
+
+  getPassActiveMarkup() {
+    if (!this.hasActivePass) return '';
+    return `
+      <div class="arcade-pass-banner">
+        <div class="arcade-pass-banner-head">Pass Active <span class="arcade-pass-banner-dot" aria-hidden="true"></span></div>
+        <small class="arcade-pass-banner-copy">${this.passValidUntil ? `until ${new Date(this.passValidUntil).toLocaleString()}` : 'Pass is active now.'}</small>
+      </div>
+    `;
   }
 
   renderDifficultySelector() {
@@ -67,6 +94,7 @@ class BlockTowerGame {
 
     this.container.innerHTML = `
       <div class="difficulty-selector arcade-shell">
+        ${this.getPassActiveMarkup()}
         <h3>${t('blocktower.select_difficulty', 'Choose your tower run')}</h3>
         <div class="difficulty-buttons">
           <button class="difficulty-btn" data-difficulty="easy">
@@ -86,12 +114,14 @@ class BlockTowerGame {
           </button>
         </div>
         <p class="flipcards-instructions">${t('blocktower.instructions', 'Memorize the color order, then rebuild the tower from bottom to top before time runs out.')}</p>
+        <button type="button" class="btn-back-games arcade-entry-back" id="blocktower-back-market">${t('back_to_market', 'Back to Marketplace')}</button>
       </div>
     `;
 
     this.container.querySelectorAll('[data-difficulty]').forEach((button) => {
       button.addEventListener('click', () => this.startGame(button.dataset.difficulty));
     });
+    this.container.querySelector('#blocktower-back-market')?.addEventListener('click', () => navigateWithFeedback('marketPlace.html'));
   }
 
   async startGame(difficulty = 'normal') {

@@ -19,6 +19,52 @@ function toClientCards(cards = []) {
   }));
 }
 
+async function persistMoveState(session, options = {}) {
+  const {
+    moveEntry,
+    matched = false,
+    completed = false,
+    speedAnalysisUpdated = false
+  } = options;
+
+  const update = {
+    $push: { moves: moveEntry },
+    $inc: { matchAttempts: 1 }
+  };
+
+  const setPayload = {};
+
+  if (matched) {
+    setPayload.matchedTriplets = session.matchedTriplets;
+    setPayload.correctMatches = session.correctMatches;
+    setPayload.cards = session.cards;
+  }
+
+  if (completed) {
+    setPayload.status = session.status;
+    setPayload.completedAt = session.completedAt;
+    setPayload.timeUsedSeconds = session.timeUsedSeconds;
+    setPayload.reward = session.reward;
+  }
+
+  if (speedAnalysisUpdated) {
+    setPayload.speedAnalysis = session.speedAnalysis;
+  }
+
+  if (Object.keys(setPayload).length) {
+    update.$set = setPayload;
+  }
+
+  const result = await GameSession.updateOne(
+    { _id: session._id, telegramId: session.telegramId, status: 'active', gameType: 'flipcards' },
+    update
+  );
+
+  if (!result?.matchedCount) {
+    throw new GameEngineError('Game is no longer active', 400);
+  }
+}
+
 module.exports = {
   id: 'flipcards',
   version: '1.0.0',
@@ -91,11 +137,12 @@ module.exports = {
       throw new GameEngineError(validation.reason, 400);
     }
 
-    session.moves.push({
+    const moveEntry = {
       cardIds,
       timestamp: new Date(),
       duration: clientDuration
-    });
+    };
+    session.moves.push(moveEntry);
     session.matchAttempts += 1;
 
     const matchResult = session.checkTripletMatch(cardIds);
@@ -112,6 +159,7 @@ module.exports = {
       (session.matchedTriplets.length / session.totalTriplets) * 100
     );
 
+    let speedAnalysisUpdated = false;
     if (session.matchedTriplets.length === session.totalTriplets) {
       session.completedAt = new Date();
       session.timeUsedSeconds = Math.round((session.completedAt - session.startedAt) / 1000);
@@ -127,12 +175,18 @@ module.exports = {
           suspiciousPattern: true,
           flagReason: suspicious.reason
         };
+        speedAnalysisUpdated = true;
       }
 
       session.status = 'completed';
     }
 
-    await session.save();
+    await persistMoveState(session, {
+      moveEntry,
+      matched: matchResult.matched,
+      completed: session.status === 'completed',
+      speedAnalysisUpdated
+    });
 
     return {
       success: true,
