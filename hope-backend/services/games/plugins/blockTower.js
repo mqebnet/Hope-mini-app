@@ -1,4 +1,5 @@
 const ArcadeGameSession = require('../../../models/ArcadeGameSession');
+const User = require('../../../models/User');
 const { GameEngineError } = require('../GameEngine');
 const {
   GAME_PASS_USD,
@@ -33,8 +34,57 @@ const DIFFICULTY_CONFIG = {
   hard: { totalBlocks: 12, timeLimitSeconds: 60, previewSeconds: 12, palette: HARD_PALETTE }
 };
 
+const HINT_COSTS = [
+  { bronzeTickets: 10, points: 0 },
+  { bronzeTickets: 20, points: 100 }
+];
+const HINT_REVEAL_SECONDS = 10;
+
 function getConfig(difficulty) {
   return DIFFICULTY_CONFIG[normalizeDifficulty(difficulty)] || DIFFICULTY_CONFIG.normal;
+}
+
+function hintEnabledForDifficulty(difficulty) {
+  return normalizeDifficulty(difficulty) !== 'easy';
+}
+
+function getHintUses(state = {}) {
+  return Math.max(0, Number(state?.hintUses || 0));
+}
+
+function getHintNextCost(hintUses = 0) {
+  const cost = HINT_COSTS[hintUses];
+  return cost
+    ? {
+        bronzeTickets: Number(cost.bronzeTickets || 0),
+        points: Number(cost.points || 0)
+      }
+    : { bronzeTickets: 0, points: 0 };
+}
+
+function formatHintCost(cost = {}) {
+  const parts = [];
+  if (Number(cost.bronzeTickets || 0) > 0) parts.push(`${Number(cost.bronzeTickets)} Bronze tickets`);
+  if (Number(cost.points || 0) > 0) parts.push(`${Number(cost.points)} points`);
+  return parts.join(' and ');
+}
+
+function buildHintState(session) {
+  const enabled = hintEnabledForDifficulty(session?.difficulty);
+  const used = enabled ? getHintUses(session?.state) : 0;
+  const maxUses = enabled ? HINT_COSTS.length : 0;
+  const remainingUses = enabled ? Math.max(0, maxUses - used) : 0;
+  const nextCost = remainingUses > 0 ? getHintNextCost(used) : { bronzeTickets: 0, points: 0 };
+
+  return {
+    enabled,
+    used,
+    maxUses,
+    remainingUses,
+    nextCostBronze: Number(nextCost.bronzeTickets || 0),
+    nextCostPoints: Number(nextCost.points || 0),
+    revealSeconds: enabled ? HINT_REVEAL_SECONDS : 0
+  };
 }
 
 function countColors(stack = []) {
@@ -156,6 +206,7 @@ function buildStatePayload(session, options = {}) {
     timeElapsed: Math.min(getElapsedSeconds(session), session.timeLimitSeconds),
     timeLimit: session.timeLimitSeconds,
     reward: session.status === 'completed' ? session.reward : null,
+    hint: buildHintState(session),
     targetStack: options.includeTarget === true ? targetStack : null
   };
 }
@@ -215,7 +266,12 @@ async function persistMoveState(session, builtStack, options = {}) {
 
 module.exports = {
   id: 'blocktower',
-  version: '1.1.0',
+  version: '1.2.0',
+  __test__: {
+    buildHintState,
+    getHintNextCost,
+    hintEnabledForDifficulty
+  },
   meta: {
     name: 'Block Tower',
     description: 'Memorize the tower, then rebuild it before the timer runs out.',
@@ -254,7 +310,8 @@ module.exports = {
         palette,
         targetStack,
         inventory,
-        builtStack: []
+        builtStack: [],
+        hintUses: 0
       },
       metrics: {
         previewSeconds: config.previewSeconds,
@@ -284,6 +341,77 @@ module.exports = {
     const targetStack = Array.isArray(session.state?.targetStack) ? [...session.state.targetStack] : [];
     const builtStack = Array.isArray(session.state?.builtStack) ? [...session.state.builtStack] : [];
     const inventory = session.state?.inventory || countColors(targetStack);
+
+    if (action === 'hint') {
+      if (!hintEnabledForDifficulty(session.difficulty)) {
+        throw new GameEngineError('Hints are only available in Normal and Hard mode', 400);
+      }
+
+      const used = getHintUses(session.state);
+      if (used >= HINT_COSTS.length) {
+        throw new GameEngineError('No hint uses remaining for this run', 400);
+      }
+
+      const cost = getHintNextCost(used);
+      const user = await User.findOneAndUpdate(
+        {
+          telegramId,
+          bronzeTickets: { $gte: Number(cost.bronzeTickets || 0) },
+          points: { $gte: Number(cost.points || 0) }
+        },
+        {
+          $inc: {
+            bronzeTickets: -Number(cost.bronzeTickets || 0),
+            points: -Number(cost.points || 0)
+          }
+        },
+        {
+          new: true
+        }
+      ).select('points xp level bronzeTickets silverTickets goldTickets');
+
+      if (!user) {
+        throw new GameEngineError(`Need ${formatHintCost(cost)} to use this help`, 400);
+      }
+
+      const nextHintUses = used + 1;
+      const result = await ArcadeGameSession.updateOne(
+        { _id: session._id, status: 'active', gameType: 'blocktower' },
+        { $set: { 'state.hintUses': nextHintUses } }
+      );
+
+      if (!result?.matchedCount) {
+        await User.updateOne({
+          telegramId
+        }, {
+          $inc: {
+            bronzeTickets: Number(cost.bronzeTickets || 0),
+            points: Number(cost.points || 0)
+          }
+        });
+        throw new GameEngineError('Game is no longer active', 400);
+      }
+
+      session.state.hintUses = nextHintUses;
+
+      return {
+        success: true,
+        status: session.status,
+        ...buildStatePayload(session, { includeTarget: true }),
+        hintReveal: {
+          durationSeconds: HINT_REVEAL_SECONDS,
+          targetStack
+        },
+        newStats: {
+          points: user.points,
+          xp: user.xp,
+          level: user.level,
+          bronzeTickets: user.bronzeTickets,
+          silverTickets: user.silverTickets,
+          goldTickets: user.goldTickets
+        }
+      };
+    }
 
     session.moveCount += 1;
 

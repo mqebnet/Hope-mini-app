@@ -46,7 +46,7 @@ const DIFFICULTY_CONFIG = {
     shuffleCount: 7,
     decisionTimerSeconds: 5,
     speedHint: 'fast',
-    timeLimitSeconds: 55
+    timeLimitSeconds: 70
   }
 };
 
@@ -88,38 +88,26 @@ function generateShuffleSequence(shuffleCount) {
 }
 
 /**
- * Apply the generated swaps and return the cup holding the ball after all
- * shuffles finish.
- *
- * @param {string} ballCupId
- * @param {string[][]} sequence
- * @returns {string}
- */
-function applyShuffles(ballCupId, sequence) {
-  let ball = ballCupId;
-  for (const [leftCupId, rightCupId] of sequence) {
-    if (ball === leftCupId) ball = rightCupId;
-    else if (ball === rightCupId) ball = leftCupId;
-  }
-  return ball;
-}
-
-/**
  * Build the server-owned state for a round.
  *
  * The client receives `startingBallCupId` so it can render the visible reveal
- * before shuffling, while `ballCupId` remains server-only until a guess is
- * processed.
+ * before shuffling. Cup ids represent the physical cups the player tracks on
+ * screen, so the hidden ball stays with that revealed cup id through the
+ * shuffle sequence.
  */
-function buildRoundState(difficulty) {
+function buildRoundState(difficulty, overrides = {}) {
   const config = getConfig(difficulty);
-  const startingBallCupId = pickRandomCup();
-  const shuffleSequence = generateShuffleSequence(config.shuffleCount);
+  const startingBallCupId = CUPS.includes(overrides.startingBallCupId)
+    ? overrides.startingBallCupId
+    : pickRandomCup();
+  const shuffleSequence = Array.isArray(overrides.shuffleSequence)
+    ? overrides.shuffleSequence
+    : generateShuffleSequence(config.shuffleCount);
 
   return {
     cups: [...CUPS],
     startingBallCupId,
-    ballCupId: applyShuffles(startingBallCupId, shuffleSequence),
+    ballCupId: startingBallCupId,
     shuffleCount: config.shuffleCount,
     shuffleSequence,
     decisionTimerSeconds: config.decisionTimerSeconds,
@@ -235,6 +223,31 @@ function buildSessionPayload(session) {
   };
 }
 
+function buildGuessResponseFromSession(session, currentRound = getCurrentRound(session.state || {})) {
+  const state = session.state || {};
+  const roundResult = getRoundResults(state).find((entry) => Number(entry?.round) === Number(currentRound)) || null;
+
+  if (!roundResult) return null;
+
+  return {
+    success: true,
+    correct: Boolean(roundResult.correct),
+    correctCupId: roundResult.correctCupId || null,
+    roundResult: {
+      round: Number(roundResult.round || currentRound),
+      guessedCupId: roundResult.guessedCupId || null,
+      correct: Boolean(roundResult.correct),
+      timedOut: Boolean(roundResult.timedOut)
+    },
+    correctCount: Number(state.correctCount || 0),
+    consecutiveStreak: Number(state.consecutiveStreak || 0),
+    currentRound: Number(currentRound),
+    gameOver: Boolean(state.gameResult),
+    gameResult: state.gameResult || null,
+    reward: state.gameResult === 'win' ? session.reward : null
+  };
+}
+
 async function loadOwnedSession(telegramId, gameSessionId, select = '') {
   if (!gameSessionId) throw new GameEngineError('Missing gameSessionId', 400);
   const query = ArcadeGameSession.findById(gameSessionId);
@@ -265,6 +278,12 @@ async function expireIfNeeded(session) {
 module.exports = {
   id: 'shellgame',
   version: '1.0.0',
+  __test__: {
+    buildRoundState,
+    generateShuffleSequence,
+    getConfig,
+    getRoundLeadMs
+  },
   meta: {
     name: 'Red ball',
     description: 'Watch the red ball, follow the cups, trust your eyes.',
@@ -503,6 +522,15 @@ module.exports = {
     );
 
     if (!result?.matchedCount) {
+      const latestSession = await ArcadeGameSession.findById(session._id);
+      if (
+        latestSession &&
+        Number(latestSession.telegramId) === telegramId &&
+        latestSession.gameType === 'shellgame'
+      ) {
+        const resolvedResponse = buildGuessResponseFromSession(latestSession, currentRound);
+        if (resolvedResponse) return resolvedResponse;
+      }
       throw new GameEngineError('Game is no longer active', 400);
     }
 

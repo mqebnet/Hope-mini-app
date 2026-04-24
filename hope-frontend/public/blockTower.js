@@ -26,6 +26,7 @@ function showNotification(message, type = 'info') {
 class BlockTowerGame {
   constructor() {
     this.container = document.getElementById('blocktower-game');
+    this.userSnapshot = getCachedUser() || null;
     this.gameSessionId = null;
     this.palette = [];
     this.targetStack = [];
@@ -48,14 +49,30 @@ class BlockTowerGame {
     this.handleBuildClick = this.handleBuildClick.bind(this);
     this.hasActivePass = false;
     this.passValidUntil = null;
+    this.hint = {
+      enabled: false,
+      used: 0,
+      maxUses: 0,
+      remainingUses: 0,
+      nextCostBronze: 0,
+      nextCostPoints: 0,
+      revealSeconds: 10
+    };
+    this.hintOverlayVisible = false;
+    this.hintOverlayStack = [];
+    this.hintHideTimer = null;
   }
 
   async init() {
     const cached = getCachedUser();
-    if (cached) updateTopBar(cached);
+    if (cached) {
+      this.userSnapshot = cached;
+      updateTopBar(cached);
+    }
 
     try {
       const user = await fetchUserData();
+      this.userSnapshot = user;
       updateTopBar(user);
     } catch (err) {
       console.warn('Block Tower user bootstrap failed:', err);
@@ -91,6 +108,7 @@ class BlockTowerGame {
 
   renderDifficultySelector() {
     if (!this.container) return;
+    this.clearHintOverlay();
 
     this.container.innerHTML = `
       <div class="difficulty-selector arcade-shell">
@@ -126,6 +144,7 @@ class BlockTowerGame {
 
   async startGame(difficulty = 'normal') {
     try {
+      this.clearHintOverlay();
       const response = await fetch('/api/games/blocktower/start', {
         method: 'POST',
         credentials: 'include',
@@ -155,6 +174,7 @@ class BlockTowerGame {
       this.moveCount = 0;
       this.mistakes = 0;
       this.isGameActive = true;
+      this.syncState(data);
 
       this.renderPreviewPhase();
       this.startPreviewCountdown();
@@ -241,6 +261,8 @@ class BlockTowerGame {
             </div>
           </div>
 
+          ${this.renderHintControls()}
+
           <div class="blocktower-stage">
             <section class="blocktower-panel blocktower-panel-solution">
               <div class="blocktower-panel-head">
@@ -273,10 +295,179 @@ class BlockTowerGame {
 
     const builtStackEl = this.container.querySelector('#blocktower-built-stack');
     const trayGridEl = this.container.querySelector('#blocktower-tray-grid');
+    const helperHost = this.container.querySelector('#blocktower-helper-strip');
     if (builtStackEl) builtStackEl.innerHTML = this.renderBuiltStack();
     if (trayGridEl) trayGridEl.innerHTML = this.renderTrayButtons(false);
+    if (helperHost) {
+      helperHost.className = `blocktower-helper-strip${this.hintOverlayVisible ? ' is-revealing' : ''}`;
+      helperHost.innerHTML = this.renderHintControlContent();
+    }
     this.refreshStats();
     this.bindBuildEvents();
+  }
+
+  canUseHintFeature() {
+    return this.difficulty === 'normal' || this.difficulty === 'hard';
+  }
+
+  getBronzeBalance() {
+    if (this.userSnapshot && this.userSnapshot.bronzeTickets != null) {
+      return Number(this.userSnapshot.bronzeTickets);
+    }
+
+    const cached = getCachedUser();
+    if (cached && cached.bronzeTickets != null) {
+      this.userSnapshot = cached;
+      return Number(cached.bronzeTickets);
+    }
+
+    return null;
+  }
+
+  getPointsBalance() {
+    if (this.userSnapshot && this.userSnapshot.points != null) {
+      return Number(this.userSnapshot.points);
+    }
+
+    const cached = getCachedUser();
+    if (cached && cached.points != null) {
+      this.userSnapshot = cached;
+      return Number(cached.points);
+    }
+
+    return null;
+  }
+
+  getHintUiState() {
+    const enabled = this.canUseHintFeature() && Boolean(this.hint?.enabled);
+    const nextBronzeCost = Number(this.hint?.nextCostBronze || 0);
+    const nextPointsCost = Number(this.hint?.nextCostPoints || 0);
+    const remainingUses = Number(this.hint?.remainingUses || 0);
+    const bronzeBalance = this.getBronzeBalance();
+    const pointsBalance = this.getPointsBalance();
+    const hasEnoughBronze = bronzeBalance == null ? true : (nextBronzeCost > 0 ? bronzeBalance >= nextBronzeCost : true);
+    const hasEnoughPoints = pointsBalance == null ? true : (nextPointsCost > 0 ? pointsBalance >= nextPointsCost : true);
+    const costSummary = nextPointsCost > 0
+      ? `${nextBronzeCost} Bronze tickets + ${nextPointsCost} Points`
+      : `${nextBronzeCost} Bronze tickets`;
+
+    let disabled = this.isProcessing || !this.isGameActive || this.hintOverlayVisible;
+    let copy = t('blocktower.help_ready_copy', `This will cost ${costSummary}`);
+
+    if (!enabled) {
+      disabled = true;
+      copy = t('blocktower.help_ready_copy', `This will cost ${costSummary}`);
+    } else if (remainingUses <= 0) {
+      disabled = true;
+      copy = t('blocktower.help_spent_copy', 'You have used both help charges for this run.');
+    } else if (!hasEnoughBronze || !hasEnoughPoints) {
+      disabled = true;
+      copy = t('blocktower.help_low_balance_copy', `Need ${costSummary} for the next help.`);
+    } else if (this.hintOverlayVisible) {
+      disabled = true;
+      copy = t('blocktower.help_showing_copy', 'Solved stack is visible right now.');
+    }
+
+    return {
+      enabled,
+      disabled,
+      nextBronzeCost,
+      nextPointsCost,
+      remainingUses,
+      bronzeBalance,
+      pointsBalance,
+      costSummary,
+      copy
+    };
+  }
+
+  renderHintControls() {
+    if (!this.canUseHintFeature()) return '';
+    return `
+      <div id="blocktower-helper-strip" class="blocktower-helper-strip${this.hintOverlayVisible ? ' is-revealing' : ''}">
+        ${this.renderHintControlContent()}
+      </div>
+    `;
+  }
+
+  renderHintControlContent() {
+    const state = this.getHintUiState();
+    const used = Number(this.hint?.used || 0);
+    const maxUses = Number(this.hint?.maxUses || 0);
+    const buttonLabel = state.nextBronzeCost > 0
+      ? t('blocktower.help_button', `Help - ${state.costSummary}`)
+      : t('blocktower.help_button_spent', 'Help');
+    const metaLabel = state.remainingUses > 0 && state.nextBronzeCost > 0
+      ? t('blocktower.help_meta', `Next: ${state.costSummary} - ${used}/${maxUses || 2} used`)
+      : t('blocktower.help_meta_spent', `${used}/${maxUses || 2} used - 0 left`);
+    const previewMarkup = this.hintOverlayVisible && this.hintOverlayStack.length
+      ? this.renderHintPreviewPanel()
+      : '';
+
+    return `
+      <div class="blocktower-helper-main">
+        <div class="blocktower-helper-copy">
+          <strong>${t('blocktower.help_title', 'Help')}</strong>
+          <span>${state.copy}</span>
+        </div>
+        <div class="blocktower-helper-actions">
+          <div class="blocktower-helper-meta">${metaLabel}</div>
+          <button
+            type="button"
+            id="blocktower-hint-button"
+            class="blocktower-helper-btn${state.disabled ? ' is-disabled' : ''}"
+            ${state.disabled ? 'disabled' : ''}
+          >${buttonLabel}</button>
+        </div>
+      </div>
+      ${previewMarkup}
+    `;
+  }
+
+  renderHintPreviewPanel() {
+    if (!this.hintOverlayVisible || !this.hintOverlayStack.length) return '';
+
+    return `
+      <div class="blocktower-helper-preview">
+        <div class="blocktower-helper-preview-head">
+          <strong>${t('blocktower.hint_overlay_title', 'Solved')}</strong>
+          <span>${t('blocktower.hint_overlay_timer', '10s')}</span>
+        </div>
+        <div class="blocktower-helper-preview-stack">
+          ${this.hintOverlayStack.map((colorId) => {
+            const color = this.getColorMeta(colorId);
+            return `
+              <div
+                class="blocktower-helper-preview-block"
+                style="--tower-color:${color.hex}"
+                aria-label="${color.label}"
+                title="${color.label}"
+              ></div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  showHintOverlay(targetStack = [], durationSeconds = 10) {
+    this.clearHintOverlay(false);
+    this.hintOverlayVisible = true;
+    this.hintOverlayStack = Array.isArray(targetStack) ? [...targetStack] : [];
+    this.renderBuildPhase();
+    this.hintHideTimer = window.setTimeout(() => {
+      this.clearHintOverlay();
+    }, Math.max(1, Number(durationSeconds || 10)) * 1000);
+  }
+
+  clearHintOverlay(shouldRender = true) {
+    clearTimeout(this.hintHideTimer);
+    this.hintHideTimer = null;
+    this.hintOverlayVisible = false;
+    this.hintOverlayStack = [];
+    if (shouldRender && this.container?.querySelector('[data-blocktower-phase="build"]')) {
+      this.renderBuildPhase();
+    }
   }
 
   renderTrayButtons(disabled = false) {
@@ -373,6 +564,12 @@ class BlockTowerGame {
       return;
     }
 
+    const hintButton = event.target.closest('#blocktower-hint-button');
+    if (hintButton && !hintButton.disabled) {
+      this.requestHint(hintButton);
+      return;
+    }
+
     const trayButton = event.target.closest('.blocktower-tray-brick[data-color-id]');
     if (trayButton && !trayButton.disabled) {
       this.sendMove('add', { colorId: trayButton.dataset.colorId }, trayButton);
@@ -409,6 +606,55 @@ class BlockTowerGame {
     this.builtStack = Array.isArray(data.builtStack) ? data.builtStack : this.builtStack;
     this.mistakes = Number(data.mistakes || 0);
     this.moveCount = Number(data.moveCount || this.moveCount);
+    if (data.hint && typeof data.hint === 'object') {
+      this.hint = {
+        ...this.hint,
+        enabled: Boolean(data.hint.enabled),
+        used: Number(data.hint.used || 0),
+        maxUses: Number(data.hint.maxUses || 0),
+        remainingUses: Number(data.hint.remainingUses || 0),
+        nextCostBronze: Number(data.hint.nextCostBronze || 0),
+        nextCostPoints: Number(data.hint.nextCostPoints || 0),
+        revealSeconds: Number(data.hint.revealSeconds || this.hint.revealSeconds || 10)
+      };
+    }
+  }
+
+  async requestHint(trigger = null) {
+    if (!this.isGameActive || this.isProcessing) return;
+    this.isProcessing = true;
+
+    try {
+      const response = await fetch('/api/games/blocktower/move', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          gameSessionId: this.gameSessionId,
+          action: 'hint'
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data?.success) {
+        throw new Error(data?.error || t('blocktower.hint_failed', 'Hint failed'));
+      }
+
+      this.syncState(data);
+      if (data.newStats) this.applyNewStats(data.newStats);
+      this.showHintOverlay(data.hintReveal?.targetStack || this.targetStack, data.hintReveal?.durationSeconds || this.hint.revealSeconds);
+    } catch (err) {
+      console.error('Block Tower hint failed:', err);
+      if (trigger) {
+        trigger.classList.add('is-wrong');
+        setTimeout(() => trigger.classList.remove('is-wrong'), 300);
+      }
+      showNotification(err.message || t('blocktower.hint_failed', 'Hint failed'), 'error');
+      this.renderBuildPhase();
+    } finally {
+      this.isProcessing = false;
+      if (this.container?.querySelector('[data-blocktower-phase="build"]')) this.renderBuildPhase();
+    }
   }
 
   async sendMove(action, payload = {}, trigger = null) {
@@ -433,6 +679,7 @@ class BlockTowerGame {
       }
 
       this.syncState(data);
+      this.isProcessing = false;
       this.renderBuildPhase();
 
       if (data.towerLocked && data.towerMatches === false) {
@@ -471,6 +718,7 @@ class BlockTowerGame {
 
     this.isGameActive = false;
     clearInterval(this.timerInterval);
+    this.clearHintOverlay(false);
 
     try {
       const response = await fetch('/api/games/blocktower/complete', {
@@ -503,6 +751,7 @@ class BlockTowerGame {
       silverTickets: Number(newStats.silverTickets ?? cached.silverTickets ?? 0),
       goldTickets: Number(newStats.goldTickets ?? cached.goldTickets ?? 0)
     };
+    this.userSnapshot = merged;
     setCachedUser(merged);
     updateTopBar(merged);
   }
@@ -557,6 +806,7 @@ class BlockTowerGame {
 
     this.isGameActive = false;
     clearInterval(this.timerInterval);
+    this.clearHintOverlay(false);
     this.abandonGame(false);
 
     this.container.innerHTML = `
@@ -571,6 +821,7 @@ class BlockTowerGame {
 
   async abandonGame(returnToMarket = false) {
     clearInterval(this.timerInterval);
+    this.clearHintOverlay(false);
     const sessionId = this.gameSessionId;
     this.gameSessionId = null;
     this.isGameActive = false;

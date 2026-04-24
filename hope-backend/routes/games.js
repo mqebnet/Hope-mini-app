@@ -25,6 +25,14 @@ function getMoveCooldownKey(gameId) {
   return `game:move:${String(gameId || 'unknown').toLowerCase()}`;
 }
 
+function shouldApplyMoveCooldown(gameId, body = {}) {
+  const normalizedGameId = String(gameId || '').toLowerCase();
+  if (normalizedGameId !== 'shellgame') return true;
+
+  const action = String(body?.action || 'guess').toLowerCase();
+  return action === 'guess';
+}
+
 function handleError(res, err) {
   if (err instanceof GameEngineError) {
     return res.status(err.status || 400).json({ success: false, error: err.message });
@@ -58,16 +66,18 @@ router.post('/:gameId/start', async (req, res) => {
 
 router.post('/:gameId/move', async (req, res) => {
   try {
-    const telegramId = req.user?.telegramId;
-    const cooldownKey = getMoveCooldownKey(req.params.gameId);
-    const cooldownMs = getMoveCooldownMs(req.params.gameId);
-    const { allowed, retryAfterMs } = cooldown.consume(telegramId, cooldownKey, cooldownMs);
-    if (!allowed) {
-      return res.status(429).json({
-        success: false,
-        error: 'Too fast! Wait before your next move.',
-        retryAfterMs
-      });
+    if (shouldApplyMoveCooldown(req.params.gameId, req.body || {})) {
+      const telegramId = req.user?.telegramId;
+      const cooldownKey = getMoveCooldownKey(req.params.gameId);
+      const cooldownMs = getMoveCooldownMs(req.params.gameId);
+      const { allowed, retryAfterMs } = cooldown.consume(telegramId, cooldownKey, cooldownMs);
+      if (!allowed) {
+        return res.status(429).json({
+          success: false,
+          error: 'Too fast! Wait before your next move.',
+          retryAfterMs
+        });
+      }
     }
     return await invoke(res, req.params.gameId, 'move', req, req.body || {});
   } catch (err) {

@@ -314,27 +314,55 @@ function renderUsersTable(users) {
   }).join('');
 
   wrap.innerHTML = `
-    <table class="user-table">
-      <thead>
-        <tr>
-          <th data-sort="telegramId">ID</th>
-          <th data-sort="username">Username</th>
-          <th data-sort="level">Level</th>
-          <th data-sort="points">Points</th>
-          <th data-sort="xp">XP</th>
-          <th data-sort="streak">Streak</th>
-          <th data-sort="transactionsCount">Transactions</th>
-          <th>Tickets</th>
-          <th data-sort="isAdmin">Admin</th>
-          <th data-sort="createdAt">Joined</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody>${rows}</tbody>
-    </table>
+    <div class="users-table-viewport">
+      <div class="users-table-stage">
+        <table class="user-table">
+          <thead>
+            <tr>
+              <th data-sort="telegramId">ID</th>
+              <th data-sort="username">Username</th>
+              <th data-sort="level">Level</th>
+              <th data-sort="points">Points</th>
+              <th data-sort="xp">XP</th>
+              <th data-sort="streak">Streak</th>
+              <th data-sort="transactionsCount">Transactions</th>
+              <th>Tickets</th>
+              <th data-sort="isAdmin">Admin</th>
+              <th data-sort="createdAt">Joined</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>
   `;
 
   updateSortIndicators();
+  fitUsersTableToViewport();
+}
+
+function fitUsersTableToViewport() {
+  const viewport = document.querySelector('#users-table-wrap .users-table-viewport');
+  const stage = document.querySelector('#users-table-wrap .users-table-stage');
+  const table = document.querySelector('#users-table-wrap .user-table');
+  if (!viewport || !stage || !table) return;
+
+  stage.style.zoom = '';
+  stage.style.width = 'max-content';
+
+  const viewportWidth = viewport.clientWidth;
+  const tableWidth = table.scrollWidth;
+  if (!viewportWidth || !tableWidth) return;
+
+  if (window.innerWidth > 760 || tableWidth <= viewportWidth) {
+    viewport.style.overflowX = 'auto';
+    return;
+  }
+
+  const scale = Math.max(0.56, Math.min(1, viewportWidth / tableWidth));
+  stage.style.zoom = String(scale);
+  viewport.style.overflowX = 'hidden';
 }
 
 async function loadUsers(page = 1) {
@@ -367,7 +395,11 @@ async function loadUsers(page = 1) {
 }
 
 function prefillEdit(telegramId) {
-  document.getElementById('edit-telegram-id').value = telegramId;
+  const telegramInput = document.getElementById('edit-telegram-id');
+  const updateCard = document.getElementById('update-user-card');
+  if (!telegramInput) return;
+
+  telegramInput.value = telegramId;
   document.getElementById('edit-points').value = '';
   document.getElementById('edit-xp').value = '';
   document.getElementById('edit-streak').value = '';
@@ -376,7 +408,11 @@ function prefillEdit(telegramId) {
   document.getElementById('edit-gold').value = '';
   document.getElementById('edit-level').value = '';
   document.getElementById('edit-admin').value = '';
-  document.getElementById('edit-telegram-id').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  updateCard?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  window.setTimeout(() => {
+    telegramInput.focus({ preventScroll: true });
+    telegramInput.select();
+  }, 260);
   clearResult('update-user-result');
 }
 
@@ -722,6 +758,8 @@ window.addEventListener('hope:globalEvent', (event) => {
 window.addEventListener('hope:wsync-status', (event) => {
   updateRealtimeStatus(event.detail || {});
 });
+
+window.addEventListener('resize', fitUsersTableToViewport);
 
 window.prefillEdit = prefillEdit;
 window.quickReset = quickReset;

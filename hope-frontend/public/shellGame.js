@@ -161,7 +161,8 @@ class RedBallGame {
       .redball-cup-body{position:relative;width:100%;height:102px;border-radius:14px 14px 32px 32px;background:linear-gradient(180deg, #ebd8b4, #915733);box-shadow:0 18px 24px rgba(0,0,0,.28)}
       .redball-cup-body:before{content:'';position:absolute;top:-8px;left:50%;width:26px;height:15px;border-radius:999px;transform:translateX(-50%);background:#c88d5f}
       .redball-cup-shadow{position:absolute;left:50%;bottom:24px;width:64px;height:14px;border-radius:50%;transform:translateX(-50%);background:rgba(0,0,0,.22);filter:blur(4px)}
-      .redball-cup-label{display:block;margin-top:8px;text-align:center;color:#d7ebe4;font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase}
+      .redball-cup-label{display:block;margin-top:8px;text-align:center;color:#d7ebe4;font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;opacity:1;transform:translateY(0);transition:opacity 140ms ease,transform 140ms ease}
+      .redball-cup.labels-hidden .redball-cup-label{opacity:0;transform:translateY(4px)}
       .redball-ball{position:absolute;left:50%;bottom:-12px;width:24px;height:24px;border-radius:50%;background:radial-gradient(circle at 30% 28%, rgba(255,255,255,.95), rgba(255,255,255,.1) 26%), linear-gradient(145deg,#ff6d89,#b91133);transform:translateX(-50%);opacity:0;transition:opacity 160ms ease}
       .redball-cup.is-ball .redball-ball{opacity:1}
       .redball-table-foot{display:grid;gap:10px}
@@ -241,6 +242,41 @@ class RedBallGame {
 
   clearSessionId() {
     try { localStorage.removeItem(STORAGE_KEY); } catch (_) {}
+  }
+
+  isTerminalMoveError(message = '') {
+    return [
+      'Game is no longer active',
+      'Round already resolved. Start the next round.',
+      'Game already ended',
+      'Time limit exceeded',
+      'No more rounds available'
+    ].includes(String(message || ''));
+  }
+
+  async syncFromServerSession(sessionId = this.gameSessionId) {
+    if (!sessionId) return false;
+
+    const res = await fetch(`/api/games/shellgame/session/${sessionId}`, {
+      credentials: 'include',
+      cache: 'no-store'
+    });
+    const data = await res.json();
+    if (!res.ok || !data?.success) throw new Error(data?.error || 'Session unavailable');
+
+    this.syncSession(data);
+
+    if (this.status === 'active') {
+      if (data.roundResolved && this.lastRoundResult) this.renderResult();
+      else this.renderRound({ resume: true });
+      return true;
+    }
+
+    if (!(this.status === 'completed' && this.gameResult === 'win' && !this.rewardClaimed)) {
+      this.clearSessionId();
+    }
+    this.renderGameOver();
+    return true;
   }
 
   syncSession(data = {}) {
@@ -334,23 +370,8 @@ class RedBallGame {
     if (!savedId) return false;
 
     try {
-      const res = await fetch(`/api/games/shellgame/session/${savedId}`, { credentials: 'include', cache: 'no-store' });
-      const data = await res.json();
-      if (!res.ok || !data?.success) throw new Error(data?.error || 'Session unavailable');
-      this.syncSession(data);
       if (!this.gameSessionId) this.gameSessionId = savedId;
-
-      if (this.status === 'active') {
-        if (data.roundResolved && this.lastRoundResult) this.renderResult();
-        else this.renderRound({ resume: true });
-        return true;
-      }
-
-      if (!(this.status === 'completed' && this.gameResult === 'win' && !this.rewardClaimed)) {
-        this.clearSessionId();
-      }
-      this.renderGameOver();
-      return true;
+      return await this.syncFromServerSession(savedId);
     } catch (err) {
       console.warn('Red ball session restore failed:', err);
       this.clearSessionId();
@@ -453,6 +474,12 @@ class RedBallGame {
     });
   }
 
+  setCupLabelsVisible(visible) {
+    Object.values(this.cupButtons).forEach((button) => {
+      button.classList.toggle('labels-hidden', !visible);
+    });
+  }
+
   applyPositions(animated = true, duration = this.getStepMs()) {
     const offsets = this.getCupOffsets();
     Object.entries(this.cupButtons).forEach(([cupId, button]) => {
@@ -518,6 +545,7 @@ class RedBallGame {
 
     this.cacheButtons();
     this.applyPositions(false);
+    this.setCupLabelsVisible(false);
     const fillEl = this.container.querySelector('#redball-fill');
     if (fillEl) fillEl.style.transform = 'scaleX(1)';
     Object.values(this.cupButtons).forEach((button) => {
@@ -572,10 +600,12 @@ class RedBallGame {
   async playIntro() {
     this.phase = 'shuffling';
     this.setFeedback('Ball is revealed', 'Lock in the starting cup before the table starts moving.', 'Open');
+    this.setCupLabelsVisible(false);
     this.setBall(this.startingBallCupId);
     await delay(ROUND_REVEAL_MS);
     this.setBall(null);
     await delay(ROUND_HIDE_MS);
+    this.setCupLabelsVisible(false);
     await this.animateSequence();
     this.enableGuessing();
   }
@@ -594,6 +624,7 @@ class RedBallGame {
   enableGuessing() {
     this.phase = 'guessing';
     this.setFeedback('Choose your cup', 'The shuffle is over. Tap the cup holding the red ball before the timer runs out.', 'Pick');
+    this.setCupLabelsVisible(true);
     const startButton = this.container.querySelector('#redball-start-round');
     if (startButton) {
       startButton.disabled = true;
@@ -682,13 +713,27 @@ class RedBallGame {
       }
     } catch (err) {
       console.error('Red ball guess failed:', err);
-      showNotification(err.message || 'Failed to submit your guess', auto ? 'warn' : 'error');
-      this.phase = 'guessing';
-      Object.values(this.cupButtons).forEach((button) => {
-        button.disabled = false;
-        button.classList.remove('is-disabled', 'is-picked');
-      });
-      this.startCountdown();
+      const message = err.message || 'Failed to submit your guess';
+      if (this.isTerminalMoveError(message)) {
+        try {
+          await this.syncFromServerSession();
+          showNotification(message, auto ? 'warn' : 'error');
+        } catch (syncErr) {
+          console.warn('Red ball session resync failed:', syncErr);
+          showNotification(message, auto ? 'warn' : 'error');
+          this.clearSessionId();
+          await this.loadPassStatus();
+          this.renderDifficultySelector();
+        }
+      } else {
+        showNotification(message, auto ? 'warn' : 'error');
+        this.phase = 'guessing';
+        Object.values(this.cupButtons).forEach((button) => {
+          button.disabled = false;
+          button.classList.remove('is-disabled', 'is-picked');
+        });
+        this.startCountdown();
+      }
     } finally {
       this.isProcessing = false;
     }
@@ -730,6 +775,7 @@ class RedBallGame {
 
     this.cacheButtons();
     this.applyPositions(false);
+    this.setCupLabelsVisible(true);
     this.setBall(correctCupId);
     Object.values(this.cupButtons).forEach((button) => {
       button.disabled = true;

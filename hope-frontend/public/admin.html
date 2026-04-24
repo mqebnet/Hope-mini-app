@@ -22,6 +22,8 @@
     .muted { color: #8aa6b8; font-size: 0.82rem; }
     .error { color: #ff6b6b; font-size: 0.82rem; }
 
+    .users-table-viewport { width: 100%; overflow-x: auto; overflow-y: hidden; margin-top: 10px; }
+    .users-table-stage { width: max-content; transform-origin: top left; }
     .user-table, .entries-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.85rem; }
     .user-table th, .user-table td, .entries-table th, .entries-table td { padding: 8px 6px; border-bottom: 1px solid rgba(255,255,255,0.08); text-align: left; }
     .user-table th { cursor: pointer; color: #9eead7; font-weight: 700; }
@@ -59,6 +61,15 @@
     .analytics-table td { color: #e7f6ef; }
     .analytics-table tr:hover td { background: rgba(0, 255, 170, 0.03); }
     .analytics-note { margin-top: 10px; color: #8aa6b8; font-size: 0.8rem; }
+    @media (max-width: 760px) {
+      .admin-wrap { padding: 12px; }
+      .admin-card { padding: 14px; }
+      .users-table-viewport { border-radius: 10px; }
+      .user-table th, .user-table td { padding: 6px 4px; white-space: nowrap; }
+      .user-table { font-size: 0.76rem; }
+      .btn-sm { padding: 5px 7px; font-size: 0.7rem; }
+      .cell-ellipsis { max-width: 100px; }
+    }
   </style>
 </head>
 <body>
@@ -117,7 +128,7 @@
       </div>
     </section>
 
-    <section class="admin-card">
+    <section class="admin-card" id="update-user-card">
       <h2>Update User</h2>
       <div class="admin-grid">
         <input id="edit-telegram-id" class="admin-input" placeholder="telegramId" />
