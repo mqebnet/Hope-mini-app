@@ -160,7 +160,7 @@ app.get('/', require('./middleware/pageAuth'), (req, res) => {
 });
 
 app.get('/auth', (_, res) => {
-  res.sendFile(path.join(__dirname, '../hope-frontend/public/auth.html'));
+  res.sendFile(path.join(__dirname, 'public/auth.html'));
 });
 app.get('/admin', require('./middleware/pageAuth'), adminAuth, (req, res) => {
   res.sendFile(path.join(__dirname, '../hope-frontend/public/admin.html'));
