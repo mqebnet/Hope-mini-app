@@ -1,0 +1,206 @@
+body.fallback-auth-body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: 'Poppins', Arial, sans-serif;
+  background:
+    radial-gradient(circle at 12% 12%, rgba(0, 255, 170, 0.14), rgba(0, 255, 170, 0) 35%),
+    radial-gradient(circle at 88% 5%, rgba(0, 234, 255, 0.12), rgba(0, 234, 255, 0) 34%),
+    linear-gradient(160deg, #031423 0%, #020812 60%, #01060d 100%);
+  color: #e6f6ff;
+}
+
+.fallback-shell {
+  width: min(980px, 94vw);
+  margin: 0 auto;
+  padding: 18px 0 44px;
+}
+
+.fallback-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid rgba(0, 255, 170, 0.28);
+  border-radius: 12px;
+  background: rgba(6, 17, 31, 0.78);
+  backdrop-filter: blur(4px);
+}
+
+.fallback-brand {
+  font-size: 18px;
+  font-weight: 700;
+  color: #00ffaa;
+}
+
+.fallback-nav-links {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.fallback-nav-links a {
+  text-decoration: none;
+  color: #c9e9f6;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 11px;
+  border-radius: 9px;
+  border: 1px solid rgba(128, 172, 196, 0.3);
+  background: rgba(15, 30, 45, 0.55);
+}
+
+.fallback-nav-links a.active {
+  color: #00251b;
+  background: linear-gradient(90deg, #00ffaa, #00eaff);
+  border-color: rgba(0, 255, 170, 0.7);
+}
+
+.fallback-hero,
+.fallback-card {
+  margin-top: 18px;
+  border: 1px solid rgba(0, 255, 170, 0.25);
+  border-radius: 14px;
+  background: rgba(6, 16, 29, 0.83);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.4);
+}
+
+.fallback-hero {
+  padding: 28px 20px;
+}
+
+.fallback-hero h1 {
+  margin: 0 0 10px;
+  color: #00ffaa;
+  font-size: clamp(28px, 5vw, 44px);
+  line-height: 1.05;
+}
+
+.fallback-hero p {
+  margin: 0;
+  color: #cae8f5;
+  max-width: 760px;
+  line-height: 1.6;
+  font-size: 15px;
+}
+
+.fallback-hero-actions {
+  margin-top: 18px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.fallback-hero-actions a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 136px;
+  padding: 11px 14px;
+  text-decoration: none;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.fallback-btn-primary {
+  color: #00251b;
+  background: linear-gradient(90deg, #00ffaa, #00eaff);
+}
+
+.fallback-btn-secondary {
+  color: #d6eff9;
+  border: 1px solid rgba(0, 255, 170, 0.4);
+  background: rgba(0, 255, 170, 0.12);
+}
+
+.fallback-card {
+  max-width: 520px;
+  margin-left: auto;
+  margin-right: auto;
+  padding: 22px 18px 18px;
+}
+
+.fallback-card h2 {
+  margin: 0 0 8px;
+  color: #00ffaa;
+  font-size: 26px;
+}
+
+.fallback-card p {
+  margin: 0 0 14px;
+  color: #c4deeb;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.fallback-form {
+  display: grid;
+  gap: 11px;
+}
+
+.fallback-form label {
+  font-size: 13px;
+  color: #d7eef9;
+  font-weight: 600;
+}
+
+.fallback-form input {
+  width: 100%;
+  border: 1px solid rgba(118, 156, 176, 0.4);
+  border-radius: 9px;
+  padding: 11px 10px;
+  font-size: 14px;
+  color: #eaf8ff;
+  background: rgba(8, 21, 36, 0.85);
+}
+
+.fallback-form input::placeholder {
+  color: rgba(180, 208, 224, 0.6);
+}
+
+.fallback-submit {
+  margin-top: 8px;
+  border: none;
+  border-radius: 10px;
+  padding: 12px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #00251b;
+  background: linear-gradient(90deg, #00ffaa, #00eaff);
+  cursor: pointer;
+}
+
+.fallback-submit:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.fallback-meta {
+  margin-top: 12px;
+  color: #acc9d9;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.fallback-result {
+  margin-top: 12px;
+  min-height: 20px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.fallback-result.error {
+  color: #ff9da4;
+}
+
+.fallback-result.success {
+  color: #91ffd4;
+}
+
+@media (max-width: 560px) {
+  .fallback-nav {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hope Universe - Login (Fallback)</title>
+  <link rel="stylesheet" href="fallback-auth.css">
+</head>
+<body class="fallback-auth-body">
+  <main class="fallback-shell">
+    <nav class="fallback-nav">
+      <div class="fallback-brand">Hope Universe</div>
+      <div class="fallback-nav-links">
+        <a href="landing.html">Home</a>
+        <a href="register.html">Register</a>
+        <a class="active" href="login.html">Login</a>
+        <a href="terms.html">Terms</a>
+        <a href="privacy.html">Privacy</a>
+      </div>
+    </nav>
+
+    <section class="fallback-card">
+      <h2>Sign In</h2>
+      <p>
+        Sign in with your registered Gmail address.
+      </p>
+
+      <form id="fallback-login-form" class="fallback-form" novalidate>
+        <label>
+          Gmail Address
+          <input type="email" name="email" placeholder="you@gmail.com" required>
+        </label>
+
+        <label>
+          Password
+          <input type="password" name="password" placeholder="Your password" required>
+        </label>
+
+        <button type="submit" class="fallback-submit">Login</button>
+        <div class="fallback-result" aria-live="polite"></div>
+      </form>
+
+      <p class="fallback-meta">
+        This fallback channel is prepared in the codebase and not activated as the main user path yet.
+      </p>
+    </section>
+  </main>
+  <script src="fallbackAuth.js"></script>
+</body>
+</html>

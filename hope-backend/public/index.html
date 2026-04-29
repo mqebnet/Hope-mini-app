@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hope - Home</title>
+  
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js" defer></script>
+  
+  <!-- Shared Styles -->
+  <link rel="stylesheet" href="styles.css" />
+
+  <!-- favicon (prevent 404) -->
+  <link rel="icon" href="/favicon.ico" />
+
+  <!-- Telegram Web App SDK -->
+  <script src="https://telegram.org/js/telegram-web-app.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0"></script>
+
+  <!-- Socket.IO Client for real-time sync -->
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+
+</head>
+<body>
+  <!-- Top Navigation Bar -->
+  <header id="top-nav">
+  <button id="profile-button" aria-label="Profile Menu">
+    <i data-lucide="user"></i>
+  </button>
+
+  <div id="user-stats">
+    <p class="tag" data-i18n="topbar.level">Level</p>
+    <span id="current-level">—</span>
+
+    <p class="tag" data-i18n="topbar.xp">XP</p>
+    <span id="user-exp">—</span>
+  </div>
+
+  <div id="ticket-icons">
+    <span id="bronze-tickets">—</span>
+    <span id="silver-tickets">—</span>
+    <span id="gold-tickets">—</span>
+  </div>
+
+  <div id="ton-connect-ui"></div>
+
+  <button id="ton-connect-button" aria-label="Connect Wallet">
+  </button>
+</header>
+
+<div id="display-panel">
+  <p class="tag" data-i18n="topbar.points">Points</p>
+
+  <div id="points-bar">
+    <div id="points-progress"></div>
+    <span id="points-display">—</span>
+  </div>
+
+  <button id="settings-button" aria-label="settings-button">
+    <i data-lucide="settings" class="settings-icon" aria-hidden="true"></i>
+  </button>
+</div>
+
+  
+  <!-- Settings Panel -->
+<div id="settings-panel" class="hidden">
+  <div class="settings-content">
+    <h2 data-i18n="settings.title">Settings</h2>
+    
+    <div class="setting-item">
+      <label data-i18n="settings.language">Language</label>
+<select id="language-select">
+  <option value="en">English</option>
+  <option value="es">Español</option>
+  <option value="ar">العربية (Arabic)</option>
+  <option value="fil">Filipino</option>
+  <option value="zh">中文 (Chinese)</option>
+  <option value="ru">Русский (Russian)</option>
+  <option value="ms">Bahasa Melayu (Malay)</option>
+</select>
+    </div>
+
+    <div class="setting-item">
+      <label data-i18n="settings.haptic">Haptic Feedback</label>
+      <label class="switch">
+        <input type="checkbox" id="haptic-toggle" checked>
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <div class="setting-item">
+      <label data-i18n="settings.sound">Sound Effects</label>
+      <label class="switch">
+        <input type="checkbox" id="sound-toggle" checked>
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <button class="close-settings" onclick="closeSettings()">&times;</button>
+  </div>
+</div>
+</div>
+
+  <!-- Main Content: Home -->
+  <main id="main-content">
+  <section id="home-content">
+    <button id="go-to-weekly-contest" disabled>
+  <i data-lucide="award"></i> <span data-i18n="home.weekly_contest">Weekly Contest</span>
+</button>
+
+
+    <p>Streak: <span id="streak">—</span> days 🔥</p>
+
+    <button id="check-in-button" aria-label="Daily Check In" data-i18n="home.check_in">
+      Check In
+    </button>
+  </section>
+
+  <!-- Mining Section -->
+  <section id="mining-section">
+    <h2 data-i18n="home.mining_heading">Mining for Points ⛏ </h2>
+
+    <div id="mining-bar">
+      <div id="mining-progress"></div>
+    </div>
+
+    <button id="farm-btn" data-i18n="home.start_mining">Start Mining</button>
+  </section>
+</main>
+
+  <div id="daily-checkin-modal" class="hidden" aria-hidden="true">
+    <div class="daily-checkin-card">
+      <button id="daily-checkin-close" class="daily-checkin-close" aria-label="Close Check-in Calendar">&times;</button>
+      <h2 data-i18n="checkin.title">Daily Check-in Calendar</h2>
+      <p id="daily-checkin-reset-time" class="daily-checkin-reset-time" data-i18n="checkin.resets">Resets daily at 00:02 UTC</p>
+      <div id="daily-checkin-streak-text" class="daily-checkin-streak-text">Current streak: 0 days</div>
+      <div id="daily-checkin-calendar" class="daily-checkin-calendar"></div>
+      <div class="daily-checkin-legend">
+        <span><i class="legend-dot checked"></i> <span data-i18n="checkin.checked">Checked</span></span>
+        <span><i class="legend-dot missed"></i> <span data-i18n="checkin.missed">Missed</span></span>
+        <span><i class="legend-dot available"></i> <span data-i18n="checkin.today">Today</span></span>
+      </div>
+      <button id="daily-checkin-modal-btn" class="daily-checkin-action" data-i18n="checkin.btn">Check In</button>
+    </div>
+  </div>
+
+
+
+<!-- Profile Panel (hidden by default) -->
+<div id="profile-container"></div>
+
+  <!-- Bottom Navigation Bar -->
+  <footer id="bottom-nav">
+    <a href="index.html" class="nav-btn" data-page="home"><i data-lucide="home"></i> <span data-i18n="nav.home">Home</span></a>
+    <a href="leaderBoard.html" class="nav-btn" data-page="leaderBoard"><i data-lucide="trending-up"></i> <span data-i18n="nav.leaders">Leaders</span></a>
+    <a href="invitePage.html" class="nav-btn" data-page="invitePage"><i data-lucide="users"></i> <span data-i18n="nav.invite">Invite</span></a>
+    <a href="marketPlace.html" class="nav-btn" data-page="marketPlace"><i data-lucide="shopping-cart"></i> <span data-i18n="nav.marketplace">Marketplace</span></a>
+    <a href="tasksPage.html" class="nav-btn" data-page="tasksPage"><i data-lucide="check-square"></i> <span data-i18n="nav.tasks">Tasks</span></a>
+</footer>
+
+<script type="module" src="notify.js"></script>
+<script type="module" src="userData.js"></script>
+<script type="module" src="script.js"></script>
+<script type="module" src="tonconnect.js"></script>
+<script type="module" src="connectWallet.js"></script>
+<!-- Page-Specific JavaScript -->
+  <script type="module" src="home.js"></script>
+  <script type="module" src="profile.js"></script>
+  <script type="module" src="settings.js"></script>
+  <script src="activeTab.js" defer></script>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      lucide.createIcons();
+    });
+  </script>
+
+</body>
+</html>
