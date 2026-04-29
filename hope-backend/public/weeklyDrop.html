@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hope - Weekly Contest</title>
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+  <!-- Shared Styles -->
+  <link rel="stylesheet" href="styles.css" />
+  <!-- Telegram Web App SDK -->
+  <script src="https://telegram.org/js/telegram-web-app.js" defer></script>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  
+</head>
+<body>
+  <!-- profile panel-->
+<div id="profile-container"></div>
+
+  <!-- Top Navigation Bar (Shared) -->
+ <header id="top-nav">
+  <button id="profile-button" aria-label="Profile Menu">
+    <i data-lucide="user"></i>
+  </button>
+
+  <div id="user-stats">
+    <p class="tag" data-i18n="topbar.level">Level</p>
+    <span id="current-level">-</span>
+    <p class="tag" data-i18n="topbar.xp">XP</p>
+    <span id="user-exp">-</span>
+  </div>
+
+  <div id="ticket-icons">
+    <span id="bronze-tickets">-</span>
+    <span id="silver-tickets">-</span>
+    <span id="gold-tickets">-</span>
+  </div>
+
+  <div id="ton-connect-ui"></div>
+
+  <button id="ton-connect-button" aria-label="Connect Wallet"></button>
+</header>
+<div id="display-panel">
+  <p class="tag" data-i18n="topbar.points">Points</p>
+  <div id="points-bar">
+    <div id="points-progress"></div>
+    <span id="points-display">—</span>
+  </div>
+</div>
+
+  <!-- Weekly Contest Section -->
+  <section id="weekly-drop-content">
+    <h1 class="weekly.title" data-i18n="weekly.title">Weekly Contest</h1>
+    <p id="eligibility-status"></p>
+    <p data-i18n="weekly.intro">Please read and agree to the following rules before entering the contest:</p>
+    <ul>
+      <li data-i18n="weekly.rule_1">Must be Level 3 (Believer) or higher</li>
+      <li data-i18n="weekly.rule_2">You must maintain a 10-day perfect streak (10 consecutive check-ins).</li>
+      <li id="weekly-rule-3" data-i18n="weekly.rule_3">Have {requiredGoldTickets}+ Gold Tickets.</li>
+      <li id="weekly-rule-4" data-i18n="weekly.rule_4">Entering the contest will deduct {requiredGoldTickets} Gold tickets and require a wallet transaction for {entryUsd} USDT in $TON.</li>
+      <li data-i18n="weekly.rule_5">Contest ends every Sunday at 23:59 UTC</li>
+    </ul>
+    <label>
+      <input type="checkbox" id="rules-checkbox" /> <span data-i18n="weekly.agree">I have read and agree to the rules.</span>
+    </label>
+    <br>
+    <button id="enter-contest-button" disabled data-i18n="weekly.enter">Enter Contest</button>
+  </section>
+
+  <!-- Bottom Navigation Bar -->
+  <footer id="bottom-nav">
+    <a href="index.html" class="nav-btn" data-page="home"><i data-lucide="home"></i> <span data-i18n="nav.home">Home</span></a>
+    <a href="leaderBoard.html" class="nav-btn" data-page="leaderBoard"><i data-lucide="trending-up"></i> <span data-i18n="nav.leaders">Leaders</span></a>
+    <a href="invitePage.html" class="nav-btn" data-page="invitePage"><i data-lucide="users"></i> <span data-i18n="nav.invite">Invite</span></a>
+    <a href="marketPlace.html" class="nav-btn" data-page="marketPlace"><i data-lucide="shopping-cart"></i> <span data-i18n="nav.marketplace">Marketplace</span></a>
+    <a href="tasksPage.html" class="nav-btn" data-page="tasksPage"><i data-lucide="check-square"></i> <span data-i18n="nav.tasks">Tasks</span></a>
+  </footer>
+
+  <!-- Weekly Contest JavaScript -->
+   <script type="module" src="notify.js"></script>
+   <script type="module" src="userData.js"></script>
+   <script type="module" src="script.js"></script>
+   <script type="module" src="tonconnect.js"></script>
+   <script type="module" src="connectWallet.js"></script>
+  <script type="module" src="weeklyDrop.js"></script>
+  <script type="module" src="profile.js"></script>
+  <script src="activeTab.js" defer></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      lucide.createIcons();
+    });
+  </script>
+</body>
+</html>

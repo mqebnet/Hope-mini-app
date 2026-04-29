@@ -1,0 +1,17 @@
+{
+    "_meta": {
+      "rtl": true
+    },
+    "settings": {
+      "title": "الإعدادات",
+      "language": "اللغة",
+      "haptic": "الردود الاهتزازية",
+      "sound": "المؤثرات الصوتية"
+    },
+    "notifications": {
+      "insufficient_tickets": "تذاكر غير كافية! استمر في اللعب لربح المزيد",
+      "puzzle_success": "تهانينا! لقد أكملت اللغز بنجاح!",
+      "daily_checkin": "تم تسجيل الحضور اليومي",
+      "time_expired": "انتهى الوقت! حاول مرة أخرى؟"
+    }
+  }

@@ -1,0 +1,27 @@
+// locales/en.json
+{
+    "settings": {
+      "title": "Settings",
+      "language": "Language",
+      "haptic": "Haptic Feedback",
+      "sound": "Sound Effects"
+    },
+    "notifications": {
+      "insufficient_tickets": "Insufficient tickets! Keep playing to earn more",
+      "puzzle_success": "Congratulations! Puzzle solved!"
+    }
+  }
+  
+  // locales/es.json
+  {
+    "settings": {
+      "title": "Ajustes",
+      "language": "Idioma",
+      "haptic": "Retroalimentación háptica",
+      "sound": "Efectos de sonido"
+    },
+    "notifications": {
+      "insufficient_tickets": "¡Tickets insuficientes! Sigue jugando para ganar más",
+      "puzzle_success": "¡Felicidades! ¡Rompecabezas resuelto!"
+    }
+  }

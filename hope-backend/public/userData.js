@@ -1,0 +1,88 @@
+// public/userData.js
+// UI-only helpers & imports from cache module
+
+import {
+  fetchUserDataOnce,
+  getCachedUser,
+  setCachedUser,
+  invalidateCache,
+  setWsActive
+} from './cache.js';
+
+// Re-export cache functions for convenience
+export { fetchUserDataOnce, getCachedUser, setCachedUser, invalidateCache, setWsActive };
+
+export function formatPoints(points = 0) {
+  if (points < 100000) return points.toLocaleString();
+  if (points >= 1e9) return `${(points / 1e9).toFixed(1)}B`;
+  if (points >= 1e6) return `${(points / 1e6).toFixed(1)}M`;
+  if (points >= 1e3) return `${(points / 1e3).toFixed(1)}K`;
+  return points.toLocaleString();
+}
+
+export function formatCompact(value = 0) {
+  const n = Number(value) || 0;
+  if (n >= 1e9) return `${(n / 1e9).toFixed(1)}B`;
+  if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
+  if (n >= 1e3) return `${(n / 1e3).toFixed(1)}K`;
+  return n.toLocaleString();
+}
+
+// Backward compatibility: fetchUserData uses the cache
+export async function fetchUserData() {
+  return fetchUserDataOnce();
+}
+
+export function getCurrentLevel(points = 0) {
+  const levels = [
+    { name: 'Seeker', min: 0 },
+    { name: 'Dreamer', min: 50000 },
+    { name: 'Believer', min: 100000 },
+    { name: 'Challenger', min: 500000 },
+    { name: 'Navigator', min: 1000000 },
+    { name: 'Ascender', min: 2000000 },
+    { name: 'Master', min: 5000000 },
+    { name: 'Grandmaster', min: 10000000 },
+    { name: 'Legend', min: 20000000 },
+    { name: 'Eldrin', min: 50000000 }
+  ];
+
+  let current = levels[0];
+  for (const level of levels) {
+    if (points >= level.min) current = level;
+  }
+  return current;
+}
+
+export function updateTopBar(user) {
+  if (!user) return;
+
+  setText('current-level', user.level || 'Seeker');
+  
+  // Display points as "current/max" format
+  const currentFormatted = formatPoints(user.points || 0);
+  const maxFormatted = formatPoints(user.nextLevelAt || 50000);
+  setText('points-display', `${currentFormatted}/${maxFormatted}`);
+  
+  setText('streak', user.streak || 0);
+  setText('user-exp', formatCompact(user.xp || 0));
+  setText('bronze-tickets', formatCompact(user.bronzeTickets || 0));
+  setText('silver-tickets', formatCompact(user.silverTickets || 0));
+  setText('gold-tickets', formatCompact(user.goldTickets || 0));
+
+  const progressEl = document.getElementById('points-progress');
+  const pointsBarEl = document.getElementById('points-bar');
+  if (progressEl && pointsBarEl && user.nextLevelAt) {
+    const progress = Math.min((user.points || 0) / user.nextLevelAt, 1);
+    progressEl.style.width = `${progress * 100}%`;
+  }
+}
+
+export function updateUI(user) {
+  updateTopBar(user);
+}
+
+function setText(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = value;
+}

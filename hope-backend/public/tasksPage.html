@@ -1,0 +1,123 @@
+<!-- tasksPage.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hope - Tasks</title>
+
+  <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://telegram.org/js/telegram-web-app.js" defer></script>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+</head>
+<body>
+
+  <!-- Top Navigation Bar -->
+  <header id="top-nav">
+  <button id="profile-button" aria-label="Profile Menu">
+    <i data-lucide="user"></i>
+  </button>
+
+  <div id="user-stats">
+    <p class="tag" data-i18n="topbar.level">Level</p>
+    <span id="current-level">-</span>
+    <p class="tag" data-i18n="topbar.xp">XP</p>
+    <span id="user-exp">-</span>
+  </div>
+
+  <div id="ticket-icons">
+    <span id="bronze-tickets">-</span>
+    <span id="silver-tickets">-</span>
+    <span id="gold-tickets">-</span>
+  </div>
+
+  <div id="ton-connect-ui"></div>
+
+  <button id="ton-connect-button" aria-label="Connect Wallet"></button>
+</header>
+<div id="display-panel">
+  <p class="tag" data-i18n="topbar.points">Points</p>
+  <div id="points-bar">
+    <div id="points-progress"></div>
+    <span id="points-display">—</span>
+  </div>
+</div>
+
+    <!-- Profile Panel -->
+  <div id="profile-container"></div>
+
+  <!-- Main Content -->
+  <main id="main-content">
+    <section id="tasks-content">
+      <h1 data-i18n="tasks.title">Tasks</h1>
+
+      <div class="task-tabs">
+        <button class="task-tab active" data-target="daily-tasks" data-i18n="tasks.daily_tab">Daily Tasks</button>
+        <button class="task-tab" data-target="one-time-tasks" data-i18n="tasks.one_time_tab">One-Time Tasks</button>
+      </div>
+
+      <!-- DAILY TASKS (default visible) -->
+      <div id="daily-tasks" class="task-section active">
+        <div class="task-group">
+          <h2 class="task-group-title" data-i18n="tasks.daily_missions">Daily Missions</h2>
+          <div class="task-list" id="daily-task-list">
+            <!-- Injected by tasks.js in this order:
+                 1. Daily Check-in
+                 2. Play Puzzles
+                 3. Visit Telegram Channel
+                 4. Like & Retweet Tweet
+                 5. Watch YouTube Video -->
+          </div>
+        </div>
+      </div>
+
+      <!-- ONE-TIME TASKS -->
+      <div id="one-time-tasks" class="task-section">
+        <div class="task-group">
+          <h2 class="task-group-title" data-i18n="tasks.one_time_missions">One-Time Missions</h2>
+          <p class="task-group-hint">
+            <span data-i18n="tasks.one_time_hint">These can be completed only once. Proof is required to claim rewards.</span>
+          </p>
+
+          <div class="task-list" id="one-time-task-list">
+            <!-- Injected by tasks.js in this order:
+                 1. Subscribe to Hope Telegram Channel
+                 2. Subscribe to YouTube Channel
+                 3. Follow Twitter Handle
+                 4. Join Hope Chat Group
+                 5. Future Utility Task -->
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Bottom Navigation Bar -->
+  <footer id="bottom-nav">
+      <a href="index.html" class="nav-btn"><i data-lucide="home"></i> <span data-i18n="nav.home">Home</span></a>
+      <a href="leaderBoard.html" class="nav-btn"><i data-lucide="trending-up"></i> <span data-i18n="nav.leaders">Leaders</span></a>
+      <a href="invitePage.html" class="nav-btn"><i data-lucide="users"></i> <span data-i18n="nav.invite">Invite</span></a>
+      <a href="marketPlace.html" class="nav-btn"><i data-lucide="shopping-cart"></i> <span data-i18n="nav.marketplace">Marketplace</span></a>
+      <a href="tasksPage.html" class="nav-btn active"><i data-lucide="check-square"></i> <span data-i18n="nav.tasks">Tasks</span></a>
+    </footer>
+
+  <!-- Scripts -->
+  <script type="module" src="notify.js"></script>
+  <script type="module" src="userData.js"></script>
+  <script type="module" src="script.js"></script>
+  <script type="module" src="tonconnect.js"></script>
+  <script type="module" src="connectWallet.js"></script>
+  <script type="module" src="tasks.js"></script>
+  <script type="module" src="profile.js"></script>
+  <script src="activeTab.js" defer></script>
+
+  
+
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      lucide.createIcons();
+    });
+  </script>
+</body>
+</html>
